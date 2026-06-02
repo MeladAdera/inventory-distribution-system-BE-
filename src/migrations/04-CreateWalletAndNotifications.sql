@@ -1,39 +1,37 @@
--- Create wallet table
-CREATE TABLE IF NOT EXISTS wallets (
+-- Create wallets table
+CREATE TABLE wallets (
   id SERIAL PRIMARY KEY,
-  user_id INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  balance DECIMAL(12, 2) DEFAULT 0.00,
-  currency VARCHAR(3) DEFAULT 'USD',
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  UNIQUE(user_id)
+  shop_id INTEGER NOT NULL UNIQUE REFERENCES shops(id) ON DELETE CASCADE,
+  balance DECIMAL(15, 2) DEFAULT 0,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- Create wallet transactions table
-CREATE TABLE IF NOT EXISTS wallet_transactions (
+-- Create wallet_transactions table
+CREATE TABLE wallet_transactions (
   id SERIAL PRIMARY KEY,
-  wallet_id INT NOT NULL REFERENCES wallets(id) ON DELETE CASCADE,
-  amount DECIMAL(12, 2) NOT NULL,
-  transaction_type VARCHAR(50),
-  description TEXT,
-  reference_id VARCHAR(255),
+  wallet_id INTEGER NOT NULL REFERENCES wallets(id) ON DELETE CASCADE,
+  type VARCHAR(50) NOT NULL CHECK (type IN ('CREDIT', 'DEBIT')),
+  amount DECIMAL(15, 2) NOT NULL,
+  reason VARCHAR(100),
+  reference_id INTEGER,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 -- Create notifications table
-CREATE TABLE IF NOT EXISTS notifications (
+CREATE TABLE notifications (
   id SERIAL PRIMARY KEY,
-  user_id INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  title VARCHAR(255),
+  shop_id INTEGER NOT NULL REFERENCES shops(id) ON DELETE CASCADE,
+  user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  title VARCHAR(255) NOT NULL,
   message TEXT,
-  type VARCHAR(50),
-  is_read BOOLEAN DEFAULT false,
-  data JSONB,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  read_at TIMESTAMP
+  type VARCHAR(50) NOT NULL CHECK (type IN ('ORDER', 'INVENTORY', 'SYSTEM')),
+  is_read BOOLEAN DEFAULT FALSE,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE INDEX idx_wallets_user_id ON wallets(user_id);
+-- Create indexes
+CREATE INDEX idx_wallets_shop_id ON wallets(shop_id);
 CREATE INDEX idx_wallet_transactions_wallet_id ON wallet_transactions(wallet_id);
+CREATE INDEX idx_notifications_shop_id ON notifications(shop_id);
 CREATE INDEX idx_notifications_user_id ON notifications(user_id);
 CREATE INDEX idx_notifications_is_read ON notifications(is_read);

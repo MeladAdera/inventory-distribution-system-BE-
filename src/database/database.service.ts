@@ -22,7 +22,7 @@ export class DatabaseService implements OnModuleDestroy {
     const client = await this.pool.connect();
 
     try {
-      const result = await client.query<T>(sql, params ? [...params] : undefined);
+      const result = await client.query<T>(sql, params);
       return result.rows;
     } finally {
       client.release();
@@ -34,11 +34,11 @@ export class DatabaseService implements OnModuleDestroy {
     params?: readonly unknown[],
   ): Promise<T | null> {
     const results = await this.query<T>(sql, params);
-    return results.length > 0 ? results[0] ?? null : null;
+    return results.length > 0 ? results[0] : null;
   }
 
   async execute(sql: string, params?: readonly unknown[]): Promise<void> {
-    void (await this.query(sql, params));
+    await this.query(sql, params);
   }
 
   async transaction<T>(

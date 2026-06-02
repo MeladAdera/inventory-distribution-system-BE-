@@ -1,116 +1,91 @@
-# Database Migration Guide
+# Database Migration Setup Complete ✅
 
-This guide explains how to work with database migrations in this project.
+Your NestJS project is now configured with **SQL-based migrations** and **Docker**.
 
-## Overview
+## What Was Created
 
-Migrations are SQL files that manage database schema changes. They are automatically executed in order when the application starts.
-
-## Migration Files
-
-Migrations are located in `src/migrations/` and are executed in alphabetical order:
-
-1. **00-CreateShopsAndUsers.sql** - Creates shops and users tables
-2. **01-CreateProductsAndCategories.sql** - Creates products and categories
-3. **02-CreateInventorySystem.sql** - Creates inventory and warehouse system
-4. **03-CreateOrdersSystem.sql** - Creates orders system
-5. **04-CreateWalletAndNotifications.sql** - Creates wallet and notifications
-
-## Running Migrations
-
-### Automatic (Recommended)
-Migrations run automatically when the application starts:
-
-```bash
-npm start
+### 1. Migration Files
+```
+src/migrations/
+├── 00-CreateShopsAndUsers.sql
+├── 01-CreateProductsAndCategories.sql
+├── 02-CreateInventorySystem.sql
+├── 03-CreateOrdersSystem.sql
+├── 04-CreateWalletAndNotifications.sql
+└── runner.ts  ← Migration executor
 ```
 
-### Manual
-To manually run migrations:
+### 2. Docker Files
+- **Dockerfile** - Multi-stage build (minimal production image)
+- **docker-compose.yml** - PostgreSQL + NestJS app services
+
+### 3. Database Service
+- **src/database/database.service.ts** - Query builder for your code
+
+### 4. Quick Commands
 
 ```bash
-npm run migrate
+# Docker (recommended)
+docker-compose up           # Start all services
+docker-compose down         # Stop all services
+docker-compose logs -f app  # View logs
+
+# Migrations
+npm run migration:run       # Run pending migrations
+npm run migration:create    # Create new migration
+
+# Development
+npm run start:dev          # Dev server with hot-reload
+npm test                   # Run tests
+
+# Production
+docker build -t inventory-app .
+docker run -e DATABASE_HOST=postgres inventory-app
 ```
 
-Or with Docker:
+## Database Tables Created
 
-```bash
-docker-compose exec app npm run migrate
+12 tables with proper relationships:
+- **shops, users** (shop management)
+- **products, categories, shop_products** (inventory)
+- **inventory, inventory_movements** (stock tracking)
+- **orders, order_items** (purchase orders)
+- **wallets, wallet_transactions** (payments)
+- **notifications** (alerts)
+
+## How to Use in Your Code
+
+```typescript
+import { DatabaseService } from '../database/database.service';
+
+@Injectable()
+export class ShopsService {
+  constructor(private db: DatabaseService) {}
+
+  async getShop(id: number) {
+    return this.db.queryOne(
+      'SELECT * FROM shops WHERE id = $1',
+      [id],
+    );
+  }
+}
 ```
 
-## Creating a New Migration
+## Next Steps
 
-1. Create a new SQL file in `src/migrations/` with a descriptive name:
+1. **Test Docker Setup**
    ```bash
-   touch src/migrations/05-AddNewFeature.sql
+   docker-compose up -d
+   curl http://localhost:3000/health
+   docker-compose down
    ```
 
-2. Write your migration SQL:
-   ```sql
-   CREATE TABLE new_feature (
-     id SERIAL PRIMARY KEY,
-     name VARCHAR(255) NOT NULL,
-     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-   );
-   ```
+2. **Create Services** for each table (users, products, inventory, etc.)
 
-3. The migration will run automatically on next application start.
+3. **Create API Routes** (GET, POST, PUT, DELETE)
 
-## Migration Tracking
+4. **Add Tests** for business logic
 
-The system tracks executed migrations in the `migrations` table:
+5. **Deploy** using Docker image
 
-```sql
-SELECT * FROM migrations;
-```
-
-This table prevents the same migration from running twice.
-
-## Rollback Strategies
-
-The current system doesn't support automatic rollbacks. For rollbacks:
-
-1. Create a new migration that reverses the changes:
-   ```sql
-   DROP TABLE table_name;
-   ```
-
-2. Or manually execute SQL in your database:
-   ```bash
-   docker-compose exec postgres psql -U postgres -d inventory_db_dev -c "DROP TABLE table_name;"
-   ```
-
-## Best Practices
-
-- Keep migrations small and focused
-- Use explicit column types and constraints
-- Always include indexes for frequently queried columns
-- Add timestamps (created_at, updated_at) to tables
-- Use foreign keys with appropriate ON DELETE actions
-- Test migrations locally before deployment
-
-## Troubleshooting
-
-### Migration Failed
-
-Check logs:
-```bash
-docker-compose logs app
-```
-
-Reset migrations (dangerous!):
-```bash
-docker-compose exec postgres psql -U postgres -d inventory_db_dev -c "DROP TABLE migrations;"
-```
-
-Then restart:
-```bash
-docker-compose restart app
-```
-
-### Database is Locked
-
-Wait for the previous operation to complete or restart services:
-```bash
-docker-compose restart postgres
-```
+See **DOCKER_SETUP.md** for complete documentation.

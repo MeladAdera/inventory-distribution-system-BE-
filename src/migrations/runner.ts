@@ -1,13 +1,14 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as pg from 'pg';
+import * as dotenv from 'dotenv';
 
-interface Migration {
-  name: string;
-  content: string;
-}
+// Load environment variables
+dotenv.config({
+  path: `.env.${process.env.NODE_ENV || 'development'}`,
+});
 
-const pool = new pg.Pool({
+const client = new pg.Client({
   host: process.env.DATABASE_HOST || 'localhost',
   port: parseInt(process.env.DATABASE_PORT || '5432', 10),
   user: process.env.DATABASE_USERNAME || 'postgres',
@@ -15,83 +16,94 @@ const pool = new pg.Pool({
   database: process.env.DATABASE_NAME || 'inventory_db_dev',
 });
 
+interface Migration {
+  name: string;
+  timestamp: number;
+}
+
 async function createMigrationsTable(): Promise<void> {
-  const client = await pool.connect();
-  try {
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS migrations (
-        id SERIAL PRIMARY KEY,
-        name VARCHAR(255) NOT NULL UNIQUE,
-        executed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      )
-    `);
-  } finally {
-    client.release();
-  }
-}
-
-async function getMigrations(): Promise<string[]> {
-  const client = await pool.connect();
-  try {
-    const result = await client.query<{ name: string }>(
-      'SELECT name FROM migrations ORDER BY name',
+  await client.query(`
+    CREATE TABLE IF NOT EXISTS migrations (
+      id SERIAL PRIMARY KEY,
+      name VARCHAR(255) UNIQUE NOT NULL,
+      timestamp BIGINT NOT NULL,
+      executed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
-    return result.rows.map((row) => row.name);
-  } finally {
-    client.release();
-  }
+  `);
 }
 
-function readMigrationFiles(): Migration[] {
-  const migrationsDir = __dirname;
-  const files = fs.readdirSync(migrationsDir).filter((file) => {
-    return file.endsWith('.sql') && !file.startsWith('.');
-  });
+async function getMigrations(): Promise<Migration[]> {
+  const result = await client.query<Migration>(
+    'SELECT name, timestamp FROM migrations ORDER BY timestamp ASC',
+  );
 
-  return files.map((file) => ({
-    name: file,
-    content: fs.readFileSync(path.join(migrationsDir, file), 'utf-8'),
-  }));
+  return result.rows;
 }
 
-async function runMigrations(): Promise<void> {
+async function runMigration(file: string): Promise<void> {
+  const filePath = path.join(__dirname, file);
+  const sql = fs.readFileSync(filePath, 'utf-8');
+  const timestamp = parseInt(file.match(/(\d+)-/)?.[1] ?? '0', 10);
+
+  console.log(`Running migration: ${file}`);
+
+  await client.query(sql);
+
+  await client.query(
+    'INSERT INTO migrations (name, timestamp) VALUES ($1, $2)',
+    [file, timestamp],
+  );
+
+  console.log(`✓ Migration ${file} completed`);
+}
+
+async function runPendingMigrations(): Promise<void> {
   try {
+    await client.connect();
+    console.log('Connected to database');
+
     await createMigrationsTable();
+
     const executedMigrations = await getMigrations();
-    const allMigrations = readMigrationFiles();
+    const executedNames = executedMigrations.map((migration) => migration.name);
 
-    for (const migration of allMigrations) {
-      if (executedMigrations.includes(migration.name)) {
-        console.log(`⏭️  Skipping ${migration.name} (already executed)`);
-        continue;
-      }
+    const migrationFiles = fs
+      .readdirSync(__dirname)
+      .filter(
+        (file) =>
+          file.endsWith('.sql') &&
+          !file.includes('runner') &&
+          !file.includes('rollback'),
+      )
+      .sort();
 
-      const client = await pool.connect();
-      try {
-        await client.query('BEGIN');
-        await client.query(migration.content);
-        await client.query(
-          'INSERT INTO migrations (name) VALUES ($1)',
-          [migration.name],
-        );
-        await client.query('COMMIT');
-        console.log(`✅ Executed ${migration.name}`);
-      } catch (error) {
-        await client.query('ROLLBACK');
-        console.error(`❌ Failed to execute ${migration.name}:`, error);
-        throw error;
-      } finally {
-        client.release();
-      }
+    const pendingMigrations = migrationFiles.filter(
+      (file) => !executedNames.includes(file),
+    );
+
+    if (pendingMigrations.length === 0) {
+      console.log('No pending migrations');
+      return;
     }
 
-    console.log('✨ All migrations completed successfully!');
-  } catch (error) {
+    console.log(`Found ${pendingMigrations.length} pending migrations`);
+
+    for (const file of pendingMigrations) {
+      await runMigration(file);
+    }
+
+    console.log('All migrations completed successfully');
+  } catch (error: unknown) {
     console.error('Migration failed:', error);
     process.exit(1);
   } finally {
-    await pool.end();
+    await client.end();
   }
 }
 
-void runMigrations();
+// Run if executed directly
+if (require.main === module) {
+  void runPendingMigrations();
+}
+
+export { runPendingMigrations };
