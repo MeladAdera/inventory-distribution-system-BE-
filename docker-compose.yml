@@ -41,7 +41,7 @@ services:
         condition: service_healthy
     networks:
       - inventory-network
-    command: sh -c "npm run migration:run && npm start"
+    command: npm start
 
   pgadmin:
     image: dpage/pgadmin4:latest
