@@ -11,6 +11,8 @@
     "start": "nest start",
     "start:dev": "nest start --watch",
     "start:prod": "node dist/main.js",
+    "migration:run": "ts-node -r tsconfig-paths/register src/migrations/runner.ts",
+    "migration:create": "node -e \"const fs = require('fs'); const timestamp = Date.now(); const name = process.argv[1]; fs.writeFileSync(`src/migrations/${timestamp}-${name}.sql`, '-- Migration SQL here\\n'); console.log(`Created: ${timestamp}-${name}.sql`);\" ",
     "lint": "eslint \"src/**/*.ts\" --fix",
     "format": "prettier --write \"src/**/*.ts\"",
     "test": "jest",
@@ -25,15 +27,13 @@
     "@nestjs/jwt": "^11.0.1",
     "@nestjs/passport": "^10.0.3",
     "@nestjs/platform-express": "^10.3.0",
-    "@nestjs/typeorm": "^10.0.0",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.0",
     "dotenv": "^16.3.1",
     "passport": "^0.7.0",
     "passport-jwt": "^4.0.1",
     "pg": "^8.11.3",
-    "reflect-metadata": "^0.1.13",
-    "typeorm": "^0.3.17"
+    "reflect-metadata": "^0.1.13"
   },
   "devDependencies": {
     "@nestjs/cli": "^10.3.0",
@@ -41,6 +41,7 @@
     "@nestjs/testing": "^10.3.0",
     "@types/jest": "^29.5.8",
     "@types/node": "^20.10.0",
+    "@types/pg": "^8.20.0",
     "@typescript-eslint/eslint-plugin": "^6.10.0",
     "@typescript-eslint/parser": "^6.10.0",
     "eslint": "^8.53.0",
