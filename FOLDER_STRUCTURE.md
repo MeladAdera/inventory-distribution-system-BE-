@@ -1,163 +1,335 @@
 # Folder Structure - Inventory Distribution System
 
-## Architecture: Feature-Based Hybrid Approach
+## Architecture: Feature-Based Modular Approach
 
-This project follows a **feature-based modular architecture** inspired by proven NestJS patterns. Each domain has its own module with clear separation of concerns.
+This project follows a **feature-based modular architecture** with clear separation of concerns. Each domain has its own module with structured folders for controllers, services, entities, repositories, and DTOs.
 
 ```
 src/
-├── admin/                              # Admin-specific operations
-│
-├── auth/                               # Authentication & Authorization
-│   ├── decorators/                     # @CurrentUser, @Public, etc.
-│   ├── dto/                            # Login, Register, JWT payloads
-│   ├── guards/                         # JwtAuthGuard, RolesGuard
-│   ├── strategies/                     # JWT strategy
+├── auth/                                # Authentication & Authorization
+│   ├── decorators/                      # @CurrentUser, @Public, @Roles
+│   ├── dto/                             # Login, Register, JWT payloads
+│   ├── guards/                          # JwtAuthGuard, RolesGuard
+│   ├── strategies/                      # JWT strategy
 │   ├── auth.module.ts
 │   ├── auth.service.ts
 │   ├── auth.controller.ts
-│   └── auth.repository.ts
+│   └── repositories/                    # Auth data access
 │
-├── common/                             # Shared across all modules
-│   ├── constants/                      # App-wide constants
-│   ├── decorators/                     # Custom decorators
-│   ├── dto/                            # PaginationDto, generic responses
-│   ├── filters/                        # HTTP exception filters
-│   ├── interceptors/                   # Request/response transformers
-│   ├── pipes/                          # Validation pipes
-│   └── index.ts                        # Barrel exports
+├── users/                               # User Management
+│   ├── controllers/                     # HTTP endpoints
+│   ├── services/                        # Business logic
+│   ├── repositories/                    # Database queries
+│   ├── entities/                        # User entity
+│   ├── dto/                             # Create, Update, Response DTOs
+│   └── users.module.ts
 │
-├── config/                             # Environment & config
-│   └── env.schema.ts                   # Validation schema for env vars
-│
-├── database/                           # Database setup & utilities
-│   ├── base.repository.ts              # Base class for all repos
-│   ├── db.module.ts
-│   ├── db.provider.ts
-│   └── pool-config.ts
-│
-├── tenant/                             # Tenant infrastructure (if multi-tenant)
-│   └── tenant.middleware.ts
-│
-├── products/                           # Product catalog management
+├── shops/                               # Shop/Store Management
+│   ├── controllers/
+│   ├── services/
+│   ├── repositories/
+│   ├── entities/
 │   ├── dto/
-│   │   ├── create-product.dto.ts
-│   │   ├── update-product.dto.ts
-│   │   └── product-response.dto.ts
-│   ├── products.module.ts
-│   ├── products.service.ts
-│   ├── products.controller.ts
-│   ├── products.repository.ts
-│   └── products.service.spec.ts
+│   └── shops.module.ts
 │
-├── inventory/                          # Stock & warehouse inventory
+├── categories/                          # Product Categories
+│   ├── controllers/
+│   ├── services/
+│   ├── repositories/
+│   ├── entities/
 │   ├── dto/
-│   │   ├── create-inventory.dto.ts
-│   │   └── inventory-response.dto.ts
-│   ├── inventory.module.ts
-│   ├── inventory.service.ts
-│   ├── inventory.controller.ts
-│   ├── inventory.repository.ts
-│   └── inventory.service.spec.ts
+│   └── categories.module.ts
 │
-├── orders/                             # Distribution orders
+├── products/                            # Product Catalog
+│   ├── controllers/
+│   ├── services/
+│   ├── repositories/
+│   ├── entities/                        # product.entity.ts
 │   ├── dto/
-│   │   ├── create-order.dto.ts
-│   │   └── order-response.dto.ts
-│   ├── orders.module.ts
-│   ├── orders.service.ts
-│   ├── orders.controller.ts
-│   ├── orders.repository.ts
-│   └── orders.service.spec.ts
+│   └── products.module.ts
 │
-├── warehouses/                         # Distribution centers
+├── inventory/                           # Stock Management
+│   ├── controllers/
+│   ├── services/
+│   ├── repositories/
+│   ├── entities/                        # inventory.entity.ts
 │   ├── dto/
-│   │   ├── create-warehouse.dto.ts
-│   │   └── warehouse-response.dto.ts
-│   ├── warehouses.module.ts
-│   ├── warehouses.service.ts
-│   ├── warehouses.controller.ts
-│   ├── warehouses.repository.ts
-│   └── warehouses.service.spec.ts
+│   └── inventory.module.ts
 │
-├── shipments/                          # Logistics & shipment tracking
+├── orders/                              # Order Management
+│   ├── controllers/
+│   ├── services/
+│   ├── repositories/
+│   ├── entities/
+│   │   ├── order.entity.ts              # Main order
+│   │   └── order-item.entity.ts         # Order line items
 │   ├── dto/
-│   │   ├── create-shipment.dto.ts
-│   │   └── shipment-response.dto.ts
-│   ├── shipments.module.ts
-│   ├── shipments.service.ts
-│   ├── shipments.controller.ts
-│   ├── shipments.repository.ts
-│   └── shipments.service.spec.ts
+│   ├── order-items/                     # Order items sub-module
+│   └── orders.module.ts
 │
-├── app.module.ts                       # Root module - imports all feature modules
-├── app.service.ts
+├── warehouse/                           # Central Warehouse (Single)
+│   ├── controllers/
+│   ├── services/
+│   ├── repositories/
+│   ├── entities/                        # warehouse.entity.ts
+│   ├── dto/
+│   └── warehouse.module.ts
+│
+├── notifications/                       # Multi-Channel Notifications
+│   ├── services/
+│   │   ├── email.service.ts             # Email notifications
+│   │   ├── sms.service.ts               # SMS notifications
+│   │   ├── push.service.ts              # Push notifications
+│   │   └── index.ts                     # Barrel exports
+│   ├── templates/                       # Email/SMS templates
+│   ├── dto/
+│   └── notifications.module.ts
+│
+├── audit-logs/                          # System Audit Trail
+│   ├── controllers/
+│   ├── services/
+│   ├── repositories/
+│   ├── entities/
+│   ├── dto/
+│   └── audit-logs.module.ts
+│
+├── common/                              # Shared Utilities & Infrastructure
+│   ├── constants/
+│   │   └── app.constants.ts             # App-wide constants
+│   ├── decorators/                      # Custom decorators
+│   ├── guards/                          # Auth guards
+│   ├── interceptors/
+│   │   └── transform.interceptor.ts     # Response transformation
+│   ├── filters/
+│   │   └── http-exception.filter.ts     # Global error handler
+│   ├── pipes/                           # Validation pipes
+│   ├── middlewares/                     # Custom middlewares
+│   ├── utils/
+│   │   ├── pagination.util.ts           # Pagination helpers
+│   │   └── index.ts
+│   ├── dto/
+│   │   └── pagination.dto.ts            # Common pagination DTO
+│   ├── base/
+│   │   └── base.repository.ts           # Base repository class
+│   └── index.ts                         # Barrel exports
+│
+├── config/                              # Configuration & Validation
+│   └── env.schema.ts                    # Environment validation schema
+│
+├── database/                            # Database Setup & Utilities
+│   ├── migrations/                      # SQL migration files
+│   │   ├── 00-CreateShopsAndUsers.sql
+│   │   ├── 01-CreateProductsAndCategories.sql
+│   │   ├── 02-CreateInventorySystem.sql
+│   │   ├── 03-CreateOrdersSystem.sql
+│   │   ├── 04-CreateWalletAndNotifications.sql
+│   │   └── runner.ts                    # Migration execution script
+│   ├── seeders/                         # Seed data scripts
+│   └── factories/                       # Test data factories
+│
+├── app.module.ts                        # Root module - imports all feature modules
 ├── app.controller.ts
-└── main.ts                             # Application entry point
+├── app.service.ts
+└── main.ts                              # Application entry point
 ```
 
-## Module Pattern
+---
 
-Each feature module follows this consistent structure:
+## 📋 Feature Module Pattern
+
+Each feature module follows this **consistent structure**:
 
 ```
 [feature]/
+├── controllers/
+│   └── [feature].controller.ts          # HTTP endpoints & request handling
+├── services/
+│   └── [feature].service.ts             # Business logic
+├── repositories/
+│   └── [feature].repository.ts          # Database queries
+├── entities/
+│   └── [feature].entity.ts              # Database model definition
 ├── dto/
-│   ├── create-[feature].dto.ts        # Create payload
-│   ├── update-[feature].dto.ts        # Update payload
-│   └── [feature]-response.dto.ts      # Response DTO
-├── [feature].module.ts                # Module definition
-├── [feature].service.ts               # Business logic
-├── [feature].controller.ts            # HTTP endpoints
-├── [feature].repository.ts            # Database queries
-└── [feature].service.spec.ts          # Unit tests
+│   ├── create-[feature].dto.ts          # Create payload validation
+│   ├── update-[feature].dto.ts          # Update payload validation
+│   └── [feature]-response.dto.ts        # Response DTO
+├── [feature].module.ts                  # Module definition & imports
+└── [feature].service.spec.ts            # Unit tests (optional)
 ```
 
-## Key Files by Purpose
+---
+
+## 🎯 Folder Organization by Purpose
 
 | Purpose | Location |
 |---------|----------|
-| Validation & Transformation | `common/pipes/` |
-| Request/Response Handling | `common/interceptors/` |
-| Error Handling | `common/filters/` |
-| Cross-cutting Concerns | `common/decorators/` |
-| Environment Configuration | `config/env.schema.ts` |
-| Database Connection | `database/db.provider.ts` |
-| Authentication Logic | `auth/auth.service.ts` |
-| Business Logic | `[feature]/[feature].service.ts` |
-| API Endpoints | `[feature]/[feature].controller.ts` |
-| Database Queries | `[feature]/[feature].repository.ts` |
+| **Constants** | `common/constants/app.constants.ts` |
+| **Pagination** | `common/dto/pagination.dto.ts`, `common/utils/pagination.util.ts` |
+| **Global Error Handling** | `common/filters/http-exception.filter.ts` |
+| **Response Transformation** | `common/interceptors/transform.interceptor.ts` |
+| **Custom Decorators** | `common/decorators/` |
+| **Authentication Guards** | `common/guards/` |
+| **Environment Config** | `config/env.schema.ts` |
+| **Database Migrations** | `database/migrations/` |
+| **Authentication Logic** | `auth/auth.service.ts` |
+| **Business Logic** | `[feature]/services/[feature].service.ts` |
+| **HTTP Endpoints** | `[feature]/controllers/[feature].controller.ts` |
+| **Database Access** | `[feature]/repositories/[feature].repository.ts` |
+| **Entity/Schema** | `[feature]/entities/[feature].entity.ts` |
+| **Validation Rules** | `[feature]/dto/create-[feature].dto.ts` |
 
-## Import Convention
+---
+
+## 🚀 Module Import Convention
 
 ```typescript
-// ✅ DO: Import from barrels
-import { PaginationDto } from '@common/dto';
+// ✅ CORRECT: Import from barrel exports
+import { PaginationDto, PaginatedResponse } from '@common/dto';
+import { APP_CONSTANTS } from '@common/constants';
 
-// ✅ DO: Import specific class
-import { ProductsService } from './products.service';
+// ✅ CORRECT: Import specific class from same module
+import { ProductsService } from './services/products.service';
+import { ProductsController } from './controllers/products.controller';
 
 // ❌ AVOID: Deep imports from other modules
-import { ProductsService } from '../products/products.service';
+import { ProductsService } from '../products/services/products.service';
+
+// ❌ AVOID: Importing from nested paths
+import { constant } from '../../../common/constants/app.constants';
 ```
 
-## Adding a New Feature
+---
 
-1. Create folder: `src/[feature]/`
-2. Create subfolders: `[feature]/dto/`
-3. Create files:
-   - `[feature].module.ts`
-   - `[feature].service.ts`
-   - `[feature].controller.ts`
-   - `[feature].repository.ts`
-4. Add to `app.module.ts` imports
-5. Implement DTOs in `dto/` folder
+## 📐 Data Flow Example: Creating an Order
 
-## Benefits of This Structure
+```
+1. Client Request
+   ↓ POST /orders
+   ↓
+2. OrdersController
+   → Validates CreateOrderDto
+   ↓
+3. OrdersService
+   → Check user exists (UsersService)
+   → Check shop exists (ShopsService)
+   → Check inventory (InventoryService)
+   → Reserve inventory
+   ↓
+4. OrdersRepository
+   → Save order to database
+   → Save order items
+   ↓
+5. NotificationsService
+   → Send email confirmation
+   → Send SMS notification
+   → Send push notification
+   ↓
+6. AuditLogsService
+   → Log order creation
+   ↓
+7. Response Transform
+   → Wrap in success envelope
+   → Include timestamp
+   ↓
+8. Response to Client
+```
 
-- 🎯 **Clear Boundaries**: Each module owns its domain
-- 🔄 **Reusability**: Common utilities in `common/` folder
-- 📦 **Scalability**: Easy to add new features
-- 🧪 **Testability**: Services, repos, and DTOs are independently testable
-- 🚀 **Performance**: Lazy-loaded modules supported
-- 📚 **Maintainability**: Clear file organization and naming
+---
+
+## ✅ Creating a New Feature Module
+
+### Step 1: Create Folder Structure
+```bash
+mkdir -p src/[feature]/{controllers,services,repositories,entities,dto}
+```
+
+### Step 2: Create Module File
+```typescript
+// src/[feature]/[feature].module.ts
+@Module({
+  controllers: [[Feature]Controller],
+  providers: [[Feature]Service, [Feature]Repository],
+  exports: [[Feature]Service],
+})
+export class [Feature]Module {}
+```
+
+### Step 3: Create Entity
+```typescript
+// src/[feature]/entities/[feature].entity.ts
+export class [Feature] {
+  id: string;
+  name: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+```
+
+### Step 4: Create DTOs
+```typescript
+// src/[feature]/dto/create-[feature].dto.ts
+export class Create[Feature]Dto {
+  @IsString()
+  name: string;
+}
+```
+
+### Step 5: Create Service
+```typescript
+// src/[feature]/services/[feature].service.ts
+@Injectable()
+export class [Feature]Service {
+  constructor(private repository: [Feature]Repository) {}
+  
+  async create(dto: Create[Feature]Dto) {
+    return this.repository.create(dto);
+  }
+}
+```
+
+### Step 6: Create Controller
+```typescript
+// src/[feature]/controllers/[feature].controller.ts
+@Controller('[features]')
+export class [Feature]Controller {
+  constructor(private service: [Feature]Service) {}
+  
+  @Post()
+  create(@Body() dto: Create[Feature]Dto) {
+    return this.service.create(dto);
+  }
+}
+```
+
+### Step 7: Add to app.module.ts
+```typescript
+@Module({
+  imports: [
+    // ... other modules
+    [Feature]Module,
+  ],
+})
+export class AppModule {}
+```
+
+---
+
+## 🎁 Benefits of This Structure
+
+- ✅ **Clear Domain Boundaries** - Each module is self-contained
+- ✅ **Scalability** - Easy to add new modules without affecting others
+- ✅ **Maintainability** - Predictable folder structure
+- ✅ **Testability** - Services, repos, and controllers are independently testable
+- ✅ **Reusability** - Common utilities shared across all modules
+- ✅ **Performance** - Supports lazy-loaded modules
+- ✅ **Developer Experience** - Easy to navigate and understand codebase
+- ✅ **Production-Ready** - Follows NestJS best practices
+
+---
+
+## 📚 Key Files
+
+- **IMPLEMENTATION_GUIDE.md** - Complete guide with patterns & examples
+- **src/database/migrations/runner.ts** - Executes pending migrations
+- **src/common/index.ts** - Barrel exports for common utilities
+- **src/notifications/services/index.ts** - Barrel exports for notification services
