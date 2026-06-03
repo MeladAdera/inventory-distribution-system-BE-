@@ -50,18 +50,22 @@ docker-compose exec app npm run migration:run
 
 The migrations create these tables:
 
-- `shops` - Shop information
+### Core Tables
+- `shops` - Shop information with wallet_balance
 - `users` - Users (OWNER, EMPLOYEE, CLIENT_ADMIN roles)
-- `categories` - Product categories
-- `products` - Product catalog
-- `shop_products` - Shop access to products
-- `inventory` - Stock levels
-- `inventory_movements` - Stock transactions
+
+### Product Management
+- `categories` - Product categories (shop-specific)
+- `products` - Product catalog (with category_id, shop_id, source: WAREHOUSE/LOCAL)
+
+### Inventory & Orders
+- `inventory` - Stock levels by shop and product
 - `orders` - Purchase orders
 - `order_items` - Order line items
-- `wallets` - Payment wallets
-- `wallet_transactions` - Wallet transactions
-- `notifications` - User notifications
+
+### System
+- `notifications` - User notifications (ORDER, INVENTORY, SYSTEM types)
+- `audit_logs` - Complete audit trail (inventory, wallet, order, product, category, user actions)
 
 ## Verify Migrations Ran
 
