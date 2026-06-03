@@ -18,7 +18,6 @@ const client = new pg.Client({
 
 interface Migration {
   name: string;
-  timestamp: number;
 }
 
 async function createMigrationsTable(): Promise<void> {
@@ -26,7 +25,6 @@ async function createMigrationsTable(): Promise<void> {
     CREATE TABLE IF NOT EXISTS migrations (
       id SERIAL PRIMARY KEY,
       name VARCHAR(255) UNIQUE NOT NULL,
-      timestamp BIGINT NOT NULL,
       executed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
   `);
@@ -34,7 +32,7 @@ async function createMigrationsTable(): Promise<void> {
 
 async function getMigrations(): Promise<Migration[]> {
   const result = await client.query<Migration>(
-    'SELECT name, timestamp FROM migrations ORDER BY timestamp ASC',
+    'SELECT name FROM migrations ORDER BY name ASC',
   );
 
   return result.rows;
@@ -43,16 +41,18 @@ async function getMigrations(): Promise<Migration[]> {
 async function runMigration(file: string): Promise<void> {
   const filePath = path.join(__dirname, file);
   const sql = fs.readFileSync(filePath, 'utf-8');
-  const timestamp = parseInt(file.match(/(\d+)-/)?.[1] ?? '0', 10);
 
   console.log(`Running migration: ${file}`);
 
-  await client.query(sql);
-
-  await client.query(
-    'INSERT INTO migrations (name, timestamp) VALUES ($1, $2)',
-    [file, timestamp],
-  );
+  await client.query('BEGIN');
+  try {
+    await client.query(sql);
+    await client.query('INSERT INTO migrations (name) VALUES ($1)', [file]);
+    await client.query('COMMIT');
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  }
 
   console.log(`✓ Migration ${file} completed`);
 }
