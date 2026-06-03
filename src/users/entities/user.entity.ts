@@ -1,12 +1,13 @@
+import { UserRole } from '../../common/enums/user-role.enum';
+
 export class User {
-  id!: string;
-  email!: string;
+  id!: number;
+  shop_id!: number | null;
   name!: string;
-  phone?: string;
-  password!: string;
-  role!: 'admin' | 'shop_manager' | 'user';
-  shopId?: string;
-  isActive!: boolean;
-  createdAt!: Date;
-  updatedAt!: Date;
+  email!: string;
+  password_hash!: string;
+  role!: UserRole;
+  is_active!: boolean;
+  created_at!: Date;
+  updated_at!: Date;
 }
