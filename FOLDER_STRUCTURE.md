@@ -26,10 +26,16 @@ src/
 │
 ├── shops/                               # Shop/Store Management
 │   ├── controllers/
+│   │   └── shops.controller.ts          # GET /shops, GET /shops/:id, PATCH /shops/:id, PATCH /shops/:id/status
 │   ├── services/
+│   │   └── shops.service.ts             # findAll, findById, update, updateStatus — role enforcement
 │   ├── repositories/
+│   │   └── shops.repository.ts          # findAll, findById, update (dynamic SET), updateStatus
 │   ├── entities/
+│   │   └── shop.entity.ts               # id, name, address, phone, type, is_active, created_at, updated_at
 │   ├── dto/
+│   │   ├── update-shop.dto.ts           # name?, address?, phone? — all optional
+│   │   └── update-shop-status.dto.ts    # isActive: boolean
 │   └── shops.module.ts
 │
 ├── categories/                          # Product Categories
@@ -123,6 +129,8 @@ src/
 │   │   ├── 02-CreateInventorySystem.sql
 │   │   ├── 03-CreateOrdersSystem.sql
 │   │   ├── 04-CreateWalletAndNotifications.sql
+│   │   ├── 05-SeedWarehouseAdmin.sql
+│   │   ├── 06-AddShopIsActive.sql       # ALTER TABLE shops ADD COLUMN is_active
 │   │   └── runner.ts                    # Migration execution script
 │   ├── seeders/                         # Seed data scripts
 │   └── factories/                       # Test data factories

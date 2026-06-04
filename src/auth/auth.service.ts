@@ -19,6 +19,12 @@ export class AuthService {
     const passwordValid = await bcrypt.compare(dto.password, user.password_hash);
     if (!passwordValid) throw new UnauthorizedException('Invalid credentials');
 
+    if (!user.is_active) throw new UnauthorizedException('Your account has been deactivated');
+
+    if (user.shop_id !== null && user.shop_is_active === false) {
+      throw new UnauthorizedException('Your shop has been deactivated');
+    }
+
     const payload = {
       sub: user.id,
       email: user.email,

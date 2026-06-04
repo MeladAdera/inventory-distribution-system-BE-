@@ -10,7 +10,10 @@ export class UsersRepository {
 
   findByEmail(email: string): Promise<User | null> {
     return this.db.queryOne<User>(
-      'SELECT * FROM users WHERE email = $1',
+      `SELECT u.*, s.is_active AS shop_is_active
+       FROM users u
+       LEFT JOIN shops s ON u.shop_id = s.id
+       WHERE u.email = $1`,
       [email],
     );
   }

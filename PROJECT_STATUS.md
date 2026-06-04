@@ -31,11 +31,11 @@ No public registration. All accounts provisioned by privileged roles.
 
 ## Database Schema
 
-6 migrations in `src/database/migrations/`, run in filename order.
+7 migrations in `src/database/migrations/`, run in filename order.
 
 | Table | Key Columns | Notes |
 |---|---|---|
-| `shops` | `id`, `name`, `address`, `phone`, `type` | `type`: `WAREHOUSE` or `SHOP` |
+| `shops` | `id`, `name`, `address`, `phone`, `type`, `is_active` | `type`: `WAREHOUSE` or `SHOP` |
 | `users` | `id`, `shop_id?`, `name`, `email`, `password_hash`, `role` | `shop_id` nullable for `WAREHOUSE_ADMIN` |
 | `categories` | `id`, `shop_id`, `name` | Per-shop |
 | `products` | `id`, `category_id`, `shop_id`, `name`, `barcode`, `source` | `source`: `WAREHOUSE` or `LOCAL` |
@@ -59,7 +59,7 @@ No public registration. All accounts provisioned by privileged roles.
 | app | ✅ | ✅ health | ✅ `/`, `/health` | — | ✅ |
 | auth | ✅ | ✅ login | ✅ `/auth/login`, `/auth/me` | ✅ `LoginDto` | ✅ |
 | users | ✅ | ✅ provisioning | ✅ `/users/shop-owners`, `/users/employees` | ✅ | ✅ |
-| shops | ✅ | ⬜ stub | ⬜ stub | ⬜ none | ❌ |
+| shops | ✅ | ✅ CRUD + status | ✅ `GET /shops`, `GET /shops/:id`, `PATCH /shops/:id`, `PATCH /shops/:id/status` | ✅ `UpdateShopDto`, `UpdateShopStatusDto` | ✅ |
 | products | ✅ | ⬜ stub | ⬜ stub | ⬜ none | ❌ |
 | categories | ✅ | ⬜ stub | ⬜ stub | ⬜ none | ❌ |
 | orders | ✅ | ⬜ stub | ⬜ stub | ⬜ none | ❌ |
@@ -90,12 +90,14 @@ No public registration. All accounts provisioned by privileged roles.
 - ✅ `@nestjs/swagger` — Swagger UI at `/api`, bearer auth configured
 - ✅ All 10 feature modules imported in `AppModule`
 - ✅ Repository layer — 3-tier architecture enforced (`Controller → Service → Repository → DatabaseService`)
-  - `UsersRepository` — real implementation (`findByEmail`, `insertUser`, supports transactional client)
-  - Stub repositories created for: shops, products, categories, orders, inventory, warehouse, audit-logs
+  - `UsersRepository` — real implementation (`findByEmail` with shop JOIN, `insertUser`, supports transactional client)
+  - `ShopsRepository` — real implementation (`findAll`, `findById`, `update`, `updateStatus`)
+  - Stub repositories created for: products, categories, orders, inventory, warehouse, audit-logs
 - ✅ Migration 05 — seeds `WAREHOUSE_ADMIN` account (`admin@warehouse.com` / `Admin@123`)
+- ✅ Migration 06 — adds `is_active` column to `shops` table
+- ✅ Shops module — full CRUD + soft delete, role-scoped access, login blocked for inactive shops
 
 ### Not Done
-- ❌ Shops CRUD
 - ❌ Products + Categories CRUD
 - ❌ Inventory management
 - ❌ Orders (warehouse ↔ shop flow)
@@ -105,11 +107,6 @@ No public registration. All accounts provisioned by privileged roles.
 ---
 
 ## What to Build Next
-
-### Ticket 3 — Shops
-- `GET /shops` — list all shops (WAREHOUSE_ADMIN) or own shop (SHOP_OWNER)
-- `GET /shops/:id` — get shop details
-- `PATCH /shops/:id` — update shop (WAREHOUSE_ADMIN or own SHOP_OWNER)
 
 ### Ticket 4 — Products + Categories
 - Full CRUD for categories (per-shop)
