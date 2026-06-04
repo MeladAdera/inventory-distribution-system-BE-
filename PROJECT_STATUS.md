@@ -13,23 +13,42 @@
 
 ---
 
+## Business Model
+
+Central Warehouse distribution system.
+
+```
+WAREHOUSE_ADMIN (Milad)
+│
+├── MD Market        ← SHOP_OWNER + EMPLOYEEs
+├── ABC Store        ← SHOP_OWNER + EMPLOYEEs
+└── Super Shop       ← SHOP_OWNER + EMPLOYEEs
+```
+
+No public registration. All accounts provisioned by privileged roles.
+
+---
+
 ## Database Schema
 
-5 migrations in `src/database/migrations/`, run in filename order, each wrapped in a transaction.
+6 migrations in `src/database/migrations/`, run in filename order.
 
 | Table | Key Columns | Notes |
 |---|---|---|
-| `shops` | `id`, `name`, `address`, `phone` | No `wallet_balance` — balance derived from `audit_logs` |
-| `users` | `id`, `shop_id?`, `name`, `email`, `password_hash`, `role` | `shop_id` nullable — warehouse owner has no shop |
+| `shops` | `id`, `name`, `address`, `phone`, `type` | `type`: `WAREHOUSE` or `SHOP` |
+| `users` | `id`, `shop_id?`, `name`, `email`, `password_hash`, `role` | `shop_id` nullable for `WAREHOUSE_ADMIN` |
 | `categories` | `id`, `shop_id`, `name` | Per-shop |
 | `products` | `id`, `category_id`, `shop_id`, `name`, `barcode`, `source` | `source`: `WAREHOUSE` or `LOCAL` |
 | `inventory` | `id`, `shop_id`, `product_id`, `current_quantity` | Unique on `(shop_id, product_id)` |
-| `orders` | `id`, `shop_id`, `status`, `total_items` | Status: `PENDING → PROCESSING → SHIPPED → RECEIVED → COMPLETED` |
+| `orders` | `id`, `from_shop_id`, `to_shop_id`, `status`, `total_items` | Supports warehouse ↔ shop direction |
 | `order_items` | `id`, `order_id`, `product_id`, `quantity`, `price` | |
 | `notifications` | `id`, `shop_id`, `user_id`, `title`, `type`, `is_read` | |
 | `audit_logs` | `id`, `shop_id`, `user_id`, `type`, `action`, `entity_type`, `amount` | Source of truth for wallet balance |
 
-**User roles:** `OWNER` · `EMPLOYEE` · `CLIENT_ADMIN`
+**User roles:** `WAREHOUSE_ADMIN` · `SHOP_OWNER` · `EMPLOYEE`
+
+**Seeded accounts:**
+- `admin@warehouse.com` / `Admin@123` → `WAREHOUSE_ADMIN`
 
 ---
 
@@ -38,8 +57,8 @@
 | Module | Module | Service | Controller | DTOs | Real Logic |
 |---|---|---|---|---|---|
 | app | ✅ | ✅ health | ✅ `/`, `/health` | — | ✅ |
-| auth | ✅ | ⬜ stub | ⬜ stub | ⬜ none | ❌ |
-| users | ✅ | ⬜ stub | ⬜ stub | ✅ `CreateUserDto` | ❌ |
+| auth | ✅ | ✅ login | ✅ `/auth/login`, `/auth/me` | ✅ `LoginDto` | ✅ |
+| users | ✅ | ✅ provisioning | ✅ `/users/shop-owners`, `/users/employees` | ✅ | ✅ |
 | shops | ✅ | ⬜ stub | ⬜ stub | ⬜ none | ❌ |
 | products | ✅ | ⬜ stub | ⬜ stub | ⬜ none | ❌ |
 | categories | ✅ | ⬜ stub | ⬜ stub | ⬜ none | ❌ |
@@ -56,70 +75,58 @@
 ### Done
 - ✅ Migration runner — transactional, ordered by filename, tracked in `migrations` table
 - ✅ `DatabaseService` — pg client wrapper
+- ✅ `DatabaseModule` — `@Global()` module, injectable everywhere without re-importing
 - ✅ `TransformInterceptor` — wraps all responses as `{ success, data, timestamp }`
-- ✅ `HttpExceptionFilter` — standardised error shape
+- ✅ `HttpExceptionFilter` — standardised error shape `{ success: false, statusCode, message }`
 - ✅ `PaginationDto` + `paginationUtil`
-- ✅ `JwtStrategy` — reads bearer token, validates against `JWT_SECRET`
+- ✅ `JwtStrategy` — reads bearer token, returns `{ id, email, role, shopId }`
+- ✅ `JwtAuthGuard` — blocks unauthenticated access
+- ✅ `RolesGuard` — enforces `@Roles()` decorator, returns 403 on mismatch
+- ✅ `@CurrentUser()` decorator — injects user from request
+- ✅ `@Roles()` decorator — sets required role metadata
+- ✅ `UserRole` enum — `WAREHOUSE_ADMIN`, `SHOP_OWNER`, `EMPLOYEE`
+- ✅ `ShopType` enum — `WAREHOUSE`, `SHOP`
 - ✅ Global `ValidationPipe` — whitelist, forbidNonWhitelisted, transform
-- ✅ Docker Compose — runs migrations before app start (`migration:run && npm start`)
-- ✅ `@nestjs/swagger` installed and wired — Swagger UI at `/api`
+- ✅ `@nestjs/swagger` — Swagger UI at `/api`, bearer auth configured
 - ✅ All 10 feature modules imported in `AppModule`
-- ✅ `HttpExceptionFilter` registered globally
-- ✅ `TransformInterceptor` registered globally
+- ✅ Repository layer — 3-tier architecture enforced (`Controller → Service → Repository → DatabaseService`)
+  - `UsersRepository` — real implementation (`findByEmail`, `insertUser`, supports transactional client)
+  - Stub repositories created for: shops, products, categories, orders, inventory, warehouse, audit-logs
+- ✅ Migration 05 — seeds `WAREHOUSE_ADMIN` account (`admin@warehouse.com` / `Admin@123`)
 
 ### Not Done
-- ❌ Auth guards directory exists but is empty
-- ❌ Auth decorators directory exists but is empty
+- ❌ Shops CRUD
+- ❌ Products + Categories CRUD
+- ❌ Inventory management
+- ❌ Orders (warehouse ↔ shop flow)
+- ❌ Audit logs
+- ❌ Notifications
 
 ---
 
-## What to Build Next (Suggested Order)
+## What to Build Next
 
-### 1. Wire Feature Modules into `AppModule`
-Nothing is reachable until modules are imported. Add all feature modules to `AppModule.imports`.
-
-### 2. Auth
-- `POST /auth/register` — hash password with bcrypt, insert user
-- `POST /auth/login` — verify password, sign and return JWT
-- `JwtAuthGuard` — wrap `AuthGuard('jwt')`
-- `@CurrentUser()` decorator — extract user from request
-
-### 3. Users
-- `GET /users/:id` — get own profile
-- `PATCH /users/:id` — update profile
-- `GET /users` — list users (OWNER only)
-
-### 4. Shops
-- `POST /shops` — create shop
+### Ticket 3 — Shops
+- `GET /shops` — list all shops (WAREHOUSE_ADMIN) or own shop (SHOP_OWNER)
 - `GET /shops/:id` — get shop details
-- `PATCH /shops/:id` — update shop
+- `PATCH /shops/:id` — update shop (WAREHOUSE_ADMIN or own SHOP_OWNER)
 
-### 5. Products + Categories
-- Full CRUD for both
-- Pagination support (infrastructure already exists)
+### Ticket 4 — Products + Categories
+- Full CRUD for categories (per-shop)
+- Full CRUD for products with pagination
 - Filter by `source` (WAREHOUSE / LOCAL)
 
-### 6. Inventory
-- `GET /inventory` — list stock levels per shop
+### Ticket 5 — Inventory
+- `GET /inventory` — list stock levels for current shop
 - `PATCH /inventory/:id` — adjust quantity
-- Low-stock detection against `reorder_level`
+- Low-stock detection
 
-### 7. Orders
-- `POST /orders` — create order, deduct inventory
-- `PATCH /orders/:id/status` — transition order status
-- `GET /orders` — list with filters (status, date range)
+### Ticket 6 — Orders
+- `POST /orders` — shop creates order request to warehouse
+- `PATCH /orders/:id/status` — warehouse transitions status
+- `GET /orders` — list with filters
 
-### 8. Audit Logs
-- Write an audit entry on every stock/order/payment change
-- `GET /audit-logs` — query by shop, user, entity, date
-- Compute wallet balance from `amount` entries
-
-### 9. Notifications
-- Wire real email/SMS/push on order status changes
-- `GET /notifications` — list for current user
-- `PATCH /notifications/:id/read` — mark as read
-
-### 10. Swagger
-- Add `DocumentBuilder` in `main.ts`
-- Add `@ApiProperty()` to all DTOs and entities
-- Add `@ApiBearerAuth()` to protected routes
+### Ticket 7 — Audit Logs + Notifications
+- Audit entry on every stock/order change
+- `GET /audit-logs` — query by shop, date
+- Notification triggers on order status change
