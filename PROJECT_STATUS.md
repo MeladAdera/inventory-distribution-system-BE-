@@ -31,13 +31,13 @@ No public registration. All accounts provisioned by privileged roles.
 
 ## Database Schema
 
-7 migrations in `src/database/migrations/`, run in filename order.
+9 migrations in `src/database/migrations/`, run in filename order.
 
 | Table | Key Columns | Notes |
 |---|---|---|
 | `shops` | `id`, `name`, `address`, `phone`, `type`, `is_active` | `type`: `WAREHOUSE` or `SHOP` |
-| `users` | `id`, `shop_id?`, `name`, `email`, `password_hash`, `role` | `shop_id` nullable for `WAREHOUSE_ADMIN` |
-| `categories` | `id`, `shop_id`, `name` | Per-shop |
+| `users` | `id`, `shop_id`, `name`, `email`, `password_hash`, `role` | `WAREHOUSE_ADMIN` linked to warehouse shop |
+| `categories` | `id`, `shop_id`, `name`, `updated_at` | Per-shop; warehouse categories are global |
 | `products` | `id`, `category_id`, `shop_id`, `name`, `barcode`, `source` | `source`: `WAREHOUSE` or `LOCAL` |
 | `inventory` | `id`, `shop_id`, `product_id`, `current_quantity` | Unique on `(shop_id, product_id)` |
 | `orders` | `id`, `from_shop_id`, `to_shop_id`, `status`, `total_items` | Supports warehouse ↔ shop direction |
@@ -61,7 +61,7 @@ No public registration. All accounts provisioned by privileged roles.
 | users | ✅ | ✅ provisioning | ✅ `/users/shop-owners`, `/users/employees` | ✅ | ✅ |
 | shops | ✅ | ✅ CRUD + status | ✅ `GET /shops`, `GET /shops/:id`, `PATCH /shops/:id`, `PATCH /shops/:id/status` | ✅ `UpdateShopDto`, `UpdateShopStatusDto` | ✅ |
 | products | ✅ | ⬜ stub | ⬜ stub | ⬜ none | ❌ |
-| categories | ✅ | ⬜ stub | ⬜ stub | ⬜ none | ❌ |
+| categories | ✅ | ✅ CRUD + global | ✅ `GET /categories`, `GET /categories/:id`, `POST /categories`, `PATCH /categories/:id`, `DELETE /categories/:id` | ✅ `CreateCategoryDto`, `UpdateCategoryDto` | ✅ |
 | orders | ✅ | ⬜ stub | ⬜ stub | ⬜ none | ❌ |
 | inventory | ✅ | ⬜ stub | ⬜ stub | ⬜ none | ❌ |
 | warehouse | ✅ | ⬜ stub | ⬜ stub | ⬜ none | ❌ |
@@ -92,13 +92,17 @@ No public registration. All accounts provisioned by privileged roles.
 - ✅ Repository layer — 3-tier architecture enforced (`Controller → Service → Repository → DatabaseService`)
   - `UsersRepository` — real implementation (`findByEmail` with shop JOIN, `insertUser`, supports transactional client)
   - `ShopsRepository` — real implementation (`findAll`, `findById`, `update`, `updateStatus`)
-  - Stub repositories created for: products, categories, orders, inventory, warehouse, audit-logs
+  - `CategoriesRepository` — real implementation (`findAll`, `findAllByShop`, `findAllForShop`, `findById`, `findByNameAndShop`, `insert`, `update`, `deleteById`, `hasProducts`)
+  - Stub repositories created for: products, orders, inventory, warehouse, audit-logs
 - ✅ Migration 05 — seeds `WAREHOUSE_ADMIN` account (`admin@warehouse.com` / `Admin@123`)
 - ✅ Migration 06 — adds `is_active` column to `shops` table
+- ✅ Migration 07 — adds `updated_at` column to `categories` table
+- ✅ Migration 08 — links `WAREHOUSE_ADMIN` to the warehouse shop (`shop_id = 1`)
 - ✅ Shops module — full CRUD + soft delete, role-scoped access, login blocked for inactive shops
+- ✅ Categories module — full CRUD, warehouse categories are global (visible to all shops), deletion blocked when products assigned
 
 ### Not Done
-- ❌ Products + Categories CRUD
+- ❌ Products CRUD
 - ❌ Inventory management
 - ❌ Orders (warehouse ↔ shop flow)
 - ❌ Audit logs
@@ -108,10 +112,10 @@ No public registration. All accounts provisioned by privileged roles.
 
 ## What to Build Next
 
-### Ticket 4 — Products + Categories
-- Full CRUD for categories (per-shop)
+### Ticket 4b — Products
 - Full CRUD for products with pagination
 - Filter by `source` (WAREHOUSE / LOCAL)
+- Link to category and shop
 
 ### Ticket 5 — Inventory
 - `GET /inventory` — list stock levels for current shop

@@ -38,12 +38,18 @@ src/
 │   │   └── update-shop-status.dto.ts    # isActive: boolean
 │   └── shops.module.ts
 │
-├── categories/                          # Product Categories
+├── categories/                          # Product Categories (per-shop + global warehouse)
 │   ├── controllers/
+│   │   └── categories.controller.ts     # GET /categories, GET /categories/:id, POST, PATCH, DELETE
 │   ├── services/
+│   │   └── categories.service.ts        # findAll, findById, create, update, remove
 │   ├── repositories/
+│   │   └── categories.repository.ts     # findAll, findAllByShop, findAllForShop, findByNameAndShop, hasProducts
 │   ├── entities/
+│   │   └── category.entity.ts           # id, shop_id, name, created_at, updated_at
 │   ├── dto/
+│   │   ├── create-category.dto.ts       # name (required, 3–100)
+│   │   └── update-category.dto.ts       # name (optional, 3–100)
 │   └── categories.module.ts
 │
 ├── products/                            # Product Catalog
@@ -131,6 +137,8 @@ src/
 │   │   ├── 04-CreateWalletAndNotifications.sql
 │   │   ├── 05-SeedWarehouseAdmin.sql
 │   │   ├── 06-AddShopIsActive.sql       # ALTER TABLE shops ADD COLUMN is_active
+│   │   ├── 07-AddCategoryUpdatedAt.sql  # ALTER TABLE categories ADD COLUMN updated_at
+│   │   ├── 08-LinkWarehouseAdminToShop.sql  # UPDATE users SET shop_id=1 WHERE role='WAREHOUSE_ADMIN'
 │   │   └── runner.ts                    # Migration execution script
 │   ├── seeders/                         # Seed data scripts
 │   └── factories/                       # Test data factories
