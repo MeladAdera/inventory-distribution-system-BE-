@@ -52,12 +52,21 @@ src/
 │   │   └── update-category.dto.ts       # name (optional, 3–100)
 │   └── categories.module.ts
 │
-├── products/                            # Product Catalog
+├── products/                            # Product Catalog (warehouse = global, local = per-shop)
 │   ├── controllers/
+│   │   └── products.controller.ts       # GET /products, GET /products/:id, POST, PATCH, DELETE
 │   ├── services/
+│   │   └── products.service.ts          # findAll, findById, create, createForShop, update, remove
 │   ├── repositories/
-│   ├── entities/                        # product.entity.ts
+│   │   └── products.repository.ts       # findPaginatedAdmin, findPaginatedForShop, categoryAccessible,
+│   │                                    # findByBarcodeAndShop, insert, update, softDelete
+│   ├── entities/
+│   │   └── product.entity.ts            # id, shop_id, category_id, name, barcode, price,
+│   │                                    # source, is_global, is_active, created_at, updated_at
 │   ├── dto/
+│   │   ├── create-product.dto.ts        # name, price, category_id, barcode?, description?
+│   │   ├── update-product.dto.ts        # all optional
+│   │   └── product-query.dto.ts         # extends PaginationDto + source?, category_id?, shop_id?
 │   └── products.module.ts
 │
 ├── inventory/                           # Stock Management
@@ -139,6 +148,7 @@ src/
 │   │   ├── 06-AddShopIsActive.sql       # ALTER TABLE shops ADD COLUMN is_active
 │   │   ├── 07-AddCategoryUpdatedAt.sql  # ALTER TABLE categories ADD COLUMN updated_at
 │   │   ├── 08-LinkWarehouseAdminToShop.sql  # UPDATE users SET shop_id=1 WHERE role='WAREHOUSE_ADMIN'
+│   │   ├── 09-AddProductPriceAndSoftDelete.sql  # ADD price, updated_at, is_active; unique barcode index
 │   │   └── runner.ts                    # Migration execution script
 │   ├── seeders/                         # Seed data scripts
 │   └── factories/                       # Test data factories

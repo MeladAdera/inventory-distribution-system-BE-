@@ -1,12 +1,14 @@
 export class Product {
-  id!: string;
+  id!: number;
+  shop_id!: number;
+  category_id!: number | null;
   name!: string;
-  description?: string;
+  description!: string | null;
+  barcode!: string | null;
   price!: number;
-  sku!: string;
-  categoryId!: string;
-  image?: string;
-  isActive!: boolean;
-  createdAt!: Date;
-  updatedAt!: Date;
+  source!: 'WAREHOUSE' | 'LOCAL';
+  is_global!: boolean;
+  is_active!: boolean;
+  created_at!: Date;
+  updated_at!: Date;
 }
