@@ -1,12 +1,13 @@
 export class Inventory {
-  id!: string;
-  productId!: string;
-  warehouseId!: string;
-  quantity!: number;
-  reservedQuantity!: number;
-  availableQuantity!: number;
-  reorderLevel!: number;
-  status!: 'in_stock' | 'low_stock' | 'out_of_stock';
-  createdAt!: Date;
-  updatedAt!: Date;
+  id!: number;
+  shop_id!: number;
+  product_id!: number;
+  current_quantity!: number;
+  low_stock_threshold!: number;
+  updated_at!: Date;
+}
+
+export class InventoryWithProduct extends Inventory {
+  product_name!: string;
+  is_low_stock!: boolean;
 }
