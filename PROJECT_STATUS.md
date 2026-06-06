@@ -31,7 +31,7 @@ No public registration. All accounts provisioned by privileged roles.
 
 ## Database Schema
 
-10 migrations in `src/database/migrations/`, run in filename order.
+11 migrations in `src/database/migrations/`, run in filename order.
 
 | Table | Key Columns | Notes |
 |---|---|---|
@@ -39,11 +39,11 @@ No public registration. All accounts provisioned by privileged roles.
 | `users` | `id`, `shop_id`, `name`, `email`, `password_hash`, `role` | `WAREHOUSE_ADMIN` linked to warehouse shop |
 | `categories` | `id`, `shop_id`, `name`, `updated_at` | Per-shop; warehouse categories are global |
 | `products` | `id`, `category_id`, `shop_id`, `name`, `barcode`, `price`, `source`, `is_active` | `source` auto-set from shop type |
-| `inventory` | `id`, `shop_id`, `product_id`, `current_quantity` | Unique on `(shop_id, product_id)` |
+| `inventory` | `id`, `shop_id`, `product_id`, `current_quantity`, `low_stock_threshold` | Unique on `(shop_id, product_id)`; threshold default 10 |
 | `orders` | `id`, `from_shop_id`, `to_shop_id`, `status`, `total_items` | Supports warehouse ↔ shop direction |
 | `order_items` | `id`, `order_id`, `product_id`, `quantity`, `price` | |
 | `notifications` | `id`, `shop_id`, `user_id`, `title`, `type`, `is_read` | |
-| `audit_logs` | `id`, `shop_id`, `user_id`, `type`, `action`, `entity_type`, `amount` | Source of truth for wallet balance |
+| `audit_logs` | `id`, `shop_id`, `user_id`, `type`, `action`, `entity_type`, `entity_id`, `quantity`, `amount`, `notes` | Append-only history of all mutations |
 
 **User roles:** `WAREHOUSE_ADMIN` · `SHOP_OWNER` · `EMPLOYEE`
 
@@ -62,10 +62,10 @@ No public registration. All accounts provisioned by privileged roles.
 | shops | ✅ | ✅ CRUD + status | ✅ `GET /shops`, `GET /shops/:id`, `PATCH /shops/:id`, `PATCH /shops/:id/status` | ✅ `UpdateShopDto`, `UpdateShopStatusDto` | ✅ |
 | products | ✅ | ✅ CRUD + soft delete | ✅ `GET /products`, `GET /products/:id`, `POST /products`, `PATCH /products/:id`, `DELETE /products/:id` | ✅ `CreateProductDto`, `UpdateProductDto`, `ProductQueryDto` | ✅ |
 | categories | ✅ | ✅ CRUD + global | ✅ `GET /categories`, `GET /categories/:id`, `POST /categories`, `PATCH /categories/:id`, `DELETE /categories/:id` | ✅ `CreateCategoryDto`, `UpdateCategoryDto` | ✅ |
+| inventory | ✅ | ✅ stock-in, adjust, low-stock | ✅ `GET /inventory`, `GET /inventory/low-stock`, `GET /inventory/:id`, `POST /inventory/stock-in`, `PATCH /inventory/:id` | ✅ `StockInDto`, `AdjustInventoryDto`, `InventoryQueryDto` | ✅ |
+| audit-logs | ✅ | ✅ log() | — (internal service) | — | ✅ |
 | orders | ✅ | ⬜ stub | ⬜ stub | ⬜ none | ❌ |
-| inventory | ✅ | ⬜ stub | ⬜ stub | ⬜ none | ❌ |
 | warehouse | ✅ | ⬜ stub | ⬜ stub | ⬜ none | ❌ |
-| audit-logs | ✅ | ⬜ stub | ⬜ stub | ⬜ none | ❌ |
 | notifications | ✅ | ⬜ stub (email/sms/push) | — | ⬜ none | ❌ |
 
 ---
@@ -88,35 +88,33 @@ No public registration. All accounts provisioned by privileged roles.
 - ✅ `ShopType` enum — `WAREHOUSE`, `SHOP`
 - ✅ Global `ValidationPipe` — whitelist, forbidNonWhitelisted, transform
 - ✅ `@nestjs/swagger` — Swagger UI at `/api`, bearer auth configured
-- ✅ All 10 feature modules imported in `AppModule`
+- ✅ All feature modules imported in `AppModule`
 - ✅ Repository layer — 3-tier architecture enforced (`Controller → Service → Repository → DatabaseService`)
   - `UsersRepository` — real implementation (`findByEmail` with shop JOIN, `insertUser`, supports transactional client)
   - `ShopsRepository` — real implementation (`findAll`, `findById`, `update`, `updateStatus`)
   - `CategoriesRepository` — real implementation (`findAll`, `findAllByShop`, `findAllForShop`, `findById`, `findByNameAndShop`, `insert`, `update`, `deleteById`, `hasProducts`)
   - `ProductsRepository` — real implementation (`findPaginatedAdmin`, `findPaginatedForShop`, `findById`, `findByBarcodeAndShop`, `categoryAccessible`, `insert`, `update`, `softDelete`)
-  - Stub repositories created for: orders, inventory, warehouse, audit-logs
+  - `InventoryRepository` — real implementation (`findPaginated`, `findAllForAdmin`, `findById`, `findLowStock`, `findAllLowStockForAdmin`, `findByShopAndProduct`, `upsertStockIn`, `adjust`)
+  - `AuditLogsRepository` — real implementation (`insert` with optional transactional client)
+  - Stub repositories created for: orders, warehouse
 - ✅ Migration 05 — seeds `WAREHOUSE_ADMIN` account (`admin@warehouse.com` / `Admin@123`)
 - ✅ Migration 06 — adds `is_active` column to `shops` table
 - ✅ Migration 07 — adds `updated_at` column to `categories` table
 - ✅ Migration 08 — links `WAREHOUSE_ADMIN` to the warehouse shop (`shop_id = 1`)
+- ✅ Migration 10 — adds `low_stock_threshold INTEGER NOT NULL DEFAULT 10` to `inventory` table
 - ✅ Shops module — full CRUD + soft delete, role-scoped access, login blocked for inactive shops
 - ✅ Categories module — full CRUD, warehouse categories are global (visible to all shops), deletion blocked when products assigned
 - ✅ Products module — full CRUD + soft delete, paginated + filtered, source auto-set from shop type, warehouse products visible to all shops
+- ✅ Inventory module — stock-in (upsert), adjustment (with negative guard), low-stock detection, role-scoped access, all mutations wrapped in DB transactions with audit log
+- ✅ Audit logs module — `AuditLogsService.log()` shared service, supports transactional client, consumed by inventory module
 
 ### Not Done
-- ❌ Inventory management
 - ❌ Orders (warehouse ↔ shop flow)
-- ❌ Audit logs
 - ❌ Notifications
 
 ---
 
 ## What to Build Next
-
-### Ticket 5 — Inventory
-- `GET /inventory` — list stock levels for current shop
-- `PATCH /inventory/:id` — adjust quantity
-- Low-stock detection
 
 ### Ticket 6 — Orders
 - `POST /orders` — shop creates order request to warehouse

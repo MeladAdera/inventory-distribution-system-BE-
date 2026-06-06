@@ -71,11 +71,25 @@ src/
 │
 ├── inventory/                           # Stock Management
 │   ├── controllers/
+│   │   └── inventory.controller.ts      # GET /inventory, GET /inventory/low-stock,
+│   │                                    # GET /inventory/:id, POST /inventory/stock-in,
+│   │                                    # PATCH /inventory/:id
 │   ├── services/
+│   │   └── inventory.service.ts         # findAll, findById, stockIn, adjust, getLowStock
+│   │                                    # assertReadAccess(), assertWriteAccess()
 │   ├── repositories/
-│   ├── entities/                        # inventory.entity.ts
+│   │   └── inventory.repository.ts      # findPaginated, findAllForAdmin, findById,
+│   │                                    # findLowStock, findAllLowStockForAdmin,
+│   │                                    # findByShopAndProduct, upsertStockIn, adjust
+│   ├── entities/
+│   │   └── inventory.entity.ts          # Inventory: id, shop_id, product_id,
+│   │                                    # current_quantity, low_stock_threshold, updated_at
+│   │                                    # InventoryWithProduct: + product_name, is_low_stock
 │   ├── dto/
-│   └── inventory.module.ts
+│   │   ├── stock-in.dto.ts             # productId, quantity, notes?
+│   │   ├── adjust-inventory.dto.ts     # adjustment (non-zero int), reason?
+│   │   └── inventory-query.dto.ts      # extends PaginationDto + lowStock?, productId?
+│   └── inventory.module.ts             # imports DatabaseModule, AuditLogsModule
 │
 ├── orders/                              # Order Management
 │   ├── controllers/
@@ -108,11 +122,16 @@ src/
 │
 ├── audit-logs/                          # System Audit Trail
 │   ├── controllers/
+│   │   └── audit-logs.controller.ts     # (reserved for future GET /audit-logs endpoint)
 │   ├── services/
+│   │   └── audit-logs.service.ts        # log(data, client?) — consumed by other modules
 │   ├── repositories/
+│   │   └── audit-logs.repository.ts     # insert(data, client?) — supports tx client
 │   ├── entities/
-│   ├── dto/
-│   └── audit-logs.module.ts
+│   │   └── audit-log.entity.ts          # id, shop_id, user_id, type, action,
+│   │                                    # entity_type, entity_id, quantity, amount,
+│   │                                    # notes, created_at
+│   └── audit-logs.module.ts             # imports DatabaseModule; exports AuditLogsService
 │
 ├── common/                              # Shared Utilities & Infrastructure
 │   ├── constants/
@@ -149,6 +168,7 @@ src/
 │   │   ├── 07-AddCategoryUpdatedAt.sql  # ALTER TABLE categories ADD COLUMN updated_at
 │   │   ├── 08-LinkWarehouseAdminToShop.sql  # UPDATE users SET shop_id=1 WHERE role='WAREHOUSE_ADMIN'
 │   │   ├── 09-AddProductPriceAndSoftDelete.sql  # ADD price, updated_at, is_active; unique barcode index
+│   │   ├── 10-AddInventoryLowStockThreshold.sql # ADD low_stock_threshold INTEGER NOT NULL DEFAULT 10
 │   │   └── runner.ts                    # Migration execution script
 │   ├── seeders/                         # Seed data scripts
 │   └── factories/                       # Test data factories
