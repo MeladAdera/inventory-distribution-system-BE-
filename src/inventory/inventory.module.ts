@@ -9,6 +9,6 @@ import { AuditLogsModule } from '../audit-logs/audit-logs.module';
   imports: [DatabaseModule, AuditLogsModule],
   controllers: [InventoryController],
   providers: [InventoryService, InventoryRepository],
-  exports: [InventoryService],
+  exports: [InventoryService, InventoryRepository],
 })
 export class InventoryModule {}

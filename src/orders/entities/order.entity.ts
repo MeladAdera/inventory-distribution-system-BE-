@@ -1,13 +1,22 @@
+export type OrderStatus = 'PENDING' | 'PROCESSING' | 'SHIPPED' | 'RECEIVED' | 'COMPLETED';
+
 export class Order {
-  id!: string;
-  orderNumber!: string;
-  userId!: string;
-  shopId!: string;
-  status!: 'pending' | 'confirmed' | 'shipped' | 'delivered' | 'cancelled';
-  totalPrice!: number;
-  totalItems!: number;
-  deliveryAddress!: string;
-  notes?: string;
-  createdAt!: Date;
-  updatedAt!: Date;
+  id!: number;
+  from_shop_id!: number;
+  to_shop_id!: number;
+  status!: OrderStatus;
+  total_items!: number;
+  created_at!: Date;
+  updated_at!: Date;
+}
+
+export class OrderWithItems extends Order {
+  items!: OrderItemRow[];
+}
+
+export interface OrderItemRow {
+  product_id: number;
+  product_name: string;
+  quantity: number;
+  price: number;
 }
