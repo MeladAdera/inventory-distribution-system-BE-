@@ -1,0 +1,52 @@
+import { IsOptional, IsInt, IsString, Min } from 'class-validator';
+import { Type } from 'class-transformer';
+import { ApiProperty } from '@nestjs/swagger';
+import { PaginationDto } from '../../common/dto/pagination.dto';
+
+export class AuditLogQueryDto extends PaginationDto {
+  @ApiProperty({ example: 2, required: false })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  shopId?: number;
+
+  @ApiProperty({ example: 3, required: false })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  userId?: number;
+
+  @ApiProperty({ example: 'INVENTORY', required: false })
+  @IsOptional()
+  @IsString()
+  type?: string;
+
+  @ApiProperty({ example: 'STOCK_IN', required: false })
+  @IsOptional()
+  @IsString()
+  action?: string;
+
+  @ApiProperty({ example: 'inventory', required: false })
+  @IsOptional()
+  @IsString()
+  entityType?: string;
+
+  @ApiProperty({ example: 5, required: false })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  entityId?: number;
+
+  @ApiProperty({ example: '2026-06-01', required: false })
+  @IsOptional()
+  @IsString()
+  fromDate?: string;
+
+  @ApiProperty({ example: '2026-06-30', required: false })
+  @IsOptional()
+  @IsString()
+  toDate?: string;
+}

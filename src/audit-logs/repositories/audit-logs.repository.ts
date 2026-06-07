@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import * as pg from 'pg';
 import { DatabaseService } from '../../database/database.service';
 import { AuditLog } from '../entities/audit-log.entity';
+import { AuditLogQueryDto } from '../dto/audit-log-query.dto';
 
 export interface CreateAuditLogData {
   shop_id: number | null;
@@ -18,6 +19,75 @@ export interface CreateAuditLogData {
 @Injectable()
 export class AuditLogsRepository {
   constructor(private readonly db: DatabaseService) {}
+
+  async findPaginated(query: AuditLogQueryDto, scopedShopId?: number): Promise<{ data: AuditLog[]; total: number }> {
+    const conditions: string[] = [];
+    const params: unknown[] = [];
+    let idx = 1;
+
+    if (scopedShopId !== undefined) {
+      conditions.push(`al.shop_id = $${idx++}`);
+      params.push(scopedShopId);
+    } else if (query.shopId) {
+      conditions.push(`al.shop_id = $${idx++}`);
+      params.push(query.shopId);
+    }
+
+    if (query.userId) {
+      conditions.push(`al.user_id = $${idx++}`);
+      params.push(query.userId);
+    }
+    if (query.type) {
+      conditions.push(`al.type = $${idx++}`);
+      params.push(query.type);
+    }
+    if (query.action) {
+      conditions.push(`al.action = $${idx++}`);
+      params.push(query.action);
+    }
+    if (query.entityType) {
+      conditions.push(`al.entity_type = $${idx++}`);
+      params.push(query.entityType);
+    }
+    if (query.entityId) {
+      conditions.push(`al.entity_id = $${idx++}`);
+      params.push(query.entityId);
+    }
+    if (query.fromDate) {
+      conditions.push(`al.created_at >= $${idx++}`);
+      params.push(query.fromDate);
+    }
+    if (query.toDate) {
+      conditions.push(`al.created_at <= $${idx++}::date + interval '1 day'`);
+      params.push(query.toDate);
+    }
+
+    const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+    params.push(query.limit, query.offset);
+    const limitIdx = idx++;
+    const offsetIdx = idx++;
+
+    const rows = await this.db.query<AuditLog & { total_count: string }>(
+      `SELECT al.*, COUNT(*) OVER() AS total_count
+       FROM audit_logs al
+       ${whereClause}
+       ORDER BY al.created_at DESC
+       LIMIT $${limitIdx} OFFSET $${offsetIdx}`,
+      params,
+    );
+
+    return {
+      data: rows.map(({ total_count: _, ...row }) => row as AuditLog),
+      total: rows.length > 0 ? parseInt(rows[0].total_count, 10) : 0,
+    };
+  }
+
+  findById(id: number): Promise<AuditLog | null> {
+    return this.db.queryOne<AuditLog>(
+      'SELECT * FROM audit_logs WHERE id = $1',
+      [id],
+    );
+  }
 
   async insert(data: CreateAuditLogData, client?: pg.PoolClient): Promise<AuditLog> {
     const sql = `

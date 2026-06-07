@@ -5,9 +5,10 @@ import { OrdersRepository } from './repositories/orders.repository';
 import { DatabaseModule } from '../database/database.module';
 import { InventoryModule } from '../inventory/inventory.module';
 import { AuditLogsModule } from '../audit-logs/audit-logs.module';
+import { NotificationsModule } from '../notifications/notifications.module';
 
 @Module({
-  imports: [DatabaseModule, InventoryModule, AuditLogsModule],
+  imports: [DatabaseModule, InventoryModule, AuditLogsModule, NotificationsModule],
   controllers: [OrdersController],
   providers: [OrdersService, OrdersRepository],
   exports: [OrdersService],

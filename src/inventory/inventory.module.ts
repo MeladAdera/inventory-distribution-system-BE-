@@ -4,9 +4,10 @@ import { InventoryController } from './controllers/inventory.controller';
 import { InventoryRepository } from './repositories/inventory.repository';
 import { DatabaseModule } from '../database/database.module';
 import { AuditLogsModule } from '../audit-logs/audit-logs.module';
+import { NotificationsModule } from '../notifications/notifications.module';
 
 @Module({
-  imports: [DatabaseModule, AuditLogsModule],
+  imports: [DatabaseModule, AuditLogsModule, NotificationsModule],
   controllers: [InventoryController],
   providers: [InventoryService, InventoryRepository],
   exports: [InventoryService, InventoryRepository],

@@ -7,6 +7,7 @@ import {
 import { DatabaseService } from '../../database/database.service';
 import { InventoryRepository } from '../repositories/inventory.repository';
 import { AuditLogsService } from '../../audit-logs/services/audit-logs.service';
+import { NotificationsService } from '../../notifications/services/notifications.service';
 import { InventoryQueryDto } from '../dto/inventory-query.dto';
 import { StockInDto } from '../dto/stock-in.dto';
 import { AdjustInventoryDto } from '../dto/adjust-inventory.dto';
@@ -25,6 +26,7 @@ export class InventoryService {
   constructor(
     private readonly inventoryRepo: InventoryRepository,
     private readonly auditLogsService: AuditLogsService,
+    private readonly notificationsService: NotificationsService,
     private readonly db: DatabaseService,
   ) {}
 
@@ -49,7 +51,7 @@ export class InventoryService {
   async stockIn(dto: StockInDto, user: RequestUser): Promise<InventoryWithProduct> {
     const shopId = user.shopId!;
 
-    return this.db.transaction(async (client) => {
+    const result = await this.db.transaction(async (client) => {
       const updated = await this.inventoryRepo.upsertStockIn(shopId, dto.productId, dto.quantity, client);
 
       await this.auditLogsService.log(
@@ -66,9 +68,14 @@ export class InventoryService {
         client,
       );
 
-      const result = await this.inventoryRepo.findById(updated.id);
-      return result!;
+      return this.inventoryRepo.findById(updated.id).then((r) => r!);
     });
+
+    if (result.is_low_stock) {
+      await this.notificationsService.notifyLowStock(result.product_name, shopId);
+    }
+
+    return result;
   }
 
   async adjust(id: number, dto: AdjustInventoryDto, user: RequestUser): Promise<InventoryWithProduct> {
@@ -84,7 +91,7 @@ export class InventoryService {
       );
     }
 
-    return this.db.transaction(async (client) => {
+    const result = await this.db.transaction(async (client) => {
       await this.inventoryRepo.adjust(id, dto.adjustment, client);
 
       await this.auditLogsService.log(
@@ -101,9 +108,14 @@ export class InventoryService {
         client,
       );
 
-      const result = await this.inventoryRepo.findById(id);
-      return result!;
+      return this.inventoryRepo.findById(id).then((r) => r!);
     });
+
+    if (result.is_low_stock) {
+      await this.notificationsService.notifyLowStock(result.product_name, item.shop_id);
+    }
+
+    return result;
   }
 
   async getLowStock(user: RequestUser): Promise<InventoryWithProduct[]> {

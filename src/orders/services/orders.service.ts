@@ -8,6 +8,7 @@ import { DatabaseService } from '../../database/database.service';
 import { OrdersRepository } from '../repositories/orders.repository';
 import { InventoryRepository } from '../../inventory/repositories/inventory.repository';
 import { AuditLogsService } from '../../audit-logs/services/audit-logs.service';
+import { NotificationsService } from '../../notifications/services/notifications.service';
 import { CreateOrderDto } from '../dto/create-order.dto';
 import { UpdateOrderStatusDto } from '../dto/update-order-status.dto';
 import { OrderQueryDto } from '../dto/order-query.dto';
@@ -34,6 +35,7 @@ export class OrdersService {
     private readonly ordersRepo: OrdersRepository,
     private readonly inventoryRepo: InventoryRepository,
     private readonly auditLogsService: AuditLogsService,
+    private readonly notificationsService: NotificationsService,
     private readonly db: DatabaseService,
   ) {}
 
@@ -58,11 +60,14 @@ export class OrdersService {
 
     const totalItems = dto.items.reduce((sum, i) => sum + i.quantity, 0);
 
-    return this.db.transaction(async (client) => {
-      const order = await this.ordersRepo.insert(warehouse.id, toShopId, totalItems, client);
-      await this.ordersRepo.insertItems(order.id, dto.items, client);
-      return order;
+    const order = await this.db.transaction(async (client) => {
+      const created = await this.ordersRepo.insert(warehouse.id, toShopId, totalItems, client);
+      await this.ordersRepo.insertItems(created.id, dto.items, client);
+      return created;
     });
+
+    await this.notificationsService.notifyOrderCreated(order.id, warehouse.id);
+    return order;
   }
 
   async findAll(query: OrderQueryDto, user: RequestUser): Promise<PaginatedResponse<Order>> {
@@ -89,8 +94,8 @@ export class OrdersService {
       );
     }
 
-    return this.db.transaction(async (client) => {
-      const updated = await this.ordersRepo.updateStatus(id, dto.status, client);
+    const updated = await this.db.transaction(async (client) => {
+      const result = await this.ordersRepo.updateStatus(id, dto.status, client);
 
       await this.auditLogsService.log(
         {
@@ -109,8 +114,11 @@ export class OrdersService {
         await this.transferInventory(id, order.from_shop_id, order.to_shop_id, user.id, client);
       }
 
-      return updated;
+      return result;
     });
+
+    await this.notificationsService.notifyStatusChanged(id, dto.status, order.to_shop_id);
+    return updated;
   }
 
   private async transferInventory(

@@ -63,10 +63,10 @@ No public registration. All accounts provisioned by privileged roles.
 | products | ✅ | ✅ CRUD + soft delete | ✅ `GET /products`, `GET /products/:id`, `POST /products`, `PATCH /products/:id`, `DELETE /products/:id` | ✅ `CreateProductDto`, `UpdateProductDto`, `ProductQueryDto` | ✅ |
 | categories | ✅ | ✅ CRUD + global | ✅ `GET /categories`, `GET /categories/:id`, `POST /categories`, `PATCH /categories/:id`, `DELETE /categories/:id` | ✅ `CreateCategoryDto`, `UpdateCategoryDto` | ✅ |
 | inventory | ✅ | ✅ stock-in, adjust, low-stock | ✅ `GET /inventory`, `GET /inventory/low-stock`, `GET /inventory/:id`, `POST /inventory/stock-in`, `PATCH /inventory/:id` | ✅ `StockInDto`, `AdjustInventoryDto`, `InventoryQueryDto` | ✅ |
-| audit-logs | ✅ | ✅ log() | — (internal service) | — | ✅ |
+| audit-logs | ✅ | ✅ log(), findAll, findById | ✅ `GET /audit-logs`, `GET /audit-logs/:id` | ✅ `AuditLogQueryDto` | ✅ |
 | orders | ✅ | ✅ createOrder, findAll, findById, updateStatus | ✅ `POST /orders`, `GET /orders`, `GET /orders/:id`, `PATCH /orders/:id/status` | ✅ `CreateOrderDto`, `UpdateOrderStatusDto`, `OrderQueryDto` | ✅ |
 | warehouse | ✅ | ⬜ stub | ⬜ stub | ⬜ none | ❌ |
-| notifications | ✅ | ⬜ stub (email/sms/push) | — | ⬜ none | ❌ |
+| notifications | ✅ | ✅ findAll, markRead, markAllRead, notifyOrderCreated, notifyStatusChanged, notifyLowStock | ✅ `GET /notifications`, `PATCH /notifications/:id/read`, `PATCH /notifications/read-all` | ✅ `NotificationQueryDto` | ✅ |
 
 ---
 
@@ -95,7 +95,8 @@ No public registration. All accounts provisioned by privileged roles.
   - `CategoriesRepository` — real implementation (`findAll`, `findAllByShop`, `findAllForShop`, `findById`, `findByNameAndShop`, `insert`, `update`, `deleteById`, `hasProducts`)
   - `ProductsRepository` — real implementation (`findPaginatedAdmin`, `findPaginatedForShop`, `findById`, `findByBarcodeAndShop`, `categoryAccessible`, `insert`, `update`, `softDelete`)
   - `InventoryRepository` — real implementation (`findPaginated`, `findAllForAdmin`, `findById`, `findLowStock`, `findAllLowStockForAdmin`, `findByShopAndProduct`, `upsertStockIn`, `adjust`) — now exported for use by OrdersService
-  - `AuditLogsRepository` — real implementation (`insert` with optional transactional client)
+  - `AuditLogsRepository` — real implementation (`insert` with optional transactional client, `findPaginated` with 8 filters, `findById`)
+  - `NotificationsRepository` — real implementation (`insert`, `findPaginatedForShop`, `markRead`, `markAllRead`, `hasUnreadLowStock`)
   - `OrdersRepository` — real implementation (`findWarehouseShop`, `insert`, `insertItems`, `findPaginated`, `findById`, `updateStatus`, `findItemsByOrderId`)
   - Stub repositories created for: warehouse
 - ✅ Migration 05 — seeds `WAREHOUSE_ADMIN` account (`admin@warehouse.com` / `Admin@123`)
@@ -109,15 +110,14 @@ No public registration. All accounts provisioned by privileged roles.
 - ✅ Inventory module — stock-in (upsert), adjustment (with negative guard), low-stock detection, role-scoped access, all mutations wrapped in DB transactions with audit log
 - ✅ Audit logs module — `AuditLogsService.log()` shared service, supports transactional client, consumed by inventory and orders modules
 - ✅ Orders module — full order lifecycle (PENDING→PROCESSING→SHIPPED→RECEIVED→COMPLETED), role-scoped access, inventory transfer on RECEIVED inside a single transaction, three audit log entries per transfer
+- ✅ Audit logs module — `GET /audit-logs` with 8 filters (shop, user, type, action, entityType, entityId, date range), `GET /audit-logs/:id`, role-scoped access
+- ✅ Notifications module — shop-scoped feed, three automatic triggers (order created, status changed, low stock with de-duplication), mark-read and mark-all-read endpoints
 
 ### Not Done
-- ❌ Notifications
+
+All planned tickets complete.
 
 ---
 
 ## What to Build Next
 
-### Ticket 7 — Audit Logs + Notifications
-- Audit entry on every stock/order change
-- `GET /audit-logs` — query by shop, date
-- Notification triggers on order status change
