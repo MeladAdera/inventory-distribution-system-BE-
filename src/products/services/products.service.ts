@@ -12,12 +12,7 @@ import { ProductQueryDto } from '../dto/product-query.dto';
 import { Product } from '../entities/product.entity';
 import { UserRole } from '../../common/enums/user-role.enum';
 import { paginate, PaginatedResponse } from '../../common/utils/pagination.util';
-
-interface RequestUser {
-  id: number;
-  role: UserRole;
-  shopId: number | null;
-}
+import { RequestUser } from '../../common/interfaces/request-user.interface';
 
 @Injectable()
 export class ProductsService {

@@ -10,12 +10,7 @@ import { Category } from '../entities/category.entity';
 import { CreateCategoryDto } from '../dto/create-category.dto';
 import { UpdateCategoryDto } from '../dto/update-category.dto';
 import { UserRole } from '../../common/enums/user-role.enum';
-
-interface RequestUser {
-  id: number;
-  role: UserRole;
-  shopId: number | null;
-}
+import { RequestUser } from '../../common/interfaces/request-user.interface';
 
 @Injectable()
 export class CategoriesService {

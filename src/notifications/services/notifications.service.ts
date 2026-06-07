@@ -2,35 +2,26 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { NotificationsRepository } from '../repositories/notifications.repository';
 import { NotificationQueryDto } from '../dto/notification-query.dto';
 import { Notification } from '../entities/notification.entity';
-import { UserRole } from '../../common/enums/user-role.enum';
 import { paginate, PaginatedResponse } from '../../common/utils/pagination.util';
-
-export interface RequestUser {
-  id: number;
-  role: UserRole;
-  shopId: number | null;
-}
+import { RequestUser } from '../../common/interfaces/request-user.interface';
 
 @Injectable()
 export class NotificationsService {
   constructor(private readonly notificationsRepo: NotificationsRepository) {}
 
   async findAll(query: NotificationQueryDto, user: RequestUser): Promise<PaginatedResponse<Notification>> {
-    const shopId = user.role === UserRole.WAREHOUSE_ADMIN ? 1 : user.shopId!;
-    const result = await this.notificationsRepo.findPaginatedForShop(shopId, query);
+    const result = await this.notificationsRepo.findPaginatedForShop(user.shopId!, query);
     return paginate(result.data, query.page, query.limit, result.total);
   }
 
   async markRead(id: number, user: RequestUser): Promise<{ success: boolean }> {
-    const shopId = user.role === UserRole.WAREHOUSE_ADMIN ? 1 : user.shopId!;
-    const notification = await this.notificationsRepo.markRead(id, shopId);
+    const notification = await this.notificationsRepo.markRead(id, user.shopId!);
     if (!notification) throw new NotFoundException('Notification not found');
     return { success: true };
   }
 
   async markAllRead(user: RequestUser): Promise<{ success: boolean }> {
-    const shopId = user.role === UserRole.WAREHOUSE_ADMIN ? 1 : user.shopId!;
-    await this.notificationsRepo.markAllRead(shopId);
+    await this.notificationsRepo.markAllRead(user.shopId!);
     return { success: true };
   }
 

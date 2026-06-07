@@ -1,6 +1,7 @@
 import { Controller, Get, Param, Query, ParseIntPipe, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
-import { AuditLogsService, RequestUser } from '../services/audit-logs.service';
+import { AuditLogsService } from '../services/audit-logs.service';
+import { RequestUser } from '../../common/interfaces/request-user.interface';
 import { AuditLogQueryDto } from '../dto/audit-log-query.dto';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../auth/guards/roles.guard';

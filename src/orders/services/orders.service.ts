@@ -15,12 +15,7 @@ import { OrderQueryDto } from '../dto/order-query.dto';
 import { Order, OrderWithItems, OrderStatus } from '../entities/order.entity';
 import { UserRole } from '../../common/enums/user-role.enum';
 import { paginate, PaginatedResponse } from '../../common/utils/pagination.util';
-
-export interface RequestUser {
-  id: number;
-  role: UserRole;
-  shopId: number | null;
-}
+import { RequestUser } from '../../common/interfaces/request-user.interface';
 
 const NEXT_STATUS: Partial<Record<OrderStatus, OrderStatus>> = {
   PENDING: 'PROCESSING',

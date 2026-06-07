@@ -21,12 +21,7 @@ import { RolesGuard } from '../../auth/guards/roles.guard';
 import { Roles } from '../../auth/decorators/roles.decorator';
 import { CurrentUser } from '../../auth/decorators/current-user.decorator';
 import { UserRole } from '../../common/enums/user-role.enum';
-
-interface RequestUser {
-  id: number;
-  role: UserRole;
-  shopId: number | null;
-}
+import { RequestUser } from '../../common/interfaces/request-user.interface';
 
 @ApiTags('categories')
 @ApiBearerAuth()

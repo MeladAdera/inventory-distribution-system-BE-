@@ -10,7 +10,8 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
-import { InventoryService, RequestUser } from '../services/inventory.service';
+import { InventoryService } from '../services/inventory.service';
+import { RequestUser } from '../../common/interfaces/request-user.interface';
 import { InventoryQueryDto } from '../dto/inventory-query.dto';
 import { StockInDto } from '../dto/stock-in.dto';
 import { AdjustInventoryDto } from '../dto/adjust-inventory.dto';

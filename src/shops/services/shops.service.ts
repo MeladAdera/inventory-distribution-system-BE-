@@ -10,12 +10,7 @@ import { UpdateShopDto } from '../dto/update-shop.dto';
 import { UpdateShopStatusDto } from '../dto/update-shop-status.dto';
 import { UserRole } from '../../common/enums/user-role.enum';
 import { ShopType } from '../../common/enums/shop-type.enum';
-
-interface RequestUser {
-  id: number;
-  role: UserRole;
-  shopId: number | null;
-}
+import { RequestUser } from '../../common/interfaces/request-user.interface';
 
 @Injectable()
 export class ShopsService {

@@ -5,12 +5,7 @@ import { AuditLog } from '../entities/audit-log.entity';
 import { AuditLogQueryDto } from '../dto/audit-log-query.dto';
 import { UserRole } from '../../common/enums/user-role.enum';
 import { paginate, PaginatedResponse } from '../../common/utils/pagination.util';
-
-export interface RequestUser {
-  id: number;
-  role: UserRole;
-  shopId: number | null;
-}
+import { RequestUser } from '../../common/interfaces/request-user.interface';
 
 @Injectable()
 export class AuditLogsService {

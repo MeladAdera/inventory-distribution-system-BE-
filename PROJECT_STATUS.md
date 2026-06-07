@@ -7,6 +7,7 @@
 | Runtime | Node.js 24, NestJS 10, TypeScript 5 |
 | Database | PostgreSQL 16 — raw SQL via `pg` (no ORM) |
 | Auth | Passport + JWT (`@nestjs/jwt`, `passport-jwt`, `bcrypt`) |
+| Rate Limiting | `@nestjs/throttler` — 100 req/min global, 5 req/min on `POST /auth/login` |
 | Validation | `class-validator` + `class-transformer` |
 | Docs | `@nestjs/swagger` — wired, Swagger UI at `/api` |
 | Infra | Docker Compose — postgres + app + pgadmin |
@@ -112,6 +113,19 @@ No public registration. All accounts provisioned by privileged roles.
 - ✅ Orders module — full order lifecycle (PENDING→PROCESSING→SHIPPED→RECEIVED→COMPLETED), role-scoped access, inventory transfer on RECEIVED inside a single transaction, three audit log entries per transfer
 - ✅ Audit logs module — `GET /audit-logs` with 8 filters (shop, user, type, action, entityType, entityId, date range), `GET /audit-logs/:id`, role-scoped access
 - ✅ Notifications module — shop-scoped feed, three automatic triggers (order created, status changed, low stock with de-duplication), mark-read and mark-all-read endpoints
+
+---
+
+## Security & Quality Hardening (post-MVP)
+
+- ✅ **Rate limiting** — `ThrottlerModule` registered globally via `APP_GUARD`; `POST /auth/login` capped at 5 req/60 s per IP (brute-force protection); all other endpoints capped at 100 req/60 s
+- ✅ **CORS** — explicit `enableCors()` in `main.ts`; origins controlled by `ALLOWED_ORIGINS` env var (comma-separated); defaults to `http://localhost:3001` in development
+- ✅ **JWT secret validation** — `JwtModule` switched to `registerAsync()` + `ConfigService.getOrThrow('JWT_SECRET')`; app refuses to start if `JWT_SECRET` is missing; no plaintext fallback remains
+- ✅ **Shared `RequestUser` interface** — single source of truth at `src/common/interfaces/request-user.interface.ts`, re-exported from `src/common`; removed 11 duplicate local declarations across services and controllers
+- ✅ **Inventory transaction bug** — `findById` inside `stockIn` and `adjust` transactions now passes the active `PoolClient` so the read sees uncommitted writes on the same connection
+- ✅ **Negative-stock race condition** — `InventoryRepository.adjust` SQL adds `AND current_quantity + $1 >= 0` guard; returns `null` on conflict; service throws `BadRequestException` instead of allowing negative inventory under concurrent load
+- ✅ **Hardcoded shop ID removed from notifications** — `NotificationsService` previously hardcoded `shopId = 1` for `WAREHOUSE_ADMIN`; now uses `user.shopId` (set correctly for all users including admin via migration 08); removed dead role-check ternary and unused `UserRole` import
+- ✅ **`any` type removed from `AuthController.getMe`** — parameter now typed as `RequestUser` using `import type`
 
 ### Not Done
 

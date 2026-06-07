@@ -15,13 +15,7 @@ import { CreateEmployeeDto } from '../dto/create-employee.dto';
 import { UserQueryDto } from '../dto/user-query.dto';
 import { UpdateUserDto } from '../dto/update-user.dto';
 import { paginate, PaginatedResponse } from '../../common/utils/pagination.util';
-
-export interface RequestUser {
-  id: number;
-  email: string;
-  role: UserRole;
-  shopId: number | null;
-}
+import { RequestUser } from '../../common/interfaces/request-user.interface';
 
 @Injectable()
 export class UsersService {

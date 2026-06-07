@@ -11,7 +11,8 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
-import { UsersService, RequestUser } from '../services/users.service';
+import { UsersService } from '../services/users.service';
+import { RequestUser } from '../../common/interfaces/request-user.interface';
 import { CreateShopOwnerDto } from '../dto/create-shop-owner.dto';
 import { CreateEmployeeDto } from '../dto/create-employee.dto';
 import { UserQueryDto } from '../dto/user-query.dto';

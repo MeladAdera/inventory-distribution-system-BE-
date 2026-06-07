@@ -87,15 +87,19 @@ export class InventoryRepository {
     };
   }
 
-  findById(id: number): Promise<InventoryWithProduct | null> {
-    return this.db.queryOne<InventoryWithProduct>(
-      `SELECT i.*, p.name AS product_name,
+  async findById(id: number, client?: pg.PoolClient): Promise<InventoryWithProduct | null> {
+    const sql = `SELECT i.*, p.name AS product_name,
               (i.current_quantity <= i.low_stock_threshold) AS is_low_stock
        FROM inventory i
        JOIN products p ON p.id = i.product_id
-       WHERE i.id = $1`,
-      [id],
-    );
+       WHERE i.id = $1`;
+
+    if (client) {
+      const result = await client.query<InventoryWithProduct>(sql, [id]);
+      return result.rows[0] ?? null;
+    }
+
+    return this.db.queryOne<InventoryWithProduct>(sql, [id]);
   }
 
   async findLowStock(shopId: number): Promise<InventoryWithProduct[]> {
@@ -150,15 +154,16 @@ export class InventoryRepository {
     return result.rows[0];
   }
 
-  async adjust(id: number, delta: number, client: pg.PoolClient): Promise<Inventory> {
+  async adjust(id: number, delta: number, client: pg.PoolClient): Promise<Inventory | null> {
     const result = await client.query<Inventory>(
       `UPDATE inventory
        SET current_quantity = current_quantity + $1,
            updated_at = NOW()
        WHERE id = $2
+         AND current_quantity + $1 >= 0
        RETURNING *`,
       [delta, id],
     );
-    return result.rows[0];
+    return result.rows[0] ?? null;
   }
 }

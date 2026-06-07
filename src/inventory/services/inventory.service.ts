@@ -14,12 +14,7 @@ import { AdjustInventoryDto } from '../dto/adjust-inventory.dto';
 import { InventoryWithProduct } from '../entities/inventory.entity';
 import { UserRole } from '../../common/enums/user-role.enum';
 import { paginate, PaginatedResponse } from '../../common/utils/pagination.util';
-
-export interface RequestUser {
-  id: number;
-  role: UserRole;
-  shopId: number | null;
-}
+import { RequestUser } from '../../common/interfaces/request-user.interface';
 
 @Injectable()
 export class InventoryService {
@@ -68,7 +63,7 @@ export class InventoryService {
         client,
       );
 
-      return this.inventoryRepo.findById(updated.id).then((r) => r!);
+      return this.inventoryRepo.findById(updated.id, client).then((r) => r!);
     });
 
     if (result.is_low_stock) {
@@ -92,7 +87,10 @@ export class InventoryService {
     }
 
     const result = await this.db.transaction(async (client) => {
-      await this.inventoryRepo.adjust(id, dto.adjustment, client);
+      const adjusted = await this.inventoryRepo.adjust(id, dto.adjustment, client);
+      if (!adjusted) {
+        throw new BadRequestException('Adjustment would result in negative stock');
+      }
 
       await this.auditLogsService.log(
         {
@@ -108,7 +106,7 @@ export class InventoryService {
         client,
       );
 
-      return this.inventoryRepo.findById(id).then((r) => r!);
+      return this.inventoryRepo.findById(id, client).then((r) => r!);
     });
 
     if (result.is_low_stock) {

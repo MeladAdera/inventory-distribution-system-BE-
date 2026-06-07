@@ -4,4 +4,5 @@ export * from './enums/user-role.enum';
 export * from './enums/shop-type.enum';
 export * from './filters/http-exception.filter';
 export * from './interceptors/transform.interceptor';
+export * from './interfaces/request-user.interface';
 export * from './utils';
