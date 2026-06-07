@@ -126,6 +126,9 @@ No public registration. All accounts provisioned by privileged roles.
 - ✅ **Negative-stock race condition** — `InventoryRepository.adjust` SQL adds `AND current_quantity + $1 >= 0` guard; returns `null` on conflict; service throws `BadRequestException` instead of allowing negative inventory under concurrent load
 - ✅ **Hardcoded shop ID removed from notifications** — `NotificationsService` previously hardcoded `shopId = 1` for `WAREHOUSE_ADMIN`; now uses `user.shopId` (set correctly for all users including admin via migration 08); removed dead role-check ternary and unused `UserRole` import
 - ✅ **`any` type removed from `AuthController.getMe`** — parameter now typed as `RequestUser` using `import type`
+- ✅ **Env schema wired up** — `env.schema.ts` rewritten to match vars the app actually reads (`DATABASE_HOST/PORT/USERNAME/PASSWORD/NAME`, `JWT_SECRET` required, `ALLOWED_ORIGINS`, `SMTP_*` optional); `validate` now passed to `ConfigModule.forRoot()` so the app validates env at startup
+- ✅ **Redundant `dotenv.config()` removed** — `main.ts` no longer manually loads the env file; `ConfigModule` handles it; eliminated the double-load and the fragile ordering dependency
+- ✅ **N+1 queries eliminated in order creation and inventory transfer** — `InventoryRepository.findByShopAndProducts` batch-fetches all products in one `ANY($2)` query; `createOrder` drops from N queries → 1; `transferInventory` batch-fetches warehouse and shop inventory (2 queries instead of 2N), all stock validation now happens in memory before any writes
 
 ### Not Done
 

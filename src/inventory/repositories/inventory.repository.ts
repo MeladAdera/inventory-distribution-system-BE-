@@ -126,6 +126,19 @@ export class InventoryRepository {
     );
   }
 
+  async findByShopAndProducts(
+    shopId: number,
+    productIds: number[],
+    client?: pg.PoolClient,
+  ): Promise<Inventory[]> {
+    const sql = 'SELECT * FROM inventory WHERE shop_id = $1 AND product_id = ANY($2)';
+    if (client) {
+      const result = await client.query<Inventory>(sql, [shopId, productIds]);
+      return result.rows;
+    }
+    return this.db.query<Inventory>(sql, [shopId, productIds]);
+  }
+
   async findByShopAndProduct(shopId: number, productId: number, client?: pg.PoolClient): Promise<Inventory | null> {
     const sql = 'SELECT * FROM inventory WHERE shop_id = $1 AND product_id = $2';
     if (client) {

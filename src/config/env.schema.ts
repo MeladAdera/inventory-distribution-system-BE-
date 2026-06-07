@@ -1,5 +1,5 @@
 import { plainToInstance } from 'class-transformer';
-import { IsEnum, IsNumber, IsString, validateSync } from 'class-validator';
+import { IsEnum, IsNotEmpty, IsNumber, IsOptional, IsString, validateSync } from 'class-validator';
 
 enum Environment {
   Development = 'development',
@@ -9,30 +9,59 @@ enum Environment {
 
 export class EnvironmentVariables {
   @IsEnum(Environment)
+  @IsOptional()
   NODE_ENV: Environment = Environment.Development;
 
   @IsNumber()
+  @IsOptional()
   PORT: number = 3000;
 
+  // Database connection — all optional because DatabaseService has safe defaults
   @IsString()
-  DATABASE_URL: string | undefined;
-
-  @IsString()
-  JWT_SECRET: string | undefined;
+  @IsOptional()
+  DATABASE_HOST?: string;
 
   @IsNumber()
-  JWT_EXPIRATION: number = 3600;
+  @IsOptional()
+  DATABASE_PORT?: number;
 
   @IsString()
+  @IsOptional()
+  DATABASE_USERNAME?: string;
+
+  @IsString()
+  @IsOptional()
+  DATABASE_PASSWORD?: string;
+
+  @IsString()
+  @IsOptional()
+  DATABASE_NAME?: string;
+
+  // Required — app refuses to start without this
+  @IsString()
+  @IsNotEmpty()
+  JWT_SECRET!: string;
+
+  // CORS — comma-separated list of allowed origins
+  @IsString()
+  @IsOptional()
+  ALLOWED_ORIGINS?: string;
+
+  // Email (stub) — all optional until implemented
+  @IsString()
+  @IsOptional()
   SMTP_HOST?: string;
 
   @IsNumber()
+  @IsOptional()
   SMTP_PORT?: number;
 
   @IsString()
+  @IsOptional()
   SMTP_USER?: string;
 
   @IsString()
+  @IsOptional()
   SMTP_PASSWORD?: string;
 }
 
@@ -40,9 +69,7 @@ export function validate(config: Record<string, unknown>) {
   const validatedConfig = plainToInstance(EnvironmentVariables, config, {
     enableImplicitConversion: true,
   });
-  const errors = validateSync(validatedConfig, {
-    skipMissingProperties: false,
-  });
+  const errors = validateSync(validatedConfig, { skipMissingProperties: false });
 
   if (errors.length > 0) {
     throw new Error(errors.toString());

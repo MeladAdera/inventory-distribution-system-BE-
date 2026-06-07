@@ -44,13 +44,13 @@ export class OrdersService {
     const hasDuplicates = new Set(productIds).size !== productIds.length;
     if (hasDuplicates) throw new BadRequestException('Duplicate products in order');
 
-    for (const item of dto.items) {
-      const inv = await this.inventoryRepo.findByShopAndProduct(warehouse.id, item.productId);
-      if (!inv) {
-        throw new BadRequestException(
-          `Product ${item.productId} does not exist in warehouse inventory`,
-        );
-      }
+    const existing = await this.inventoryRepo.findByShopAndProducts(warehouse.id, productIds);
+    if (existing.length !== productIds.length) {
+      const foundIds = new Set(existing.map((inv) => inv.product_id));
+      const missingId = productIds.find((id) => !foundIds.has(id));
+      throw new BadRequestException(
+        `Product ${missingId} does not exist in warehouse inventory`,
+      );
     }
 
     const totalItems = dto.items.reduce((sum, i) => sum + i.quantity, 0);
@@ -124,28 +124,36 @@ export class OrdersService {
     client: import('pg').PoolClient,
   ): Promise<void> {
     const items = await this.ordersRepo.findItemsByOrderId(orderId, client);
+    const productIds = items.map((i) => i.product_id);
 
+    // 1 query — fetch all warehouse inventory records for this order's products
+    const warehouseInventories = await this.inventoryRepo.findByShopAndProducts(
+      warehouseShopId,
+      productIds,
+      client,
+    );
+    const warehouseMap = new Map(warehouseInventories.map((inv) => [inv.product_id, inv]));
+
+    // Validate all stock in memory before touching anything
     for (const item of items) {
-      const warehouseInv = await this.inventoryRepo.findByShopAndProduct(
-        warehouseShopId,
-        item.product_id,
-        client,
-      );
-
-      if (!warehouseInv) {
+      const inv = warehouseMap.get(item.product_id);
+      if (!inv) {
         throw new BadRequestException(
           `Warehouse inventory record missing for product ${item.product_id}`,
         );
       }
-
-      if (warehouseInv.current_quantity < item.quantity) {
+      if (inv.current_quantity < item.quantity) {
         throw new BadRequestException(
-          `Insufficient warehouse stock for product ${item.product_id} (available: ${warehouseInv.current_quantity}, required: ${item.quantity})`,
+          `Insufficient warehouse stock for product ${item.product_id} (available: ${inv.current_quantity}, required: ${item.quantity})`,
         );
       }
+    }
+
+    // Deduct from warehouse + upsert into shop (N queries each — row-specific)
+    for (const item of items) {
+      const warehouseInv = warehouseMap.get(item.product_id)!;
 
       await this.inventoryRepo.adjust(warehouseInv.id, -item.quantity, client);
-
       await this.auditLogsService.log(
         {
           shop_id: warehouseShopId,
@@ -161,9 +169,17 @@ export class OrdersService {
       );
 
       await this.inventoryRepo.upsertStockIn(toShopId, item.product_id, item.quantity, client);
+    }
 
-      const shopInv = await this.inventoryRepo.findByShopAndProduct(toShopId, item.product_id, client);
+    // 1 query — fetch all resulting shop inventory records for TRANSFER_IN audit logs
+    const shopInventories = await this.inventoryRepo.findByShopAndProducts(
+      toShopId,
+      productIds,
+      client,
+    );
+    const shopMap = new Map(shopInventories.map((inv) => [inv.product_id, inv]));
 
+    for (const item of items) {
       await this.auditLogsService.log(
         {
           shop_id: toShopId,
@@ -171,7 +187,7 @@ export class OrdersService {
           type: 'INVENTORY',
           action: 'TRANSFER_IN',
           entity_type: 'inventory',
-          entity_id: shopInv?.id,
+          entity_id: shopMap.get(item.product_id)?.id,
           quantity: item.quantity,
           notes: `Order #${orderId} — received from warehouse`,
         },
