@@ -58,7 +58,7 @@ No public registration. All accounts provisioned by privileged roles.
 |---|---|---|---|---|---|
 | app | ✅ | ✅ health | ✅ `/`, `/health` | — | ✅ |
 | auth | ✅ | ✅ login | ✅ `/auth/login`, `/auth/me` | ✅ `LoginDto` | ✅ |
-| users | ✅ | ✅ provisioning | ✅ `/users/shop-owners`, `/users/employees` | ✅ | ✅ |
+| users | ✅ | ✅ provisioning + full CRUD | ✅ `POST /users/shop-owners`, `POST /users/employees`, `GET /users`, `GET /users/:id`, `PATCH /users/:id`, `DELETE /users/:id` | ✅ `CreateShopOwnerDto`, `CreateEmployeeDto`, `UserQueryDto`, `UpdateUserDto` | ✅ |
 | shops | ✅ | ✅ CRUD + status | ✅ `GET /shops`, `GET /shops/:id`, `PATCH /shops/:id`, `PATCH /shops/:id/status` | ✅ `UpdateShopDto`, `UpdateShopStatusDto` | ✅ |
 | products | ✅ | ✅ CRUD + soft delete | ✅ `GET /products`, `GET /products/:id`, `POST /products`, `PATCH /products/:id`, `DELETE /products/:id` | ✅ `CreateProductDto`, `UpdateProductDto`, `ProductQueryDto` | ✅ |
 | categories | ✅ | ✅ CRUD + global | ✅ `GET /categories`, `GET /categories/:id`, `POST /categories`, `PATCH /categories/:id`, `DELETE /categories/:id` | ✅ `CreateCategoryDto`, `UpdateCategoryDto` | ✅ |
@@ -121,3 +121,5 @@ All planned tickets complete.
 
 ## What to Build Next
 
+- ⬜ Warehouse dashboard stats — `GET /warehouse/stats` (pending orders count, low-stock count, total shops, total products)
+- ⬜ Change password endpoint — `PATCH /users/:id/password` (current password verification + bcrypt rehash)

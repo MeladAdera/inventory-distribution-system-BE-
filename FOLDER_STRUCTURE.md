@@ -16,12 +16,24 @@ src/
 │   ├── auth.controller.ts
 │   └── repositories/                    # Auth data access
 │
-├── users/                               # User Management
-│   ├── controllers/                     # HTTP endpoints
-│   ├── services/                        # Business logic
-│   ├── repositories/                    # Database queries
-│   ├── entities/                        # User entity
-│   ├── dto/                             # Create, Update, Response DTOs
+├── users/                               # User Management (provisioning + full CRUD)
+│   ├── controllers/
+│   │   └── users.controller.ts          # POST /users/shop-owners, POST /users/employees,
+│   │                                    # GET /users, GET /users/:id,
+│   │                                    # PATCH /users/:id, DELETE /users/:id
+│   ├── services/
+│   │   └── users.service.ts             # createShopOwner (tx), createEmployee,
+│   │                                    # findAll, findById, updateUser, deactivateUser
+│   ├── repositories/
+│   │   └── users.repository.ts          # findByEmail, insertUser, findPaginated,
+│   │                                    # findById, update, deactivate
+│   ├── entities/
+│   │   └── user.entity.ts               # User (with password_hash), SafeUser (without)
+│   ├── dto/
+│   │   ├── create-shop-owner.dto.ts     # shopName, shopAddress?, ownerName, email, password
+│   │   ├── create-employee.dto.ts       # name, email, password
+│   │   ├── user-query.dto.ts            # extends PaginationDto + role?, shop_id?, search?
+│   │   └── update-user.dto.ts           # name?, email? (at least one required)
 │   └── users.module.ts
 │
 ├── shops/                               # Shop/Store Management

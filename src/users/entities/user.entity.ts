@@ -12,3 +12,16 @@ export class User {
   created_at!: Date;
   updated_at!: Date;
 }
+
+// Password-free projection returned by all read/write endpoints
+export class SafeUser {
+  id!: number;
+  shop_id!: number | null;
+  shop_name?: string; // populated via LEFT JOIN with shops
+  name!: string;
+  email!: string;
+  role!: UserRole;
+  is_active!: boolean;
+  created_at!: Date;
+  updated_at!: Date;
+}
