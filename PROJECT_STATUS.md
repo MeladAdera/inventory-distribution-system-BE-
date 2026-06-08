@@ -38,6 +38,7 @@ No public registration. All accounts provisioned by privileged roles.
 |---|---|---|
 | `shops` | `id`, `name`, `address`, `phone`, `type`, `is_active` | `type`: `WAREHOUSE` or `SHOP` |
 | `users` | `id`, `shop_id`, `name`, `email`, `password_hash`, `role` | `WAREHOUSE_ADMIN` linked to warehouse shop |
+| `refresh_tokens` | `id`, `user_id`, `token_hash`, `expires_at`, `created_at`, `revoked_at` | SHA-256 hash only; `revoked_at NULL` = active |
 | `categories` | `id`, `shop_id`, `name`, `updated_at` | Per-shop; warehouse categories are global |
 | `products` | `id`, `category_id`, `shop_id`, `name`, `barcode`, `price`, `source`, `is_active` | `source` auto-set from shop type |
 | `inventory` | `id`, `shop_id`, `product_id`, `current_quantity`, `low_stock_threshold` | Unique on `(shop_id, product_id)`; threshold default 10 |
@@ -58,7 +59,7 @@ No public registration. All accounts provisioned by privileged roles.
 | Module | Module | Service | Controller | DTOs | Real Logic |
 |---|---|---|---|---|---|
 | app | ✅ | ✅ health | ✅ `/`, `/health` | — | ✅ |
-| auth | ✅ | ✅ login | ✅ `/auth/login`, `/auth/me` | ✅ `LoginDto` | ✅ |
+| auth | ✅ | ✅ login, refresh, logout | ✅ `/auth/login`, `/auth/refresh`, `/auth/logout`, `/auth/me` | ✅ `LoginDto`, `RefreshTokenDto` | ✅ |
 | users | ✅ | ✅ provisioning + full CRUD | ✅ `POST /users/shop-owners`, `POST /users/employees`, `GET /users`, `GET /users/:id`, `PATCH /users/:id`, `DELETE /users/:id` | ✅ `CreateShopOwnerDto`, `CreateEmployeeDto`, `UserQueryDto`, `UpdateUserDto` | ✅ |
 | shops | ✅ | ✅ CRUD + status | ✅ `GET /shops`, `GET /shops/:id`, `PATCH /shops/:id`, `PATCH /shops/:id/status` | ✅ `UpdateShopDto`, `UpdateShopStatusDto` | ✅ |
 | products | ✅ | ✅ CRUD + soft delete | ✅ `GET /products`, `GET /products/:id`, `POST /products`, `PATCH /products/:id`, `DELETE /products/:id` | ✅ `CreateProductDto`, `UpdateProductDto`, `ProductQueryDto` | ✅ |
@@ -105,6 +106,7 @@ No public registration. All accounts provisioned by privileged roles.
 - ✅ Migration 07 — adds `updated_at` column to `categories` table
 - ✅ Migration 08 — links `WAREHOUSE_ADMIN` to the warehouse shop (`shop_id = 1`)
 - ✅ Migration 10 — adds `low_stock_threshold INTEGER NOT NULL DEFAULT 10` to `inventory` table
+- ✅ Migration 11 — creates `refresh_tokens` table (user_id FK, token_hash, expires_at, revoked_at, indexed)
 - ✅ Shops module — full CRUD + soft delete, role-scoped access, login blocked for inactive shops
 - ✅ Categories module — full CRUD, warehouse categories are global (visible to all shops), deletion blocked when products assigned
 - ✅ Products module — full CRUD + soft delete, paginated + filtered, source auto-set from shop type, warehouse products visible to all shops
@@ -129,6 +131,8 @@ No public registration. All accounts provisioned by privileged roles.
 - ✅ **Env schema wired up** — `env.schema.ts` rewritten to match vars the app actually reads (`DATABASE_HOST/PORT/USERNAME/PASSWORD/NAME`, `JWT_SECRET` required, `ALLOWED_ORIGINS`, `SMTP_*` optional); `validate` now passed to `ConfigModule.forRoot()` so the app validates env at startup
 - ✅ **Redundant `dotenv.config()` removed** — `main.ts` no longer manually loads the env file; `ConfigModule` handles it; eliminated the double-load and the fragile ordering dependency
 - ✅ **N+1 queries eliminated in order creation and inventory transfer** — `InventoryRepository.findByShopAndProducts` batch-fetches all products in one `ANY($2)` query; `createOrder` drops from N queries → 1; `transferInventory` batch-fetches warehouse and shop inventory (2 queries instead of 2N), all stock validation now happens in memory before any writes
+
+- ✅ **Refresh token system** — `refresh_tokens` table, SHA-256 hashed opaque tokens, atomic rotation in single DB transaction, all-device logout via `revokeAllForUser`, access token expiry reduced to 15 min
 
 ### Not Done
 

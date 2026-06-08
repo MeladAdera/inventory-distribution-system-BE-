@@ -24,8 +24,21 @@ Defined in `src/common/enums/user-role.enum.ts`.
 ### `POST /auth/login` — public
 ```json
 Request:  { "email": "admin@warehouse.com", "password": "Admin@123" }
-Response: { "accessToken": "...", "user": { "id", "email", "role", "shopId" } }
+Response: { "accessToken": "...", "refreshToken": "...", "user": { "id", "name", "email", "role", "shopId" } }
 ```
+Access token expires in **15 minutes**. Refresh token expires in **30 days**.
+
+### `POST /auth/refresh` — public
+Rotates the refresh token atomically and issues a new access token.
+```json
+Request:  { "refreshToken": "<UUID>" }
+Response: { "accessToken": "...", "refreshToken": "<new UUID>" }
+```
+Old token is revoked in the same DB transaction as the new token insert — replay attacks fail immediately.
+
+### `POST /auth/logout` — requires JWT
+Revokes all active refresh tokens for the current user (all devices).
+Returns `204 No Content`.
 
 ### `GET /auth/me` — requires JWT
 Returns the authenticated user object decoded from the token.
@@ -90,8 +103,8 @@ Seeded by migration `05-SeedWarehouseAdmin.sql`.
 ```
 src/auth/
 ├── auth.module.ts
-├── auth.service.ts          login()
-├── auth.controller.ts       POST /auth/login, GET /auth/me
+├── auth.service.ts          login(), refresh(), logout(), generateRefreshToken(), rotateRefreshToken()
+├── auth.controller.ts       POST /auth/login, POST /auth/refresh, POST /auth/logout, GET /auth/me
 ├── strategies/
 │   └── jwt.strategy.ts      validate() → {id, email, role, shopId}
 ├── guards/
@@ -100,8 +113,11 @@ src/auth/
 ├── decorators/
 │   ├── current-user.decorator.ts
 │   └── roles.decorator.ts
+├── repositories/
+│   └── refresh-tokens.repository.ts   create, findValid, revoke, revokeAllForUser, rotate (tx)
 └── dto/
-    └── login.dto.ts
+    ├── login.dto.ts
+    └── refresh-token.dto.ts
 
 src/users/
 ├── services/users.service.ts   findByEmail, createShopOwner, createEmployee

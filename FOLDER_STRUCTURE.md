@@ -7,14 +7,18 @@ This project follows a **feature-based modular architecture** with clear separat
 ```
 src/
 ├── auth/                                # Authentication & Authorization
-│   ├── decorators/                      # @CurrentUser, @Public, @Roles
-│   ├── dto/                             # Login, Register, JWT payloads
+│   ├── decorators/                      # @CurrentUser, @Roles
+│   ├── dto/
+│   │   ├── login.dto.ts                 # { email, password }
+│   │   └── refresh-token.dto.ts         # { refreshToken }
 │   ├── guards/                          # JwtAuthGuard, RolesGuard
-│   ├── strategies/                      # JWT strategy
+│   ├── strategies/
+│   │   └── jwt.strategy.ts              # validates bearer token → RequestUser
+│   ├── repositories/
+│   │   └── refresh-tokens.repository.ts # create, findValid, revoke, revokeAllForUser, rotate (tx)
 │   ├── auth.module.ts
-│   ├── auth.service.ts
-│   ├── auth.controller.ts
-│   └── repositories/                    # Auth data access
+│   ├── auth.service.ts                  # login, refresh, logout, generateRefreshToken, rotateRefreshToken
+│   └── auth.controller.ts               # POST /auth/login, /auth/refresh, /auth/logout, GET /auth/me
 │
 ├── users/                               # User Management (provisioning + full CRUD)
 │   ├── controllers/
@@ -181,6 +185,7 @@ src/
 │   │   ├── 08-LinkWarehouseAdminToShop.sql  # UPDATE users SET shop_id=1 WHERE role='WAREHOUSE_ADMIN'
 │   │   ├── 09-AddProductPriceAndSoftDelete.sql  # ADD price, updated_at, is_active; unique barcode index
 │   │   ├── 10-AddInventoryLowStockThreshold.sql # ADD low_stock_threshold INTEGER NOT NULL DEFAULT 10
+│   │   ├── 11-AddRefreshTokenHash.sql   # CREATE TABLE refresh_tokens (user_id FK, token_hash, expires_at, revoked_at)
 │   │   └── runner.ts                    # Migration execution script
 │   ├── seeders/                         # Seed data scripts
 │   └── factories/                       # Test data factories

@@ -19,6 +19,16 @@ export class UsersRepository {
     );
   }
 
+  findByIdWithShop(id: number): Promise<User | null> {
+    return this.db.queryOne<User>(
+      `SELECT u.*, s.is_active AS shop_is_active
+       FROM users u
+       LEFT JOIN shops s ON u.shop_id = s.id
+       WHERE u.id = $1`,
+      [id],
+    );
+  }
+
   async insertUser(
     name: string,
     email: string,
