@@ -62,7 +62,7 @@ No public registration. All accounts provisioned by privileged roles.
 | auth | ✅ | ✅ login, refresh, logout | ✅ `/auth/login`, `/auth/refresh`, `/auth/logout`, `/auth/me` | ✅ `LoginDto`, `RefreshTokenDto` | ✅ |
 | users | ✅ | ✅ provisioning + full CRUD | ✅ `POST /users/shop-owners`, `POST /users/employees`, `GET /users`, `GET /users/:id`, `PATCH /users/:id`, `DELETE /users/:id` | ✅ `CreateShopOwnerDto`, `CreateEmployeeDto`, `UserQueryDto`, `UpdateUserDto` | ✅ |
 | shops | ✅ | ✅ CRUD + status | ✅ `GET /shops`, `GET /shops/:id`, `PATCH /shops/:id`, `PATCH /shops/:id/status` | ✅ `UpdateShopDto`, `UpdateShopStatusDto` | ✅ |
-| products | ✅ | ✅ CRUD + soft delete | ✅ `GET /products`, `GET /products/:id`, `POST /products`, `PATCH /products/:id`, `DELETE /products/:id` | ✅ `CreateProductDto`, `UpdateProductDto`, `ProductQueryDto` | ✅ |
+| products | ✅ | ✅ CRUD + soft delete | ✅ `GET /products`, `GET /products/:id`, `POST /products`, `PATCH /products/:id`, `DELETE /products/:id` | ✅ `CreateProductDto`, `UpdateProductDto`, `ProductQueryDto` (category_name, is_active, stock_status filters) | ✅ |
 | categories | ✅ | ✅ CRUD + global | ✅ `GET /categories`, `GET /categories/:id`, `POST /categories`, `PATCH /categories/:id`, `DELETE /categories/:id` | ✅ `CreateCategoryDto`, `UpdateCategoryDto` | ✅ |
 | inventory | ✅ | ✅ stock-in, adjust, low-stock | ✅ `GET /inventory`, `GET /inventory/low-stock`, `GET /inventory/:id`, `POST /inventory/stock-in`, `PATCH /inventory/:id` | ✅ `StockInDto`, `AdjustInventoryDto`, `InventoryQueryDto` | ✅ |
 | audit-logs | ✅ | ✅ log(), findAll, findById | ✅ `GET /audit-logs`, `GET /audit-logs/:id` | ✅ `AuditLogQueryDto` | ✅ |
@@ -133,6 +133,12 @@ No public registration. All accounts provisioned by privileged roles.
 - ✅ **N+1 queries eliminated in order creation and inventory transfer** — `InventoryRepository.findByShopAndProducts` batch-fetches all products in one `ANY($2)` query; `createOrder` drops from N queries → 1; `transferInventory` batch-fetches warehouse and shop inventory (2 queries instead of 2N), all stock validation now happens in memory before any writes
 
 - ✅ **Refresh token system** — `refresh_tokens` table, SHA-256 hashed opaque tokens, atomic rotation in single DB transaction, all-device logout via `revokeAllForUser`, access token expiry reduced to 15 min
+
+- ✅ **HTTP request logger** — middleware in `main.ts` logs every inbound `METHOD + PATH` via NestJS `Logger`; login endpoint additionally logs success/failure with email for auth debugging
+- ✅ **Port split** — dev app runs on `PORT=3001`; `ALLOWED_ORIGINS=http://localhost:3000` so the frontend (3000) can call the API without CORS errors; test env stays on `PORT=3000`
+- ✅ **Database seeder** — `src/database/seeders/seed.ts` populates 4 shops, 8 users, 10 categories, 15 products, 36 inventory rows, 7 orders, 27 order items, 9 notifications, 13 audit log entries; run via `npm run seed`; documented in `docs/setup-guide/05-seeder.md`
+- ✅ **Product query filter enhancements** — `GET /products` now supports `category_name` (ILIKE, replaces `category_id`), `is_active` (admin-only boolean; defaults to active-only), and `stock_status` (`OUT_OF_STOCK` / `LOW_STOCK` / `HIGH_STOCK` relative to per-product `low_stock_threshold`); all queries LEFT JOIN `categories` and `inventory` so `category_name` is returned in every product response
+- ✅ **API Reference** — `API_REFERENCE.md` at repo root documents all endpoints with request/response examples
 
 ### Not Done
 

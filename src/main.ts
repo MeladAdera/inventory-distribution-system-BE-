@@ -1,5 +1,5 @@
 import { NestFactory } from '@nestjs/core';
-import { ValidationPipe } from '@nestjs/common';
+import { ValidationPipe, Logger } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { AppModule } from './app.module';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
@@ -7,6 +7,12 @@ import { TransformInterceptor } from './common/interceptors/transform.intercepto
 
 async function bootstrap(): Promise<void> {
   const app = await NestFactory.create(AppModule);
+  const httpLogger = new Logger('HTTP');
+
+  app.use((req: any, _res: any, next: () => void) => {
+    httpLogger.log(`METHOD: ${req.method}  PATH: ${req.originalUrl}`);
+    next();
+  });
 
   const allowedOrigins = process.env.ALLOWED_ORIGINS
     ? process.env.ALLOWED_ORIGINS.split(',')

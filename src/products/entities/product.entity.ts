@@ -2,6 +2,7 @@ export class Product {
   id!: number;
   shop_id!: number;
   category_id!: number | null;
+  category_name!: string | null;
   name!: string;
   description!: string | null;
   barcode!: string | null;

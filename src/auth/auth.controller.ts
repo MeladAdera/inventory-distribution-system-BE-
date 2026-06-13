@@ -1,4 +1,4 @@
-import { Controller, Post, Get, Body, UseGuards, HttpCode, HttpStatus } from '@nestjs/common';
+import { Controller, Post, Get, Body, UseGuards, HttpCode, HttpStatus, Logger } from '@nestjs/common';
 import {
   ApiTags,
   ApiOperation,
@@ -17,6 +17,8 @@ import type { RequestUser } from '../common/interfaces/request-user.interface';
 @ApiTags('auth')
 @Controller('auth')
 export class AuthController {
+  private readonly logger = new Logger(AuthController.name);
+
   constructor(private readonly authService: AuthService) {}
 
   @Post('login')
@@ -27,8 +29,17 @@ export class AuthController {
     description: 'Returns access token, refresh token, and user info',
   })
   @ApiUnauthorizedResponse({ description: 'Invalid credentials or inactive account' })
-  login(@Body() dto: LoginDto) {
-    return this.authService.login(dto);
+  async login(@Body() dto: LoginDto) {
+    this.logger.log('LOGIN REQUEST RECEIVED');
+    this.logger.log(`Email: ${dto.email}`);
+    try {
+      const result = await this.authService.login(dto);
+      this.logger.log(`Login success for: ${dto.email}`);
+      return result;
+    } catch (error) {
+      this.logger.warn(`Login failed for: ${dto.email} — ${(error as Error).message}`);
+      throw error;
+    }
   }
 
   @Post('refresh')

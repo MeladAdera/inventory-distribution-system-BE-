@@ -38,7 +38,7 @@ Products belong to a shop and a category. Warehouse products (`source = WAREHOUS
 
 ### GET /products
 
-Returns a paginated list of active products.
+Returns a paginated list of products.
 
 **Query parameters:**
 
@@ -47,8 +47,10 @@ Returns a paginated list of active products.
 | `page` | number | Page number (default: 1) |
 | `limit` | number | Items per page (default: 10) |
 | `source` | `WAREHOUSE` \| `LOCAL` | Filter by product source |
-| `category_id` | number | Filter by category |
+| `category_name` | string | Case-insensitive substring match on category name (`ILIKE`) |
 | `shop_id` | number | Admin only — filter by specific shop |
+| `is_active` | boolean | Admin only — `false` to show inactive/soft-deleted products; defaults to active-only |
+| `stock_status` | `OUT_OF_STOCK` \| `LOW_STOCK` \| `HIGH_STOCK` | Filter by inventory level relative to each product's `low_stock_threshold` |
 
 **Response shape:**
 ```json
@@ -62,6 +64,8 @@ Returns a paginated list of active products.
   "hasPrev": false
 }
 ```
+
+Each product object now includes `category_name` (joined from the `categories` table).
 
 ---
 
@@ -144,7 +148,7 @@ Same fields as above, all optional.
 
 ### ProductQueryDto — `src/products/dto/product-query.dto.ts`
 
-Extends `PaginationDto` (`page`, `limit`) and adds `source?`, `category_id?`, `shop_id?`.
+Extends `PaginationDto` (`page`, `limit`) and adds `source?`, `category_name?`, `shop_id?`, `is_active?`, `stock_status?`.
 
 ---
 
@@ -198,13 +202,14 @@ src/products/
 │                                        findById, findByBarcodeAndShop,
 │                                        categoryAccessible, insert, update, softDelete
 ├── entities/
-│   └── product.entity.ts                id, shop_id, category_id, name, description,
-│                                        barcode, price, source, is_global,
+│   └── product.entity.ts                id, shop_id, category_id, category_name, name,
+│                                        description, barcode, price, source, is_global,
 │                                        is_active, created_at, updated_at
 └── dto/
     ├── create-product.dto.ts            name, price, category_id, barcode?, description?
     ├── update-product.dto.ts            all optional
-    └── product-query.dto.ts             extends PaginationDto + source?, category_id?, shop_id?
+    └── product-query.dto.ts             extends PaginationDto + source?, category_name?, shop_id?,
+                                         is_active?, stock_status?
 
 src/database/migrations/
 └── 09-AddProductPriceAndSoftDelete.sql

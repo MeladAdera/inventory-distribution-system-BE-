@@ -1,5 +1,5 @@
-import { IsOptional, IsEnum, IsInt } from 'class-validator';
-import { Type } from 'class-transformer';
+import { IsOptional, IsEnum, IsBoolean, IsString, IsInt } from 'class-validator';
+import { Transform, Type } from 'class-transformer';
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { PaginationDto } from '../../common/dto/pagination.dto';
 
@@ -8,21 +8,41 @@ export enum ProductSource {
   LOCAL = 'LOCAL',
 }
 
+export enum StockStatus {
+  OUT_OF_STOCK = 'OUT_OF_STOCK',
+  LOW_STOCK = 'LOW_STOCK',
+  HIGH_STOCK = 'HIGH_STOCK',
+}
+
 export class ProductQueryDto extends PaginationDto {
   @ApiPropertyOptional({ enum: ProductSource })
   @IsOptional()
   @IsEnum(ProductSource)
   source?: ProductSource;
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({ description: 'Filter by category name (case-insensitive)' })
   @IsOptional()
-  @Type(() => Number)
-  @IsInt()
-  category_id?: number;
+  @IsString()
+  category_name?: string;
 
   @ApiPropertyOptional({ description: 'WAREHOUSE_ADMIN only — filter by a specific shop' })
   @IsOptional()
   @Type(() => Number)
   @IsInt()
   shop_id?: number;
+
+  @ApiPropertyOptional({ description: 'WAREHOUSE_ADMIN only — false to show inactive products; defaults to active only' })
+  @IsOptional()
+  @Transform(({ value }) => {
+    if (value === 'true') return true;
+    if (value === 'false') return false;
+    return value;
+  })
+  @IsBoolean()
+  is_active?: boolean;
+
+  @ApiPropertyOptional({ enum: StockStatus, description: 'Filter by stock level relative to inventory threshold' })
+  @IsOptional()
+  @IsEnum(StockStatus)
+  stock_status?: StockStatus;
 }

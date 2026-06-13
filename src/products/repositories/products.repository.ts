@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { DatabaseService } from '../../database/database.service';
 import { Product } from '../entities/product.entity';
 import { UpdateProductDto } from '../dto/update-product.dto';
-import { ProductQueryDto } from '../dto/product-query.dto';
+import { ProductQueryDto, StockStatus } from '../dto/product-query.dto';
 
 interface PaginatedProducts {
   data: Product[];
@@ -13,22 +13,35 @@ interface PaginatedProducts {
 export class ProductsRepository {
   constructor(private readonly db: DatabaseService) {}
 
-  // Admin: all active products (optional shop/source/category filters)
+  // Admin: products with optional is_active, source, category, shop, and stock-level filters
   async findPaginatedAdmin(query: ProductQueryDto): Promise<PaginatedProducts> {
-    const conditions: string[] = ['p.is_active = TRUE'];
+    const conditions: string[] = [];
     const params: unknown[] = [];
     let idx = 1;
 
-    if (query.shop_id)    { conditions.push(`p.shop_id = $${idx++}`);      params.push(query.shop_id); }
-    if (query.source)     { conditions.push(`p.source = $${idx++}`);       params.push(query.source); }
-    if (query.category_id){ conditions.push(`p.category_id = $${idx++}`);  params.push(query.category_id); }
+    // Default to active-only; pass is_active=false to see inactive products
+    conditions.push(query.is_active === false ? 'p.is_active = FALSE' : 'p.is_active = TRUE');
+
+    if (query.shop_id)      { conditions.push(`p.shop_id = $${idx++}`);                params.push(query.shop_id); }
+    if (query.source)       { conditions.push(`p.source = $${idx++}`);                 params.push(query.source); }
+    if (query.category_name){ conditions.push(`c.name ILIKE $${idx++}`);               params.push(query.category_name); }
+
+    if (query.stock_status === StockStatus.OUT_OF_STOCK) {
+      conditions.push('COALESCE(i.current_quantity, 0) = 0');
+    } else if (query.stock_status === StockStatus.LOW_STOCK) {
+      conditions.push('COALESCE(i.current_quantity, 0) > 0 AND i.current_quantity <= i.low_stock_threshold');
+    } else if (query.stock_status === StockStatus.HIGH_STOCK) {
+      conditions.push('COALESCE(i.current_quantity, 0) > COALESCE(i.low_stock_threshold, 10)');
+    }
 
     params.push(query.limit, query.offset);
     const limitIdx = idx++; const offsetIdx = idx++;
 
     const rows = await this.db.query<Product & { total_count: string }>(
-      `SELECT p.*, COUNT(*) OVER() AS total_count
+      `SELECT p.*, c.name AS category_name, COUNT(*) OVER() AS total_count
        FROM products p
+       LEFT JOIN categories c ON c.id = p.category_id
+       LEFT JOIN inventory i ON i.product_id = p.id AND i.shop_id = p.shop_id
        WHERE ${conditions.join(' AND ')}
        ORDER BY p.created_at DESC
        LIMIT $${limitIdx} OFFSET $${offsetIdx}`,
@@ -50,15 +63,16 @@ export class ProductsRepository {
     const params: unknown[] = [shopId];
     let idx = 2;
 
-    if (query.source)     { conditions.push(`p.source = $${idx++}`);      params.push(query.source); }
-    if (query.category_id){ conditions.push(`p.category_id = $${idx++}`); params.push(query.category_id); }
+    if (query.source)        { conditions.push(`p.source = $${idx++}`);   params.push(query.source); }
+    if (query.category_name) { conditions.push(`c.name ILIKE $${idx++}`); params.push(query.category_name); }
 
     params.push(query.limit, query.offset);
     const limitIdx = idx++; const offsetIdx = idx++;
 
     const rows = await this.db.query<Product & { total_count: string }>(
-      `SELECT p.*, COUNT(*) OVER() AS total_count
+      `SELECT p.*, c.name AS category_name, COUNT(*) OVER() AS total_count
        FROM products p
+       LEFT JOIN categories c ON c.id = p.category_id
        WHERE ${conditions.join(' AND ')}
        ORDER BY p.source DESC, p.created_at DESC
        LIMIT $${limitIdx} OFFSET $${offsetIdx}`,
@@ -73,7 +87,10 @@ export class ProductsRepository {
 
   findById(id: number): Promise<Product | null> {
     return this.db.queryOne<Product>(
-      'SELECT * FROM products WHERE id = $1 AND is_active = TRUE',
+      `SELECT p.*, c.name AS category_name
+       FROM products p
+       LEFT JOIN categories c ON c.id = p.category_id
+       WHERE p.id = $1 AND p.is_active = TRUE`,
       [id],
     );
   }
