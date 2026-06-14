@@ -1,8 +1,8 @@
 # Frontend Handoff — Inventory & Distribution System
 
 > **Status:** Backend API is complete and ready for integration.  
-> **Base URL (dev):** `http://localhost:3000`  
-> **API Docs (Swagger):** `http://localhost:3000/api`
+> **Base URL (dev):** `http://localhost:3001`  
+> **API Docs (Swagger):** `http://localhost:3001/api`
 
 ---
 
@@ -290,16 +290,19 @@ Request → 401?
 | Param | Type | Description |
 |-------|------|-------------|
 | `source` | string | `WAREHOUSE` or `LOCAL` |
-| `category_id` | number | Filter by category |
-| `shop_id` | number | Admin only — filter by shop |
+| `category_name` | string | Case-insensitive substring match on category name |
+| `shop_id` | number | Admin only — filter by specific shop |
+| `is_active` | boolean | Admin only — `false` to include soft-deleted products (default: active only) |
+| `stock_status` | string | `OUT_OF_STOCK` \| `LOW_STOCK` \| `HIGH_STOCK` — relative to each product's threshold |
 | `page` / `limit` | number | Pagination |
 
-**Product Object:**
+**Product Object (list):**
 ```json
 {
   "id": 10,
   "shop_id": 1,
   "category_id": 3,
+  "category_name": "Electronics",
   "name": "Laptop 15\"",
   "description": "Core i7 laptop",
   "barcode": "1234567890",
@@ -307,12 +310,36 @@ Request → 401?
   "source": "WAREHOUSE",
   "is_global": true,
   "is_active": true,
-  "created_at": "2025-01-01T00:00:00Z"
+  "created_at": "2025-01-01T00:00:00Z",
+  "updated_at": "2025-01-01T00:00:00Z"
+}
+```
+
+**Product Object (single — `GET /products/:id`):**
+
+Same fields as above, plus `current_quantity` from the inventory table:
+```json
+{
+  "id": 10,
+  "shop_id": 1,
+  "category_id": 3,
+  "category_name": "Electronics",
+  "name": "Laptop 15\"",
+  "description": "Core i7 laptop",
+  "barcode": "1234567890",
+  "price": "1200.00",
+  "source": "WAREHOUSE",
+  "is_global": true,
+  "is_active": true,
+  "created_at": "2025-01-01T00:00:00Z",
+  "updated_at": "2025-01-01T00:00:00Z",
+  "current_quantity": 42
 }
 ```
 
 > `source: "WAREHOUSE"` — product defined at the warehouse level.  
-> `source: "LOCAL"` — product defined by a shop.
+> `source: "LOCAL"` — product defined by a shop.  
+> `current_quantity` — returns `0` if no inventory record exists yet for this product.
 
 ---
 
@@ -436,7 +463,7 @@ PENDING → PROCESSING → SHIPPED → RECEIVED → COMPLETED
 | `RECEIVED` | Shop received delivery |
 | `COMPLETED` | Order fully closed |
 
-> When status changes to `SHIPPED`, warehouse inventory is automatically decremented.
+> When status changes to `RECEIVED`, warehouse inventory is automatically decremented and transferred to the shop's inventory inside a single DB transaction.
 
 **Query Params for** `GET /orders`
 
@@ -683,7 +710,7 @@ OUT_OF_STOCK   — quantity = 0
 
 ## Quick Start Checklist for Frontend
 
-- [ ] Configure Axios/Fetch base URL as `http://localhost:3000`
+- [ ] Configure Axios/Fetch base URL as `http://localhost:3001`
 - [ ] On login success, store **both** `accessToken` and `refreshToken` (localStorage or httpOnly cookies)
 - [ ] Add `Authorization: Bearer <accessToken>` header globally on every request
 - [ ] Implement a **401 interceptor**: call `POST /auth/refresh` → retry with new token → on second 401, redirect to `/login`
@@ -695,4 +722,4 @@ OUT_OF_STOCK   — quantity = 0
 
 ---
 
-> Questions? The full interactive Swagger docs are at `http://localhost:3000/api` — every endpoint is documented there with request/response schemas.
+> Questions? The full interactive Swagger docs are at `http://localhost:3001/api` — every endpoint is documented there with request/response schemas.
