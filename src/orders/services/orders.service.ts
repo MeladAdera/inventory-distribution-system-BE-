@@ -65,9 +65,11 @@ export class OrdersService {
     return order;
   }
 
-  async findAll(query: OrderQueryDto, user: RequestUser): Promise<PaginatedResponse<Order>> {
-    const shopId = user.role === UserRole.WAREHOUSE_ADMIN ? undefined : user.shopId!;
-    const result = await this.ordersRepo.findPaginated(query, shopId);
+  async findAll(query: OrderQueryDto, user: RequestUser): Promise<PaginatedResponse<OrderWithItems>> {
+    const isAdmin = user.role === UserRole.WAREHOUSE_ADMIN;
+    const shopId = isAdmin ? undefined : user.shopId!;
+    const toShopId = isAdmin ? query.shop_id : undefined;
+    const result = await this.ordersRepo.findPaginated(query, shopId, toShopId);
     return paginate(result.data, query.page, query.limit, result.total);
   }
 

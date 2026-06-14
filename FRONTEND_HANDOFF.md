@@ -136,6 +136,18 @@ GET /auth/me
 Authorization: Bearer <accessToken>
 ```
 
+**Response `200`:**
+```json
+{
+  "id": 1,
+  "email": "admin@warehouse.com",
+  "role": "WAREHOUSE_ADMIN",
+  "shopId": 1
+}
+```
+
+> Note: this response comes from the JWT payload — it does **not** include `name`. Use the `name` from the login response or fetch it from `GET /users/:id`.
+
 ### Token Lifecycle (what to implement in the HTTP client)
 
 ```
@@ -289,6 +301,7 @@ Request → 401?
 
 | Param | Type | Description |
 |-------|------|-------------|
+| `search` | string | Case-insensitive search by product name or barcode |
 | `source` | string | `WAREHOUSE` or `LOCAL` |
 | `category_name` | string | Case-insensitive substring match on category name |
 | `shop_id` | number | Admin only — filter by specific shop |
@@ -352,6 +365,12 @@ Same fields as above, plus `current_quantity` from the inventory table:
 | POST | `/categories` | JWT | `WAREHOUSE_ADMIN`, `SHOP_OWNER` | Create category |
 | PATCH | `/categories/:id` | JWT | `WAREHOUSE_ADMIN`, `SHOP_OWNER` | Rename category |
 | DELETE | `/categories/:id` | JWT | `WAREHOUSE_ADMIN`, `SHOP_OWNER` | Delete (fails if products exist) |
+
+**Query Params for** `GET /categories`
+
+| Param | Type | Description |
+|-------|------|-------------|
+| `shopId` | number | Admin only — filter by specific shop |
 
 **Create/Update Category:**
 ```json
@@ -470,24 +489,29 @@ PENDING → PROCESSING → SHIPPED → RECEIVED → COMPLETED
 | Param | Type | Description |
 |-------|------|-------------|
 | `status` | string | Filter by order status |
+| `shop_id` | number | Admin only — filter by destination shop (`to_shop_id`) |
 | `page` / `limit` | number | Pagination |
 
-**Order Object (detail view):**
+**Order Object (both list and detail view):**
 ```json
 {
   "id": 15,
-  "from_shop_id": 2,
-  "to_shop_id": 1,
+  "from_shop_id": 1,
+  "to_shop_id": 2,
+  "to_shop_name": "Cairo Branch",
   "status": "PROCESSING",
   "total_items": 8,
   "created_at": "2025-01-10T09:00:00Z",
   "updated_at": "2025-01-10T11:00:00Z",
   "items": [
-    { "id": 30, "order_id": 15, "product_id": 10, "quantity": 5, "price": "1200.00" },
-    { "id": 31, "order_id": 15, "product_id": 11, "quantity": 3, "price": "250.00" }
+    { "product_id": 10, "product_name": "Laptop 15\"", "quantity": 5, "price": "1200.00" },
+    { "product_id": 11, "product_name": "Monitor", "quantity": 3, "price": "250.00" }
   ]
 }
 ```
+
+> `from_shop_id` is always the **warehouse** (the supplier); `to_shop_id` / `to_shop_name` identify the **shop** that placed the order.
+> `items` is included in both the list and single-order responses.
 
 ---
 
@@ -624,8 +648,8 @@ For lists:
   "success": false,
   "statusCode": 400,
   "message": "email must be an email",
-  "timestamp": "2025-01-15T10:00:00Z",
-  "path": "/users"
+  "error": "Bad Request",
+  "timestamp": "2025-01-15T10:00:00Z"
 }
 ```
 

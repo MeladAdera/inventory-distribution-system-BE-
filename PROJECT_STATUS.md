@@ -66,7 +66,7 @@ No public registration. All accounts provisioned by privileged roles.
 | categories | ✅ | ✅ CRUD + global | ✅ `GET /categories`, `GET /categories/:id`, `POST /categories`, `PATCH /categories/:id`, `DELETE /categories/:id` | ✅ `CreateCategoryDto`, `UpdateCategoryDto` | ✅ |
 | inventory | ✅ | ✅ stock-in, adjust, low-stock | ✅ `GET /inventory`, `GET /inventory/low-stock`, `GET /inventory/:id`, `POST /inventory/stock-in`, `PATCH /inventory/:id` | ✅ `StockInDto`, `AdjustInventoryDto`, `InventoryQueryDto` | ✅ |
 | audit-logs | ✅ | ✅ log(), findAll, findById | ✅ `GET /audit-logs`, `GET /audit-logs/:id` | ✅ `AuditLogQueryDto` | ✅ |
-| orders | ✅ | ✅ createOrder, findAll, findById, updateStatus | ✅ `POST /orders`, `GET /orders`, `GET /orders/:id`, `PATCH /orders/:id/status` | ✅ `CreateOrderDto`, `UpdateOrderStatusDto`, `OrderQueryDto` | ✅ |
+| orders | ✅ | ✅ createOrder, findAll, findById, updateStatus | ✅ `POST /orders`, `GET /orders`, `GET /orders/:id`, `PATCH /orders/:id/status` | ✅ `CreateOrderDto`, `UpdateOrderStatusDto`, `OrderQueryDto` (`status`, `shop_id` filters) | ✅ |
 | warehouse | ✅ | ⬜ stub | ⬜ stub | ⬜ none | ❌ |
 | notifications | ✅ | ✅ findAll, markRead, markAllRead, notifyOrderCreated, notifyStatusChanged, notifyLowStock | ✅ `GET /notifications`, `PATCH /notifications/:id/read`, `PATCH /notifications/read-all` | ✅ `NotificationQueryDto` | ✅ |
 
@@ -99,7 +99,7 @@ No public registration. All accounts provisioned by privileged roles.
   - `InventoryRepository` — real implementation (`findPaginated`, `findAllForAdmin`, `findById`, `findLowStock`, `findAllLowStockForAdmin`, `findByShopAndProduct`, `upsertStockIn`, `adjust`) — now exported for use by OrdersService
   - `AuditLogsRepository` — real implementation (`insert` with optional transactional client, `findPaginated` with 8 filters, `findById`)
   - `NotificationsRepository` — real implementation (`insert`, `findPaginatedForShop`, `markRead`, `markAllRead`, `hasUnreadLowStock`)
-  - `OrdersRepository` — real implementation (`findWarehouseShop`, `insert`, `insertItems`, `findPaginated`, `findById`, `updateStatus`, `findItemsByOrderId`)
+  - `OrdersRepository` — real implementation (`findWarehouseShop`, `insert`, `insertItems` with product price lookup, `findPaginated` with items + `to_shop_name` + `shop_id` filter, `findById` with items + `to_shop_name`, `updateStatus`, `findItemsByOrderId`)
   - Stub repositories created for: warehouse
 - ✅ Migration 05 — seeds `WAREHOUSE_ADMIN` account (`admin@warehouse.com` / `Admin@123`)
 - ✅ Migration 06 — adds `is_active` column to `shops` table
@@ -140,6 +140,11 @@ No public registration. All accounts provisioned by privileged roles.
 - ✅ **Product query filter enhancements** — `GET /products` now supports `category_name` (ILIKE, replaces `category_id`), `is_active` (admin-only boolean; defaults to active-only), and `stock_status` (`OUT_OF_STOCK` / `LOW_STOCK` / `HIGH_STOCK` relative to per-product `low_stock_threshold`); all queries LEFT JOIN `categories` and `inventory` so `category_name` is returned in every product response
 - ✅ **API Reference** — `API_REFERENCE.md` at repo root documents all endpoints with request/response examples
 - ✅ **`GET /products/:id` returns stock quantity** — `findById` now LEFT JOINs the `inventory` table and returns `current_quantity` (COALESCE to 0); `Product` entity updated with the new field
+- ✅ **Order items price bug fixed** — `OrdersRepository.insertItems` previously hardcoded `price = 0`; now fetches each product's current price from the `products` table in the same transaction before inserting, so order items correctly snapshot the price at order time
+- ✅ **`GET /orders` returns items array** — list endpoint now includes `items` (with `product_id`, `product_name`, `quantity`, `price`) on every order using `JSON_AGG` + `LEFT JOIN order_items/products`; same shape as `GET /orders/:id`
+- ✅ **`GET /orders` supports `?shop_id=` filter** — `WAREHOUSE_ADMIN` can filter orders by destination shop (`to_shop_id`); ignored for non-admins (their own shop restriction still applies); `OrderQueryDto` updated
+- ✅ **`GET /orders` returns `to_shop_name`** — both list and detail queries now `JOIN shops` and embed the shop name directly; `Order` entity updated with `to_shop_name` field; frontend no longer needs a secondary `/shops` call
+- ✅ **FRONTEND_HANDOFF.md corrected** — fixed 6 inaccuracies: error format (`path` → `error` field), `GET /auth/me` response shape (no `name`), `GET /products` missing `search` param, `GET /categories` missing `?shopId=` filter, order `from_shop_id`/`to_shop_id` example values swapped, order items shape wrong (`id`/`order_id` removed, `product_name` added)
 
 ### Not Done
 

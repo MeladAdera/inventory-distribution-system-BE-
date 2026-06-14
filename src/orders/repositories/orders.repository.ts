@@ -8,7 +8,7 @@ import { OrderItemDto } from '../dto/create-order.dto';
 import { Shop } from '../../shops/entities/shop.entity';
 
 interface PaginatedOrders {
-  data: Order[];
+  data: OrderWithItems[];
   total: number;
 }
 
@@ -33,11 +33,19 @@ export class OrdersRepository {
   }
 
   async insertItems(orderId: number, items: OrderItemDto[], client: pg.PoolClient): Promise<OrderItem[]> {
+    const productIds = items.map((i) => i.productId);
+    const priceRows = await client.query<{ id: number; price: string }>(
+      `SELECT id, price FROM products WHERE id = ANY($1::int[])`,
+      [productIds],
+    );
+    const priceMap = new Map(priceRows.rows.map((r) => [r.id, r.price]));
+
     const params: unknown[] = [orderId];
     const placeholders = items.map((item, i) => {
-      params.push(item.productId, item.quantity);
-      const base = i * 2;
-      return `($1, $${base + 2}, $${base + 3}, 0)`;
+      const price = priceMap.get(item.productId) ?? '0';
+      params.push(item.productId, item.quantity, price);
+      const base = i * 3;
+      return `($1, $${base + 2}, $${base + 3}, $${base + 4})`;
     });
 
     const result = await client.query<OrderItem>(
@@ -49,7 +57,7 @@ export class OrdersRepository {
     return result.rows;
   }
 
-  async findPaginated(query: OrderQueryDto, shopId?: number): Promise<PaginatedOrders> {
+  async findPaginated(query: OrderQueryDto, shopId?: number, toShopId?: number): Promise<PaginatedOrders> {
     const conditions: string[] = [];
     const params: unknown[] = [];
     let idx = 1;
@@ -58,6 +66,11 @@ export class OrdersRepository {
       conditions.push(`(o.from_shop_id = $${idx} OR o.to_shop_id = $${idx})`);
       params.push(shopId);
       idx++;
+    }
+
+    if (toShopId !== undefined) {
+      conditions.push(`o.to_shop_id = $${idx++}`);
+      params.push(toShopId);
     }
 
     if (query.status) {
@@ -71,17 +84,34 @@ export class OrdersRepository {
     const limitIdx = idx++;
     const offsetIdx = idx++;
 
-    const rows = await this.db.query<Order & { total_count: string }>(
-      `SELECT o.*, COUNT(*) OVER() AS total_count
+    const rows = await this.db.query<OrderWithItems & { total_count: string }>(
+      `SELECT o.*,
+              s.name AS to_shop_name,
+              COUNT(*) OVER() AS total_count,
+              COALESCE(
+                JSON_AGG(
+                  JSON_BUILD_OBJECT(
+                    'product_id',   oi.product_id,
+                    'product_name', p.name,
+                    'quantity',     oi.quantity,
+                    'price',        oi.price
+                  )
+                ) FILTER (WHERE oi.id IS NOT NULL),
+                '[]'
+              ) AS items
        FROM orders o
+       JOIN shops         s  ON s.id = o.to_shop_id
+       LEFT JOIN order_items oi ON oi.order_id = o.id
+       LEFT JOIN products    p  ON p.id = oi.product_id
        ${whereClause}
+       GROUP BY o.id, s.name
        ORDER BY o.created_at DESC
        LIMIT $${limitIdx} OFFSET $${offsetIdx}`,
       params,
     );
 
     return {
-      data: rows.map(({ total_count: _, ...row }) => row as Order),
+      data: rows.map(({ total_count: _, ...row }) => row as OrderWithItems),
       total: rows.length > 0 ? parseInt(rows[0].total_count, 10) : 0,
     };
   }
@@ -90,22 +120,24 @@ export class OrdersRepository {
     return this.db.queryOne<OrderWithItems>(
       `SELECT
          o.*,
+         s.name AS to_shop_name,
          COALESCE(
            JSON_AGG(
              JSON_BUILD_OBJECT(
-               'product_id', oi.product_id,
+               'product_id',   oi.product_id,
                'product_name', p.name,
-               'quantity', oi.quantity,
-               'price', oi.price
+               'quantity',     oi.quantity,
+               'price',        oi.price
              )
            ) FILTER (WHERE oi.id IS NOT NULL),
            '[]'
          ) AS items
        FROM orders o
+       JOIN shops         s  ON s.id = o.to_shop_id
        LEFT JOIN order_items oi ON oi.order_id = o.id
-       LEFT JOIN products p ON p.id = oi.product_id
+       LEFT JOIN products    p  ON p.id = oi.product_id
        WHERE o.id = $1
-       GROUP BY o.id`,
+       GROUP BY o.id, s.name`,
       [id],
     );
   }
