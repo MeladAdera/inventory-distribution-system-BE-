@@ -29,8 +29,8 @@ export class OrdersController {
   constructor(private readonly ordersService: OrdersService) {}
 
   @Post()
-  @Roles(UserRole.SHOP_OWNER)
-  @ApiOperation({ summary: 'Create a new order request to the warehouse — SHOP_OWNER only' })
+  @Roles(UserRole.SHOP_OWNER, UserRole.WAREHOUSE_ADMIN)
+  @ApiOperation({ summary: 'Create a new order. SHOP_OWNER uses their own shop as destination. WAREHOUSE_ADMIN must supply shopId in the body.' })
   createOrder(
     @Body() dto: CreateOrderDto,
     @CurrentUser() user: RequestUser,

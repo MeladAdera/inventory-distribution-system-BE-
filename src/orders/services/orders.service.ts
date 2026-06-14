@@ -35,7 +35,13 @@ export class OrdersService {
   ) {}
 
   async createOrder(dto: CreateOrderDto, user: RequestUser): Promise<Order> {
-    const toShopId = user.shopId!;
+    let toShopId: number;
+    if (user.role === UserRole.WAREHOUSE_ADMIN) {
+      if (!dto.shopId) throw new BadRequestException('shopId is required when creating an order as WAREHOUSE_ADMIN');
+      toShopId = dto.shopId;
+    } else {
+      toShopId = user.shopId!;
+    }
 
     const warehouse = await this.ordersRepo.findWarehouseShop();
     if (!warehouse) throw new BadRequestException('Warehouse not found');

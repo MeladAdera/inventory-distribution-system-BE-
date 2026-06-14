@@ -1,6 +1,6 @@
 import { Type } from 'class-transformer';
-import { IsArray, IsInt, IsPositive, ArrayNotEmpty, ValidateNested } from 'class-validator';
-import { ApiProperty } from '@nestjs/swagger';
+import { IsArray, IsInt, IsOptional, IsPositive, ArrayNotEmpty, ValidateNested } from 'class-validator';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class OrderItemDto {
   @ApiProperty({ example: 10 })
@@ -21,4 +21,10 @@ export class CreateOrderDto {
   @ValidateNested({ each: true })
   @Type(() => OrderItemDto)
   items!: OrderItemDto[];
+
+  @ApiPropertyOptional({ description: 'WAREHOUSE_ADMIN only — destination shop (to_shop_id). Required when called by an admin.' })
+  @IsOptional()
+  @IsInt()
+  @IsPositive()
+  shopId?: number;
 }

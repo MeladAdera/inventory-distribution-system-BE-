@@ -449,14 +449,27 @@ Orders are requests from a **Shop** to the **Warehouse** to receive products.
 
 | Method | Path | Auth | Roles | Description |
 |--------|------|------|-------|-------------|
-| POST | `/orders` | JWT | `SHOP_OWNER` | Create a new order |
+| POST | `/orders` | JWT | `SHOP_OWNER`, `WAREHOUSE_ADMIN` | Create a new order |
 | GET | `/orders` | JWT | All | List orders |
 | GET | `/orders/:id` | JWT | All | Get order details with items |
 | PATCH | `/orders/:id/status` | JWT | `WAREHOUSE_ADMIN` | Advance order status |
 
 **Create Order** `POST /orders`
+
+For `SHOP_OWNER` — `to_shop_id` is set automatically from their account:
 ```json
 {
+  "items": [
+    { "productId": 10, "quantity": 5 },
+    { "productId": 11, "quantity": 3 }
+  ]
+}
+```
+
+For `WAREHOUSE_ADMIN` — must supply `shopId` to set the destination:
+```json
+{
+  "shopId": 2,
   "items": [
     { "productId": 10, "quantity": 5 },
     { "productId": 11, "quantity": 3 }
