@@ -15,6 +15,11 @@ export enum StockStatus {
 }
 
 export class ProductQueryDto extends PaginationDto {
+  @ApiPropertyOptional({ description: 'Search by product name or barcode (case-insensitive)' })
+  @IsOptional()
+  @IsString()
+  search?: string;
+
   @ApiPropertyOptional({ enum: ProductSource })
   @IsOptional()
   @IsEnum(ProductSource)

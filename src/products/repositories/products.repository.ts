@@ -22,6 +22,7 @@ export class ProductsRepository {
     // Default to active-only; pass is_active=false to see inactive products
     conditions.push(query.is_active === false ? 'p.is_active = FALSE' : 'p.is_active = TRUE');
 
+    if (query.search)        { conditions.push(`(p.name ILIKE $${idx} OR p.barcode ILIKE $${idx})`); params.push(`%${query.search}%`); idx++; }
     if (query.shop_id)      { conditions.push(`p.shop_id = $${idx++}`);                params.push(query.shop_id); }
     if (query.source)       { conditions.push(`p.source = $${idx++}`);                 params.push(query.source); }
     if (query.category_name){ conditions.push(`c.name ILIKE $${idx++}`);               params.push(query.category_name); }
@@ -63,6 +64,7 @@ export class ProductsRepository {
     const params: unknown[] = [shopId];
     let idx = 2;
 
+    if (query.search)        { conditions.push(`(p.name ILIKE $${idx} OR p.barcode ILIKE $${idx})`); params.push(`%${query.search}%`); idx++; }
     if (query.source)        { conditions.push(`p.source = $${idx++}`);   params.push(query.source); }
     if (query.category_name) { conditions.push(`c.name ILIKE $${idx++}`); params.push(query.category_name); }
 
