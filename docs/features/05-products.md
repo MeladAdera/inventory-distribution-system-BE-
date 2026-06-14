@@ -71,10 +71,12 @@ Each product object now includes `category_name` (joined from the `categories` t
 
 ### GET /products/:id
 
-Returns a single active product.
+Returns a single active product, including its current stock quantity.
 
 - `404` if product does not exist or is soft-deleted.
 - `403` if non-admin requests a product that is neither theirs nor a warehouse product.
+
+**Response includes `current_quantity`** — joined from the `inventory` table (`COALESCE` to `0` if no inventory record exists yet).
 
 ---
 
@@ -204,7 +206,7 @@ src/products/
 ├── entities/
 │   └── product.entity.ts                id, shop_id, category_id, category_name, name,
 │                                        description, barcode, price, source, is_global,
-│                                        is_active, created_at, updated_at
+│                                        is_active, created_at, updated_at, current_quantity
 └── dto/
     ├── create-product.dto.ts            name, price, category_id, barcode?, description?
     ├── update-product.dto.ts            all optional

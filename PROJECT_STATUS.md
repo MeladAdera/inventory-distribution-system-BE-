@@ -139,6 +139,7 @@ No public registration. All accounts provisioned by privileged roles.
 - ✅ **Database seeder** — `src/database/seeders/seed.ts` populates 4 shops, 8 users, 10 categories, 15 products, 36 inventory rows, 7 orders, 27 order items, 9 notifications, 13 audit log entries; run via `npm run seed`; documented in `docs/setup-guide/05-seeder.md`
 - ✅ **Product query filter enhancements** — `GET /products` now supports `category_name` (ILIKE, replaces `category_id`), `is_active` (admin-only boolean; defaults to active-only), and `stock_status` (`OUT_OF_STOCK` / `LOW_STOCK` / `HIGH_STOCK` relative to per-product `low_stock_threshold`); all queries LEFT JOIN `categories` and `inventory` so `category_name` is returned in every product response
 - ✅ **API Reference** — `API_REFERENCE.md` at repo root documents all endpoints with request/response examples
+- ✅ **`GET /products/:id` returns stock quantity** — `findById` now LEFT JOINs the `inventory` table and returns `current_quantity` (COALESCE to 0); `Product` entity updated with the new field
 
 ### Not Done
 

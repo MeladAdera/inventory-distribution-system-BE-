@@ -87,9 +87,10 @@ export class ProductsRepository {
 
   findById(id: number): Promise<Product | null> {
     return this.db.queryOne<Product>(
-      `SELECT p.*, c.name AS category_name
+      `SELECT p.*, c.name AS category_name, COALESCE(i.current_quantity, 0) AS current_quantity
        FROM products p
        LEFT JOIN categories c ON c.id = p.category_id
+       LEFT JOIN inventory i ON i.product_id = p.id AND i.shop_id = p.shop_id
        WHERE p.id = $1 AND p.is_active = TRUE`,
       [id],
     );
