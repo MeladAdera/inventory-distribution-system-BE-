@@ -3,13 +3,14 @@ import { ValidationPipe, Logger } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { AppModule } from './app.module';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
+import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 import { TransformInterceptor } from './common/interceptors/transform.interceptor';
 
 async function bootstrap(): Promise<void> {
   const app = await NestFactory.create(AppModule);
   const httpLogger = new Logger('HTTP');
 
-  app.use((req: any, _res: any, next: () => void) => {
+  app.use((req: import('express').Request, _res: import('express').Response, next: import('express').NextFunction) => {
     httpLogger.log(`METHOD: ${req.method}  PATH: ${req.originalUrl}`);
     next();
   });
@@ -33,7 +34,9 @@ async function bootstrap(): Promise<void> {
     }),
   );
 
-  app.useGlobalFilters(new HttpExceptionFilter());
+  // AllExceptionsFilter registered first — it handles everything not caught by
+  // the more specific HttpExceptionFilter that follows it.
+  app.useGlobalFilters(new AllExceptionsFilter(), new HttpExceptionFilter());
   app.useGlobalInterceptors(new TransformInterceptor());
 
   const swaggerConfig = new DocumentBuilder()

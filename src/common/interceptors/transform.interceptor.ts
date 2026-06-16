@@ -7,9 +7,15 @@ import {
 import { Observable } from 'rxjs';
 import { map } from 'rxjs/operators';
 
+interface SuccessEnvelope<T> {
+  success: true;
+  data: T;
+  timestamp: string;
+}
+
 @Injectable()
-export class TransformInterceptor implements NestInterceptor {
-  intercept(_context: ExecutionContext, next: CallHandler): Observable<any> {
+export class TransformInterceptor<T> implements NestInterceptor<T, SuccessEnvelope<T>> {
+  intercept(_context: ExecutionContext, next: CallHandler<T>): Observable<SuccessEnvelope<T>> {
     return next.handle().pipe(
       map((data) => ({
         success: true,

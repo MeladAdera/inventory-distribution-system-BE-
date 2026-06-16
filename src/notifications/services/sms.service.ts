@@ -2,17 +2,13 @@ import { Injectable } from '@nestjs/common';
 
 @Injectable()
 export class SmsService {
-  async sendSms(phoneNumber: string, message: string): Promise<void> {
+  sendSms(phoneNumber: string, message: string): void {
     // TODO: Implement SMS sending logic
     console.log(`SMS sent to ${phoneNumber}: ${message}`);
   }
 
-  async sendOrderStatusSms(
-    phoneNumber: string,
-    orderNumber: string,
-    status: string,
-  ): Promise<void> {
+  sendOrderStatusSms(phoneNumber: string, orderNumber: string, status: string): void {
     const message = `Your order ${orderNumber} status: ${status}`;
-    await this.sendSms(phoneNumber, message);
+    this.sendSms(phoneNumber, message);
   }
 }

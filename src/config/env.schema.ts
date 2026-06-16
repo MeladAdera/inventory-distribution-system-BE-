@@ -16,31 +16,32 @@ export class EnvironmentVariables {
   @IsOptional()
   PORT: number = 3000;
 
-  // Database connection — all optional because DatabaseService has safe defaults
   @IsString()
-  @IsOptional()
-  DATABASE_HOST?: string;
+  @IsNotEmpty()
+  DATABASE_HOST!: string;
 
   @IsNumber()
-  @IsOptional()
-  DATABASE_PORT?: number;
+  DATABASE_PORT: number = 5432;
 
   @IsString()
-  @IsOptional()
-  DATABASE_USERNAME?: string;
+  @IsNotEmpty()
+  DATABASE_USERNAME!: string;
 
   @IsString()
-  @IsOptional()
-  DATABASE_PASSWORD?: string;
+  @IsNotEmpty()
+  DATABASE_PASSWORD!: string;
 
   @IsString()
-  @IsOptional()
-  DATABASE_NAME?: string;
+  @IsNotEmpty()
+  DATABASE_NAME!: string;
 
-  // Required — app refuses to start without this
+  // Required — app refuses to start without these
   @IsString()
   @IsNotEmpty()
   JWT_SECRET!: string;
+
+  @IsNumber()
+  REFRESH_TOKEN_EXPIRATION_DAYS: number = 30;
 
   // CORS — comma-separated list of allowed origins
   @IsString()

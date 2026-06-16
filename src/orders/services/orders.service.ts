@@ -3,6 +3,8 @@ import {
   NotFoundException,
   BadRequestException,
   ForbiddenException,
+  ConflictException,
+  Logger,
 } from '@nestjs/common';
 import { DatabaseService } from '../../database/database.service';
 import { OrdersRepository } from '../repositories/orders.repository';
@@ -26,6 +28,8 @@ const NEXT_STATUS: Partial<Record<OrderStatus, OrderStatus>> = {
 
 @Injectable()
 export class OrdersService {
+  private readonly logger = new Logger(OrdersService.name);
+
   constructor(
     private readonly ordersRepo: OrdersRepository,
     private readonly inventoryRepo: InventoryRepository,
@@ -67,7 +71,8 @@ export class OrdersService {
       return created;
     });
 
-    await this.notificationsService.notifyOrderCreated(order.id, warehouse.id);
+    this.notificationsService.notifyOrderCreated(order.id, warehouse.id)
+      .catch((err: unknown) => this.logger.error('notifyOrderCreated failed', err));
     return order;
   }
 
@@ -87,18 +92,29 @@ export class OrdersService {
   }
 
   async updateStatus(id: number, dto: UpdateOrderStatusDto, user: RequestUser): Promise<Order> {
-    const order = await this.ordersRepo.findById(id);
-    if (!order) throw new NotFoundException('Order not found');
-
-    const expected = NEXT_STATUS[order.status];
-    if (expected !== dto.status) {
-      throw new BadRequestException(
-        `Invalid transition: ${order.status} → ${dto.status}. Expected next status: ${expected ?? 'none (order is completed)'}`,
-      );
-    }
+    // Quick existence check before opening a transaction (avoids unnecessary lock).
+    const preCheck = await this.ordersRepo.findById(id);
+    if (!preCheck) throw new NotFoundException('Order not found');
 
     const updated = await this.db.transaction(async (client) => {
-      const result = await this.ordersRepo.updateStatus(id, dto.status, client);
+      // Lock the row so concurrent requests cannot both pass validation and both
+      // run transferInventory (which would double-deduct warehouse stock).
+      const order = await this.ordersRepo.findByIdForUpdate(id, client);
+      if (!order) throw new NotFoundException('Order not found');
+
+      const expected = NEXT_STATUS[order.status];
+      if (expected !== dto.status) {
+        throw new BadRequestException(
+          `Invalid transition: ${order.status} → ${dto.status}. Expected next status: ${expected ?? 'none (order is completed)'}`,
+        );
+      }
+
+      // Only updates if the status still matches what we just read — guards against
+      // a race that slips through between lock acquisition and the UPDATE.
+      const result = await this.ordersRepo.updateStatus(id, dto.status, order.status, client);
+      if (!result) {
+        throw new ConflictException('Order status was modified by another request. Please retry.');
+      }
 
       await this.auditLogsService.log(
         {
@@ -117,11 +133,12 @@ export class OrdersService {
         await this.transferInventory(id, order.from_shop_id, order.to_shop_id, user.id, client);
       }
 
-      return result;
+      return { result, order };
     });
 
-    await this.notificationsService.notifyStatusChanged(id, dto.status, order.to_shop_id);
-    return updated;
+    this.notificationsService.notifyStatusChanged(id, dto.status, updated.order.to_shop_id)
+      .catch((err: unknown) => this.logger.error('notifyStatusChanged failed', err));
+    return updated.result;
   }
 
   private async transferInventory(

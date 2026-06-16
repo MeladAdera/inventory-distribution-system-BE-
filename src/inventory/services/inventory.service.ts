@@ -3,6 +3,7 @@ import {
   NotFoundException,
   ForbiddenException,
   BadRequestException,
+  Logger,
 } from '@nestjs/common';
 import { DatabaseService } from '../../database/database.service';
 import { InventoryRepository } from '../repositories/inventory.repository';
@@ -18,6 +19,8 @@ import { RequestUser } from '../../common/interfaces/request-user.interface';
 
 @Injectable()
 export class InventoryService {
+  private readonly logger = new Logger(InventoryService.name);
+
   constructor(
     private readonly inventoryRepo: InventoryRepository,
     private readonly auditLogsService: AuditLogsService,
@@ -67,7 +70,8 @@ export class InventoryService {
     });
 
     if (result.is_low_stock) {
-      await this.notificationsService.notifyLowStock(result.product_name, shopId);
+      this.notificationsService.notifyLowStock(result.product_name, shopId)
+        .catch((err: unknown) => this.logger.error('notifyLowStock failed', err));
     }
 
     return result;
@@ -110,7 +114,8 @@ export class InventoryService {
     });
 
     if (result.is_low_stock) {
-      await this.notificationsService.notifyLowStock(result.product_name, item.shop_id);
+      this.notificationsService.notifyLowStock(result.product_name, item.shop_id)
+        .catch((err: unknown) => this.logger.error('notifyLowStock failed', err));
     }
 
     return result;

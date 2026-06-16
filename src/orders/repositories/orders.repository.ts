@@ -42,7 +42,10 @@ export class OrdersRepository {
 
     const params: unknown[] = [orderId];
     const placeholders = items.map((item, i) => {
-      const price = priceMap.get(item.productId) ?? '0';
+      const price = priceMap.get(item.productId);
+      if (price === undefined) {
+        throw new Error(`Price not found for product ${item.productId}`);
+      }
       params.push(item.productId, item.quantity, price);
       const base = i * 3;
       return `($1, $${base + 2}, $${base + 3}, $${base + 4})`;
@@ -142,15 +145,26 @@ export class OrdersRepository {
     );
   }
 
-  async updateStatus(id: number, status: OrderStatus, client: pg.PoolClient): Promise<Order> {
+  // Locks the order row for the duration of the caller's transaction so
+  // concurrent status-update requests cannot both pass validation and both
+  // run transferInventory (double-deduct bug).
+  async findByIdForUpdate(id: number, client: pg.PoolClient): Promise<Order | null> {
+    const result = await client.query<Order>(
+      `SELECT * FROM orders WHERE id = $1 FOR UPDATE`,
+      [id],
+    );
+    return result.rows[0] ?? null;
+  }
+
+  async updateStatus(id: number, status: OrderStatus, expectedStatus: OrderStatus, client: pg.PoolClient): Promise<Order | null> {
     const result = await client.query<Order>(
       `UPDATE orders
        SET status = $1, updated_at = NOW()
-       WHERE id = $2
+       WHERE id = $2 AND status = $3
        RETURNING *`,
-      [status, id],
+      [status, id, expectedStatus],
     );
-    return result.rows[0];
+    return result.rows[0] ?? null;
   }
 
   async findItemsByOrderId(orderId: number, client: pg.PoolClient): Promise<(OrderItem & { product_name: string })[]> {

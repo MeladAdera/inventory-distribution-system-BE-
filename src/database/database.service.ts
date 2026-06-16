@@ -6,12 +6,20 @@ export class DatabaseService implements OnModuleDestroy {
   private readonly pool: pg.Pool;
 
   constructor() {
+    const isProd = process.env.NODE_ENV === 'production';
+
     this.pool = new pg.Pool({
-      host: process.env.DATABASE_HOST || 'localhost',
-      port: parseInt(process.env.DATABASE_PORT || '5432', 10),
-      user: process.env.DATABASE_USERNAME || 'postgres',
-      password: process.env.DATABASE_PASSWORD || 'postgres',
-      database: process.env.DATABASE_NAME || 'inventory_db_dev',
+      host: process.env.DATABASE_HOST,
+      port: parseInt(process.env.DATABASE_PORT ?? '5432', 10),
+      user: process.env.DATABASE_USERNAME,
+      password: process.env.DATABASE_PASSWORD,
+      database: process.env.DATABASE_NAME,
+      // Keep connections bounded so the app fails fast under unexpected load
+      // rather than exhausting the DB.
+      max: 20,
+      idleTimeoutMillis: 30_000,
+      connectionTimeoutMillis: 5_000,
+      ssl: isProd ? { rejectUnauthorized: true } : false,
     });
   }
 
