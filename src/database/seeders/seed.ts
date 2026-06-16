@@ -177,63 +177,158 @@ async function seedInventory(): Promise<void> {
 }
 
 async function seedOrders(): Promise<void> {
-  // Orders: warehouse (1) → shops  OR  shop → warehouse
+  // total_items = number of distinct product line items per order
+  // updated_at is set explicitly on COMPLETED orders so trend queries land on the right date bucket
   await client.query(`
-    INSERT INTO orders (id, from_shop_id, to_shop_id, status, total_items, created_at) VALUES
-      -- Completed orders (Downtown receiving from Warehouse)
-      (1, 1, 2, 'COMPLETED',   3, NOW() - INTERVAL '10 days'),
-      (2, 1, 2, 'COMPLETED',   5, NOW() - INTERVAL '7 days'),
-      -- Completed order (Uptown)
-      (3, 1, 3, 'COMPLETED',   2, NOW() - INTERVAL '5 days'),
-      -- In-flight orders
-      (4, 1, 2, 'SHIPPED',     4, NOW() - INTERVAL '2 days'),
-      (5, 1, 3, 'PROCESSING',  3, NOW() - INTERVAL '1 day'),
-      -- Pending orders
-      (6, 1, 4, 'PENDING',     6, NOW() - INTERVAL '3 hours'),
-      (7, 1, 2, 'PENDING',     2, NOW() - INTERVAL '1 hour')
+    INSERT INTO orders (id, from_shop_id, to_shop_id, status, total_items, created_at, updated_at) VALUES
+      -- ── Older COMPLETED orders (monthly trend coverage: last 5 months) ──────
+      (1,  1, 2, 'COMPLETED', 2, NOW() - INTERVAL '5 months', NOW() - INTERVAL '5 months'),
+      (2,  1, 3, 'COMPLETED', 3, NOW() - INTERVAL '4 months', NOW() - INTERVAL '4 months'),
+      (3,  1, 4, 'COMPLETED', 3, NOW() - INTERVAL '3 months', NOW() - INTERVAL '3 months'),
+      (4,  1, 2, 'COMPLETED', 3, NOW() - INTERVAL '2 months', NOW() - INTERVAL '2 months'),
+      (5,  1, 3, 'COMPLETED', 2, NOW() - INTERVAL '6 weeks',  NOW() - INTERVAL '6 weeks'),
+
+      -- ── COMPLETED orders spread across the last 14 days (daily trend) ───────
+      (6,  1, 2, 'COMPLETED', 2, NOW() - INTERVAL '14 days', NOW() - INTERVAL '14 days'),
+      (7,  1, 3, 'COMPLETED', 2, NOW() - INTERVAL '13 days', NOW() - INTERVAL '13 days'),
+      (8,  1, 4, 'COMPLETED', 3, NOW() - INTERVAL '12 days', NOW() - INTERVAL '12 days'),
+      (9,  1, 2, 'COMPLETED', 2, NOW() - INTERVAL '11 days', NOW() - INTERVAL '11 days'),
+      (10, 1, 3, 'COMPLETED', 3, NOW() - INTERVAL '10 days', NOW() - INTERVAL '10 days'),
+      (11, 1, 2, 'COMPLETED', 2, NOW() - INTERVAL '9 days',  NOW() - INTERVAL '9 days'),
+      (12, 1, 4, 'COMPLETED', 3, NOW() - INTERVAL '8 days',  NOW() - INTERVAL '8 days'),
+      (13, 1, 2, 'COMPLETED', 5, NOW() - INTERVAL '7 days',  NOW() - INTERVAL '7 days'),
+      (14, 1, 3, 'COMPLETED', 3, NOW() - INTERVAL '6 days',  NOW() - INTERVAL '6 days'),
+      (15, 1, 2, 'COMPLETED', 3, NOW() - INTERVAL '5 days',  NOW() - INTERVAL '5 days'),
+      (16, 1, 4, 'COMPLETED', 3, NOW() - INTERVAL '4 days',  NOW() - INTERVAL '4 days'),
+      (17, 1, 2, 'COMPLETED', 3, NOW() - INTERVAL '3 days',  NOW() - INTERVAL '3 days'),
+      (18, 1, 3, 'COMPLETED', 2, NOW() - INTERVAL '2 days',  NOW() - INTERVAL '2 days'),
+      (19, 1, 2, 'COMPLETED', 3, NOW() - INTERVAL '1 day',   NOW() - INTERVAL '1 day'),
+
+      -- ── In-flight orders ─────────────────────────────────────────────────────
+      (20, 1, 2, 'SHIPPED',    4, NOW() - INTERVAL '2 days', NOW() - INTERVAL '1 day'),
+      (21, 1, 3, 'PROCESSING', 3, NOW() - INTERVAL '1 day',  NOW() - INTERVAL '12 hours'),
+      (22, 1, 4, 'PENDING',    6, NOW() - INTERVAL '3 hours',NOW() - INTERVAL '3 hours'),
+      (23, 1, 2, 'PENDING',    2, NOW() - INTERVAL '1 hour', NOW() - INTERVAL '1 hour')
   `);
-  await client.query(`SELECT setval('orders_id_seq', 7)`);
+  await client.query(`SELECT setval('orders_id_seq', 23)`);
 
   await client.query(`
     INSERT INTO order_items (order_id, product_id, quantity, price) VALUES
-      -- Order 1
-      (1, 2,  20, 24.99),
-      (1, 5, 100,  0.99),
-      (1, 8,  50,  1.49),
+      -- ── Older orders (monthly coverage) ──────────────────────────────────────
+      -- Order 1  (5 months ago, Downtown)
+      (1,  5, 500,  0.99),
+      (1,  9, 200,  1.29),
 
-      -- Order 2
-      (2, 1,  10, 45.99),
-      (2, 3,   5, 89.99),
-      (2, 6,  30,  2.49),
-      (2, 9,  60,  1.29),
-      (2, 10, 20,  3.99),
+      -- Order 2  (4 months ago, Uptown)
+      (2,  2,  50, 24.99),
+      (2,  5, 350,  0.99),
+      (2,  8, 150,  1.49),
 
-      -- Order 3
-      (3, 2,  30, 24.99),
-      (3, 4,  15, 34.99),
+      -- Order 3  (3 months ago, Eastside)
+      (3,  1,  15, 45.99),
+      (3,  2,  60, 24.99),
+      (3,  5, 400,  0.99),
 
-      -- Order 4 (SHIPPED)
-      (4, 1,   5, 45.99),
-      (4, 2,  25, 24.99),
-      (4, 7,  40,  1.99),
-      (4, 9,  50,  1.29),
+      -- Order 4  (2 months ago, Downtown)
+      (4,  5, 300,  0.99),
+      (4,  8, 100,  1.49),
+      (4,  9, 100,  1.29),
 
-      -- Order 5 (PROCESSING)
-      (5, 3,  10, 89.99),
-      (5, 5, 200,  0.99),
-      (5, 11, 30,  4.99),
+      -- Order 5  (6 weeks ago, Uptown)
+      (5,  2,  40, 24.99),
+      (5,  5, 300,  0.99),
 
-      -- Order 6 (PENDING)
-      (6, 2,  20, 24.99),
-      (6, 5, 150,  0.99),
-      (6, 6,  40,  2.49),
-      (6, 8,  80,  1.49),
-      (6, 9,  60,  1.29),
-      (6, 10, 30,  3.99),
+      -- ── Daily-trend orders ────────────────────────────────────────────────────
+      -- Order 6  (day -14, Downtown)
+      (6,  5, 300,  0.99),
+      (6,  9, 100,  1.29),
 
-      -- Order 7 (PENDING)
-      (7, 1,   3, 45.99),
-      (7, 3,   2, 89.99)
+      -- Order 7  (day -13, Uptown)
+      (7,  2,  40, 24.99),
+      (7,  5, 150,  0.99),
+
+      -- Order 8  (day -12, Eastside)
+      (8,  5, 100,  0.99),
+      (8,  8,  60,  1.49),
+      (8, 10,  30,  3.99),
+
+      -- Order 9  (day -11, Downtown)
+      (9,  1,  10, 45.99),
+      (9,  6,  50,  2.49),
+
+      -- Order 10 (day -10, Uptown)
+      (10, 3,  15, 89.99),
+      (10, 9,  80,  1.29),
+      (10,11,  25,  4.99),
+
+      -- Order 11 (day -9, Downtown)
+      (11, 2,  35, 24.99),
+      (11, 5, 200,  0.99),
+
+      -- Order 12 (day -8, Eastside)
+      (12, 1,   8, 45.99),
+      (12, 6,  40,  2.49),
+      (12, 7,  30,  1.99),
+
+      -- Order 13 (day -7, Downtown — bigger restock)
+      (13, 2,  20, 24.99),
+      (13, 5, 100,  0.99),
+      (13, 8,  50,  1.49),
+      (13, 9,  60,  1.29),
+      (13,10,  20,  3.99),
+
+      -- Order 14 (day -6, Uptown)
+      (14, 3,  10, 89.99),
+      (14, 5, 200,  0.99),
+      (14, 6,  30,  2.49),
+
+      -- Order 15 (day -5, Downtown)
+      (15, 5, 150,  0.99),
+      (15, 8, 100,  1.49),
+      (15, 9,  70,  1.29),
+
+      -- Order 16 (day -4, Eastside)
+      (16, 2,  30, 24.99),
+      (16, 5, 120,  0.99),
+      (16,11,  20,  4.99),
+
+      -- Order 17 (day -3, Downtown)
+      (17, 2,  50, 24.99),
+      (17, 5, 200,  0.99),
+      (17, 9,  80,  1.29),
+
+      -- Order 18 (day -2, Uptown)
+      (18, 3,  20, 89.99),
+      (18, 4,  15, 34.99),
+
+      -- Order 19 (day -1, Downtown)
+      (19, 5, 250,  0.99),
+      (19, 8,  80,  1.49),
+      (19, 9,  60,  1.29),
+
+      -- ── In-flight orders ─────────────────────────────────────────────────────
+      -- Order 20 (SHIPPED)
+      (20, 1,   5, 45.99),
+      (20, 2,  25, 24.99),
+      (20, 7,  40,  1.99),
+      (20, 9,  50,  1.29),
+
+      -- Order 21 (PROCESSING)
+      (21, 3,  10, 89.99),
+      (21, 5, 200,  0.99),
+      (21,11,  30,  4.99),
+
+      -- Order 22 (PENDING)
+      (22, 2,  20, 24.99),
+      (22, 5, 150,  0.99),
+      (22, 6,  40,  2.49),
+      (22, 8,  80,  1.49),
+      (22, 9,  60,  1.29),
+      (22,10,  30,  3.99),
+
+      -- Order 23 (PENDING)
+      (23, 1,   3, 45.99),
+      (23, 3,   2, 89.99)
   `);
 }
 
@@ -243,9 +338,9 @@ async function seedNotifications(): Promise<void> {
       (2, 2, 'Low Stock Alert',      'USB-C Hub 7-Port is running low (15 units). Reorder soon.', 'LOW_STOCK',    FALSE),
       (2, 2, 'Low Stock Alert',      'Energy Drink 250ml is critically low (5 units).',            'LOW_STOCK',    FALSE),
       (4, 4, 'Low Stock Alert',      'Hand Sanitizer 500ml is below threshold (9 units).',         'LOW_STOCK',    FALSE),
-      (2, 2, 'Order Shipped',        'Order #4 from Main Warehouse is on its way.',                'ORDER_UPDATE', FALSE),
-      (3, 3, 'Order Processing',     'Order #5 is being processed at the warehouse.',              'ORDER_UPDATE', FALSE),
-      (2, 2, 'Order Completed',      'Order #1 has been delivered and marked complete.',           'ORDER_UPDATE', TRUE),
+      (2, 2, 'Order Shipped',        'Order #20 from Main Warehouse is on its way.',               'ORDER_UPDATE', FALSE),
+      (3, 3, 'Order Processing',     'Order #21 is being processed at the warehouse.',             'ORDER_UPDATE', FALSE),
+      (2, 2, 'Order Completed',      'Order #13 has been delivered and marked complete.',          'ORDER_UPDATE', TRUE),
       (2, 2, 'Welcome to the system','Your shop Downtown Shop is now active.',                     'SYSTEM',       TRUE),
       (3, 3, 'Welcome to the system','Your shop Uptown Shop is now active.',                       'SYSTEM',       TRUE),
       (4, 4, 'Welcome to the system','Your shop Eastside Branch is now active.',                   'SYSTEM',       TRUE)
@@ -261,11 +356,11 @@ async function seedAuditLogs(): Promise<void> {
       (2, 2, 'INVENTORY', 'ADJUST',    'PRODUCT',  7,  -10, NULL, 'Damaged goods removed — Energy Drink'),
       (4, 4, 'INVENTORY', 'ADJUST',    'PRODUCT', 11,   -5, NULL, 'Expired units removed — Hand Sanitizer'),
 
-      -- Order events
-      (2, 2, 'ORDER', 'CREATED',   'ORDER', 1, NULL, NULL,    'Requested stock replenishment'),
-      (1, 1, 'ORDER', 'SHIPPED',   'ORDER', 1, NULL, NULL,    'Dispatched from warehouse'),
-      (2, 2, 'ORDER', 'RECEIVED',  'ORDER', 1, NULL, NULL,    'Stock received at Downtown Shop'),
-      (2, 2, 'ORDER', 'COMPLETED', 'ORDER', 1, NULL, 2572.50, 'Order closed'),
+      -- Order events (referencing order 13 — the day-7 Downtown restock)
+      (2, 2, 'ORDER', 'CREATED',   'ORDER', 13, NULL, NULL,    'Requested stock replenishment'),
+      (1, 1, 'ORDER', 'SHIPPED',   'ORDER', 13, NULL, NULL,    'Dispatched from warehouse'),
+      (2, 2, 'ORDER', 'RECEIVED',  'ORDER', 13, NULL, NULL,    'Stock received at Downtown Shop'),
+      (2, 2, 'ORDER', 'COMPLETED', 'ORDER', 13, NULL, 2572.50, 'Order closed'),
 
       -- User management
       (2, 1, 'USER', 'CREATED', 'USER', 5, NULL, NULL, 'Employee David Lee added to Downtown Shop'),

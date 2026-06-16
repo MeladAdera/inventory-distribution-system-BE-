@@ -69,6 +69,7 @@ No public registration. All accounts provisioned by privileged roles.
 | orders | ✅ | ✅ createOrder, findAll, findById, updateStatus | ✅ `POST /orders`, `GET /orders`, `GET /orders/:id`, `PATCH /orders/:id/status` | ✅ `CreateOrderDto`, `UpdateOrderStatusDto`, `OrderQueryDto` (`status`, `shop_id` filters) | ✅ |
 | warehouse | ✅ | ⬜ stub | ⬜ stub | ⬜ none | ❌ |
 | notifications | ✅ | ✅ findAll, markRead, markAllRead, notifyOrderCreated, notifyStatusChanged, notifyLowStock | ✅ `GET /notifications`, `PATCH /notifications/:id/read`, `PATCH /notifications/read-all` | ✅ `NotificationQueryDto` | ✅ |
+| analytics | ✅ | ✅ getTopProducts, getConsumptionTrend | ✅ `GET /analytics/top-products`, `GET /analytics/consumption-trend` | ✅ `TopProductsQueryDto` (`limit` 1–20), `ConsumptionTrendQueryDto` (`period`: daily/weekly/monthly) | ✅ |
 
 ---
 
@@ -136,7 +137,8 @@ No public registration. All accounts provisioned by privileged roles.
 
 - ✅ **HTTP request logger** — middleware in `main.ts` logs every inbound `METHOD + PATH` via NestJS `Logger`; login endpoint additionally logs success/failure with email for auth debugging
 - ✅ **Port split** — dev app runs on `PORT=3001`; `ALLOWED_ORIGINS=http://localhost:3000` so the frontend (3000) can call the API without CORS errors; test env stays on `PORT=3000`
-- ✅ **Database seeder** — `src/database/seeders/seed.ts` populates 4 shops, 8 users, 10 categories, 15 products, 36 inventory rows, 7 orders, 27 order items, 9 notifications, 13 audit log entries; run via `npm run seed`; documented in `docs/setup-guide/05-seeder.md`
+- ✅ **Database seeder** — `src/database/seeders/seed.ts` populates 4 shops, 8 users, 10 categories, 15 products, 36 inventory rows, 23 orders (19 COMPLETED spread across 5 months + 4 in-flight), 70 order items, 9 notifications, 13 audit log entries; run via `npm run seed`; documented in `docs/setup-guide/05-seeder.md`
+- ✅ **Analytics module** — `GET /analytics/top-products?limit=` and `GET /analytics/consumption-trend?period=daily|weekly|monthly`; both endpoints aggregate `order_items` on COMPLETED orders only; `WAREHOUSE_ADMIN` sees all shops, shop users are scoped to their own `to_shop_id`; documented in `docs/features/09-analytics.md`
 - ✅ **Product query filter enhancements** — `GET /products` now supports `category_name` (ILIKE, replaces `category_id`), `is_active` (admin-only boolean; defaults to active-only), and `stock_status` (`OUT_OF_STOCK` / `LOW_STOCK` / `HIGH_STOCK` relative to per-product `low_stock_threshold`); all queries LEFT JOIN `categories` and `inventory` so `category_name` is returned in every product response
 - ✅ **API Reference** — `API_REFERENCE.md` at repo root documents all endpoints with request/response examples
 - ✅ **`GET /products/:id` returns stock quantity** — `findById` now LEFT JOINs the `inventory` table and returns `current_quantity` (COALESCE to 0); `Product` entity updated with the new field
@@ -154,5 +156,5 @@ All planned tickets complete.
 
 ## What to Build Next
 
-- ⬜ Warehouse dashboard stats — `GET /warehouse/stats` (pending orders count, low-stock count, total shops, total products)
 - ⬜ Change password endpoint — `PATCH /users/:id/password` (current password verification + bcrypt rehash)
+- ⬜ Warehouse dashboard stats — `GET /warehouse/stats` (pending orders count, low-stock count, total shops, total products)

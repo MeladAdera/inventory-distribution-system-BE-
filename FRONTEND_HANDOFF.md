@@ -21,6 +21,7 @@
    - [Orders](#orders)
    - [Notifications](#notifications)
    - [Audit Logs](#audit-logs)
+   - [Analytics](#analytics)
 5. [Pagination](#5-pagination)
 6. [Response Format](#6-response-format)
 7. [Error Format](#7-error-format)
@@ -600,6 +601,46 @@ Read-only. Tracks all significant actions in the system.
   "created_at": "2025-01-15T10:00:00Z"
 }
 ```
+
+---
+
+### Analytics
+
+Powers the dashboard charts. Both endpoints aggregate `order_items` across **COMPLETED orders only**. `WAREHOUSE_ADMIN` sees all shops; `SHOP_OWNER` and `EMPLOYEE` are automatically scoped to their own shop.
+
+| Method | Path | Auth | Roles | Description |
+|--------|------|------|-------|-------------|
+| GET | `/analytics/top-products` | JWT | All | Top N products by total units consumed |
+| GET | `/analytics/consumption-trend` | JWT | All | Units consumed over time (daily / weekly / monthly) |
+
+**Top Products** `GET /analytics/top-products`
+
+| Param | Type | Default | Description |
+|-------|------|---------|-------------|
+| `limit` | number | `5` | How many products to return (max 20) |
+
+```json
+[
+  { "product_id": 5, "product_name": "Water Bottle 500ml", "total_quantity": 3620 },
+  { "product_id": 9, "product_name": "Chocolate Bar 100g", "total_quantity": 750  }
+]
+```
+
+**Consumption Trend** `GET /analytics/consumption-trend`
+
+| Param | Type | Default | Description |
+|-------|------|---------|-------------|
+| `period` | string | `daily` | `daily` (last 14 days) · `weekly` (last 8 weeks) · `monthly` (last 6 months) |
+
+```json
+[
+  { "label": "2026-06-01", "value": 320 },
+  { "label": "2026-06-02", "value": 280 },
+  { "label": "2026-06-03", "value": 410 }
+]
+```
+
+Labels format per period: `daily` → `YYYY-MM-DD`, `weekly` → `YYYY-Www`, `monthly` → `YYYY-MM`. Array is sorted ascending — feed directly to your chart library. Days/weeks/months with zero consumption are omitted (no zero-padding).
 
 ---
 
