@@ -59,8 +59,8 @@ export class OrdersController {
   }
 
   @Patch(':id/status')
-  @Roles(UserRole.WAREHOUSE_ADMIN)
-  @ApiOperation({ summary: 'Advance order status — WAREHOUSE_ADMIN only. Transitions: PENDING→PROCESSING→SHIPPED→RECEIVED→COMPLETED' })
+  @Roles(UserRole.WAREHOUSE_ADMIN, UserRole.SHOP_OWNER)
+  @ApiOperation({ summary: 'Update order status. WAREHOUSE_ADMIN: any sequential transition or cancel (PENDING/PROCESSING). SHOP_OWNER: SHIPPED→RECEIVED or cancel PENDING — own orders only.' })
   updateStatus(
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: UpdateOrderStatusDto,

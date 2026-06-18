@@ -1,4 +1,4 @@
-export type OrderStatus = 'PENDING' | 'PROCESSING' | 'SHIPPED' | 'RECEIVED' | 'COMPLETED';
+export type OrderStatus = 'PENDING' | 'PROCESSING' | 'SHIPPED' | 'RECEIVED' | 'COMPLETED' | 'CANCELLED';
 
 export class Order {
   id!: number;
@@ -13,6 +13,7 @@ export class Order {
 
 export class OrderWithItems extends Order {
   items!: OrderItemRow[];
+  total_price!: number;
 }
 
 export interface OrderItemRow {

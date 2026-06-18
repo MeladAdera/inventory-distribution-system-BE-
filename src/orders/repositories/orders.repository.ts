@@ -124,6 +124,7 @@ export class OrdersRepository {
       `SELECT
          o.*,
          s.name AS to_shop_name,
+         COALESCE(SUM(oi.quantity * oi.price), 0)::float8 AS total_price,
          COALESCE(
            JSON_AGG(
              JSON_BUILD_OBJECT(

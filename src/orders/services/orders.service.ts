@@ -102,11 +102,36 @@ export class OrdersService {
       const order = await this.ordersRepo.findByIdForUpdate(id, client);
       if (!order) throw new NotFoundException('Order not found');
 
-      const expected = NEXT_STATUS[order.status];
-      if (expected !== dto.status) {
-        throw new BadRequestException(
-          `Invalid transition: ${order.status} → ${dto.status}. Expected next status: ${expected ?? 'none (order is completed)'}`,
-        );
+      if (dto.status === 'CANCELLED') {
+        const cancellable: OrderStatus[] = ['PENDING', 'PROCESSING'];
+        if (!cancellable.includes(order.status)) {
+          throw new BadRequestException(
+            `Cannot cancel an order with status ${order.status}. Only PENDING and PROCESSING orders can be cancelled.`,
+          );
+        }
+        if (user.role === UserRole.SHOP_OWNER) {
+          if (order.to_shop_id !== user.shopId) {
+            throw new ForbiddenException('You can only cancel orders assigned to your shop');
+          }
+          if (order.status !== 'PENDING') {
+            throw new ForbiddenException('Shop owners can only cancel PENDING orders');
+          }
+        }
+      } else {
+        if (user.role === UserRole.SHOP_OWNER) {
+          if (order.to_shop_id !== user.shopId) {
+            throw new ForbiddenException('You can only update status for orders assigned to your shop');
+          }
+          if (order.status !== 'SHIPPED' || dto.status !== 'RECEIVED') {
+            throw new ForbiddenException('Shop owners can only mark a SHIPPED order as RECEIVED');
+          }
+        }
+        const expected = NEXT_STATUS[order.status];
+        if (expected !== dto.status) {
+          throw new BadRequestException(
+            `Invalid transition: ${order.status} → ${dto.status}. Expected next status: ${expected ?? 'none (terminal state)'}`,
+          );
+        }
       }
 
       // Only updates if the status still matches what we just read — guards against

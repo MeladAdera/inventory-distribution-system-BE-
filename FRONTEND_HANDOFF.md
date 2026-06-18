@@ -481,7 +481,7 @@ Orders are requests from a **Shop** to the **Warehouse** to receive products.
 | POST | `/orders` | JWT | `SHOP_OWNER`, `WAREHOUSE_ADMIN` | Create a new order |
 | GET | `/orders` | JWT | All | List orders |
 | GET | `/orders/:id` | JWT | All | Get order details with items |
-| PATCH | `/orders/:id/status` | JWT | `WAREHOUSE_ADMIN` | Advance order status |
+| PATCH | `/orders/:id/status` | JWT | `WAREHOUSE_ADMIN`, `SHOP_OWNER` | Advance or cancel order status (role restrictions apply) |
 
 **Create Order** `POST /orders`
 
@@ -508,25 +508,39 @@ For `WAREHOUSE_ADMIN` — must supply `shopId` to set the destination:
 
 **Update Status** `PATCH /orders/:id/status`
 ```json
-{ "status": "PROCESSING" }
+{ "status": "RECEIVED" }
 ```
 
-> **Important:** The backend enforces **strict sequential transitions only**. You must always send the immediate next status in the chain. Skipping a step (e.g., sending `SHIPPED` while still `PENDING`) returns `400 Bad Request`. The UI should derive the correct next status from the current order status rather than letting the user pick freely.
+**Who can call this and what they can send:**
+
+| Role | Allowed transitions | Ownership check |
+|------|---------------------|-----------------|
+| `WAREHOUSE_ADMIN` | Any sequential step: `PENDING→PROCESSING→SHIPPED→RECEIVED→COMPLETED` | None — can act on any order |
+| `WAREHOUSE_ADMIN` | Cancel: `PENDING→CANCELLED` or `PROCESSING→CANCELLED` | None |
+| `SHOP_OWNER` | `SHIPPED→RECEIVED` only | `to_shop_id` must match their shop |
+| `SHOP_OWNER` | Cancel: `PENDING→CANCELLED` only | `to_shop_id` must match their shop |
+
+> **Sequential transitions:** You must always send the immediate next status in the chain. Skipping a step (e.g., sending `SHIPPED` while still `PENDING`) returns `400 Bad Request`. The UI should derive the correct next status from the current order status rather than letting the user pick freely.
+
+> **Cancellation:** Once an order is `SHIPPED` or beyond, it cannot be cancelled — returns `400 Bad Request`. `CANCELLED` is a terminal state; no further transitions are allowed from it.
 
 **Order Status Flow:**
 ```
 PENDING → PROCESSING → SHIPPED → RECEIVED → COMPLETED
+   ↓            ↓
+CANCELLED    CANCELLED
 ```
 
-| Status | Meaning |
-|--------|---------|
-| `PENDING` | Shop submitted the order |
-| `PROCESSING` | Warehouse accepted & is preparing |
-| `SHIPPED` | Order dispatched |
-| `RECEIVED` | Shop received delivery |
-| `COMPLETED` | Order fully closed |
+| Status | Meaning | Terminal? |
+|--------|---------|-----------|
+| `PENDING` | Shop submitted the order | No |
+| `PROCESSING` | Warehouse accepted & is preparing | No |
+| `SHIPPED` | Order dispatched | No |
+| `RECEIVED` | Shop confirmed delivery | No |
+| `COMPLETED` | Order fully closed | Yes |
+| `CANCELLED` | Order cancelled before shipping | Yes |
 
-> When status changes to `RECEIVED`, warehouse inventory is automatically decremented and transferred to the shop's inventory inside a single DB transaction.
+> When status changes to `RECEIVED`, warehouse inventory is automatically decremented and transferred to the shop's inventory inside a single DB transaction. No inventory side effects occur on cancellation.
 
 **Query Params for** `GET /orders`
 
@@ -536,7 +550,7 @@ PENDING → PROCESSING → SHIPPED → RECEIVED → COMPLETED
 | `shop_id` | number | Admin only — filter by destination shop (`to_shop_id`) |
 | `page` / `limit` | number | Pagination |
 
-**Order Object (both list and detail view):**
+**Order Object (list view):**
 ```json
 {
   "id": 15,
@@ -548,14 +562,37 @@ PENDING → PROCESSING → SHIPPED → RECEIVED → COMPLETED
   "created_at": "2025-01-10T09:00:00Z",
   "updated_at": "2025-01-10T11:00:00Z",
   "items": [
-    { "product_id": 10, "product_name": "Laptop 15\"", "quantity": 5, "price": "1200.00" },
-    { "product_id": 11, "product_name": "Monitor", "quantity": 3, "price": "250.00" }
+    { "product_id": 10, "product_name": "Laptop 15\"", "quantity": 5, "price": 1200.00 },
+    { "product_id": 11, "product_name": "Monitor", "quantity": 3, "price": 250.00 }
   ]
 }
 ```
 
+**Order Object (detail view — `GET /orders/:id`):**
+
+Same fields as above, plus `total_price`:
+
+```json
+{
+  "id": 15,
+  "from_shop_id": 1,
+  "to_shop_id": 2,
+  "to_shop_name": "Cairo Branch",
+  "status": "PROCESSING",
+  "total_items": 8,
+  "total_price": 6750.00,
+  "created_at": "2025-01-10T09:00:00Z",
+  "updated_at": "2025-01-10T11:00:00Z",
+  "items": [
+    { "product_id": 10, "product_name": "Laptop 15\"", "quantity": 5, "price": 1200.00 },
+    { "product_id": 11, "product_name": "Monitor", "quantity": 3, "price": 250.00 }
+  ]
+}
+```
+
+> `total_price` is the sum of `quantity × price` for every item in the order. Prices are **snapshots** captured at order creation time — they do not change if the product price is updated later.
+
 > `from_shop_id` is always the **warehouse** (the supplier); `to_shop_id` / `to_shop_name` identify the **shop** that placed the order.
-> `items` is included in both the list and single-order responses.
 
 ---
 
@@ -767,6 +804,8 @@ SHOP         — retail branch
 ### OrderStatus
 ```
 PENDING → PROCESSING → SHIPPED → RECEIVED → COMPLETED
+   ↓            ↓
+CANCELLED    CANCELLED
 ```
 
 ### ProductSource
