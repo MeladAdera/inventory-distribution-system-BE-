@@ -24,6 +24,7 @@ export class ProductsRepository {
 
     if (query.search)        { conditions.push(`(p.name ILIKE $${idx} OR p.barcode ILIKE $${idx})`); params.push(`%${query.search}%`); idx++; }
     if (query.shop_id)      { conditions.push(`p.shop_id = $${idx++}`);                params.push(query.shop_id); }
+    if (query.shop_name)    { conditions.push(`s.name ILIKE $${idx++}`);               params.push(`%${query.shop_name}%`); }
     if (query.source)       { conditions.push(`p.source = $${idx++}`);                 params.push(query.source); }
     if (query.category_name){ conditions.push(`c.name ILIKE $${idx++}`);               params.push(query.category_name); }
 
@@ -43,6 +44,7 @@ export class ProductsRepository {
        FROM products p
        LEFT JOIN categories c ON c.id = p.category_id
        LEFT JOIN inventory i ON i.product_id = p.id AND i.shop_id = p.shop_id
+       LEFT JOIN shops s ON s.id = p.shop_id
        WHERE ${conditions.join(' AND ')}
        ORDER BY p.created_at DESC
        LIMIT $${limitIdx} OFFSET $${offsetIdx}`,

@@ -1,8 +1,8 @@
 # Frontend Handoff — Inventory & Distribution System
 
 > **Status:** Backend API is complete and ready for integration.  
-> **Base URL (dev):** `http://localhost:3001`  
-> **API Docs (Swagger):** `http://localhost:3001/api`
+> **Base URL (dev):** `http://localhost:3000`  
+> **API Docs (Swagger):** `http://localhost:3000/api`
 
 ---
 
@@ -200,6 +200,7 @@ Request → 401?
   "password": "password123"
 }
 ```
+> `shopAddress` is optional.
 
 **Create Employee** `POST /users/employees`
 ```json
@@ -261,6 +262,12 @@ Request → 401?
 
 > `type` is either `"WAREHOUSE"` (the main warehouse) or `"SHOP"` (retail branch).
 
+> **`GET /shops` response shape depends on role:**
+> - `WAREHOUSE_ADMIN` → `data` is a **`Shop[]` array** (all shops, no pagination)
+> - `SHOP_OWNER` / `EMPLOYEE` → `data` is a **single `Shop` object** (their own shop only)
+>
+> `GET /shops` does **not** support `page` / `limit` query params.
+
 **Update Shop** `PATCH /shops/:id`
 ```json
 {
@@ -285,7 +292,7 @@ Request → 401?
 | GET | `/products/:id` | JWT | All | Get single product |
 | POST | `/products` | JWT | `WAREHOUSE_ADMIN`, `SHOP_OWNER` | Create product |
 | PATCH | `/products/:id` | JWT | `WAREHOUSE_ADMIN`, `SHOP_OWNER` | Update product |
-| DELETE | `/products/:id` | JWT | `WAREHOUSE_ADMIN`, `SHOP_OWNER` | Soft-delete product |
+| DELETE | `/products/:id` | JWT | `WAREHOUSE_ADMIN`, `SHOP_OWNER` | Soft-delete product → `204 No Content` |
 
 **Create Product** `POST /products`
 ```json
@@ -305,10 +312,31 @@ Request → 401?
 | `search` | string | Case-insensitive search by product name or barcode |
 | `source` | string | `WAREHOUSE` or `LOCAL` |
 | `category_name` | string | Case-insensitive substring match on category name |
-| `shop_id` | number | Admin only — filter by specific shop |
+| `shop_id` | number | Admin only — filter by specific shop ID |
+| `shop_name` | string | Admin only — case-insensitive partial match on shop name (e.g. `?shop_name=melad` matches "Melad Market") |
 | `is_active` | boolean | Admin only — `false` to include soft-deleted products (default: active only) |
 | `stock_status` | string | `OUT_OF_STOCK` \| `LOW_STOCK` \| `HIGH_STOCK` — relative to each product's threshold |
 | `page` / `limit` | number | Pagination |
+
+> **Admin-only params:** `shop_id`, `shop_name`, and `is_active` are silently ignored for `SHOP_OWNER` and `EMPLOYEE` roles.
+
+**`source` values explained:**
+
+| Value | Meaning |
+|-------|---------|
+| `WAREHOUSE` | Product created by the warehouse admin — visible to all shops |
+| `LOCAL` | Product created by a specific shop — visible only to that shop |
+
+> `source` is set automatically by the backend based on who creates the product. It cannot be set manually.
+
+**Filter examples (admin):**
+```
+GET /products?shop_name=melad                    → all products belonging to Melad Market
+GET /products?shop_name=melad&source=LOCAL       → only products Melad Market created itself
+GET /products?shop_name=melad&source=WAREHOUSE   → only warehouse products visible to Melad Market
+GET /products?source=LOCAL                       → all shop-created products across all shops
+GET /products?stock_status=LOW_STOCK&shop_name=melad → low-stock items in Melad Market
+```
 
 **Product Object (list):**
 ```json
@@ -365,7 +393,7 @@ Same fields as above, plus `current_quantity` from the inventory table:
 | GET | `/categories/:id` | JWT | All | Get single category |
 | POST | `/categories` | JWT | `WAREHOUSE_ADMIN`, `SHOP_OWNER` | Create category |
 | PATCH | `/categories/:id` | JWT | `WAREHOUSE_ADMIN`, `SHOP_OWNER` | Rename category |
-| DELETE | `/categories/:id` | JWT | `WAREHOUSE_ADMIN`, `SHOP_OWNER` | Delete (fails if products exist) |
+| DELETE | `/categories/:id` | JWT | `WAREHOUSE_ADMIN`, `SHOP_OWNER` | Delete (fails if products exist) → `204 No Content` |
 
 **Query Params for** `GET /categories`
 
@@ -482,6 +510,8 @@ For `WAREHOUSE_ADMIN` — must supply `shopId` to set the destination:
 ```json
 { "status": "PROCESSING" }
 ```
+
+> **Important:** The backend enforces **strict sequential transitions only**. You must always send the immediate next status in the chain. Skipping a step (e.g., sending `SHIPPED` while still `PENDING`) returns `400 Bad Request`. The UI should derive the correct next status from the current order status rather than letting the user pick freely.
 
 **Order Status Flow:**
 ```
@@ -646,7 +676,7 @@ Labels format per period: `daily` → `YYYY-MM-DD`, `weekly` → `YYYY-Www`, `mo
 
 ## 5. Pagination
 
-All list endpoints support pagination via query params:
+All list endpoints support pagination via query params, **except `GET /shops`** (which is never large enough to need it and returns all results directly):
 
 | Param | Default | Max | Description |
 |-------|---------|-----|-------------|
@@ -788,7 +818,7 @@ OUT_OF_STOCK   — quantity = 0
 
 ## Quick Start Checklist for Frontend
 
-- [ ] Configure Axios/Fetch base URL as `http://localhost:3001`
+- [ ] Configure Axios/Fetch base URL as `http://localhost:3000`
 - [ ] On login success, store **both** `accessToken` and `refreshToken` (localStorage or httpOnly cookies)
 - [ ] Add `Authorization: Bearer <accessToken>` header globally on every request
 - [ ] Implement a **401 interceptor**: call `POST /auth/refresh` → retry with new token → on second 401, redirect to `/login`
@@ -800,4 +830,4 @@ OUT_OF_STOCK   — quantity = 0
 
 ---
 
-> Questions? The full interactive Swagger docs are at `http://localhost:3001/api` — every endpoint is documented there with request/response schemas.
+> Questions? The full interactive Swagger docs are at `http://localhost:3000/api` — every endpoint is documented there with request/response schemas.

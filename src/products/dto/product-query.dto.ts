@@ -36,6 +36,11 @@ export class ProductQueryDto extends PaginationDto {
   @IsInt()
   shop_id?: number;
 
+  @ApiPropertyOptional({ description: 'WAREHOUSE_ADMIN only — filter by shop name (case-insensitive partial match)' })
+  @IsOptional()
+  @IsString()
+  shop_name?: string;
+
   @ApiPropertyOptional({ description: 'WAREHOUSE_ADMIN only — false to show inactive products; defaults to active only' })
   @IsOptional()
   @Transform(({ value }: { value: unknown }) => {
