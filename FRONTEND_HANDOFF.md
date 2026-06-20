@@ -292,6 +292,8 @@ Request → 401?
 | GET | `/products/:id` | JWT | All | Get single product |
 | POST | `/products` | JWT | `WAREHOUSE_ADMIN`, `SHOP_OWNER` | Create product |
 | PATCH | `/products/:id` | JWT | `WAREHOUSE_ADMIN`, `SHOP_OWNER` | Update product |
+| PATCH | `/products/:id/image` | JWT | `WAREHOUSE_ADMIN`, `SHOP_OWNER` | Upload or replace product image |
+| DELETE | `/products/:id/image` | JWT | `WAREHOUSE_ADMIN`, `SHOP_OWNER` | Remove product image → `204 No Content` |
 | DELETE | `/products/:id` | JWT | `WAREHOUSE_ADMIN`, `SHOP_OWNER` | Soft-delete product → `204 No Content` |
 
 **Create Product** `POST /products`
@@ -338,6 +340,23 @@ GET /products?source=LOCAL                       → all shop-created products a
 GET /products?stock_status=LOW_STOCK&shop_name=melad → low-stock items in Melad Market
 ```
 
+**Upload Product Image** `PATCH /products/:id/image`
+
+Send as `multipart/form-data` with field name `image`. Max size: 5 MB. Accepted formats: `jpeg`, `png`, `webp`, `gif`.
+
+**Response `200`:**
+```json
+{ "image_url": "/uploads/products/uuid.jpg" }
+```
+
+> Prepend the base URL to get the full image URL: `http://localhost:3000/uploads/products/uuid.jpg`
+
+**Delete Product Image** `DELETE /products/:id/image`
+
+No body required. Sets `image_url` back to `null`.
+
+**Response:** `204 No Content`
+
 **Product Object (list):**
 ```json
 {
@@ -351,6 +370,7 @@ GET /products?stock_status=LOW_STOCK&shop_name=melad → low-stock items in Mela
   "price": "1200.00",
   "source": "WAREHOUSE",
   "is_global": true,
+  "image_url": "/uploads/products/uuid.jpg",
   "is_active": true,
   "created_at": "2025-01-01T00:00:00Z",
   "updated_at": "2025-01-01T00:00:00Z"
@@ -372,6 +392,7 @@ Same fields as above, plus `current_quantity` from the inventory table:
   "price": "1200.00",
   "source": "WAREHOUSE",
   "is_global": true,
+  "image_url": "/uploads/products/uuid.jpg",
   "is_active": true,
   "created_at": "2025-01-01T00:00:00Z",
   "updated_at": "2025-01-01T00:00:00Z",
@@ -381,7 +402,8 @@ Same fields as above, plus `current_quantity` from the inventory table:
 
 > `source: "WAREHOUSE"` — product defined at the warehouse level.  
 > `source: "LOCAL"` — product defined by a shop.  
-> `current_quantity` — returns `0` if no inventory record exists yet for this product.
+> `current_quantity` — returns `0` if no inventory record exists yet for this product.  
+> `image_url` — `null` until an image is uploaded.
 
 ---
 
@@ -393,6 +415,8 @@ Same fields as above, plus `current_quantity` from the inventory table:
 | GET | `/categories/:id` | JWT | All | Get single category |
 | POST | `/categories` | JWT | `WAREHOUSE_ADMIN`, `SHOP_OWNER` | Create category |
 | PATCH | `/categories/:id` | JWT | `WAREHOUSE_ADMIN`, `SHOP_OWNER` | Rename category |
+| PATCH | `/categories/:id/image` | JWT | `WAREHOUSE_ADMIN`, `SHOP_OWNER` | Upload or replace category image |
+| DELETE | `/categories/:id/image` | JWT | `WAREHOUSE_ADMIN`, `SHOP_OWNER` | Remove category image → `204 No Content` |
 | DELETE | `/categories/:id` | JWT | `WAREHOUSE_ADMIN`, `SHOP_OWNER` | Delete (fails if products exist) → `204 No Content` |
 
 **Query Params for** `GET /categories`
@@ -406,17 +430,36 @@ Same fields as above, plus `current_quantity` from the inventory table:
 { "name": "Electronics" }
 ```
 
+**Upload Category Image** `PATCH /categories/:id/image`
+
+Send as `multipart/form-data` with field name `image`. Max size: 5 MB. Accepted formats: `jpeg`, `png`, `webp`, `gif`.
+
+**Response `200`:**
+```json
+{ "image_url": "/uploads/categories/uuid.jpg" }
+```
+
+> Prepend the base URL to get the full image URL: `http://localhost:3000/uploads/categories/uuid.jpg`
+
+**Delete Category Image** `DELETE /categories/:id/image`
+
+No body required. Sets `image_url` back to `null`.
+
+**Response:** `204 No Content`
+
 **Category Object:**
 ```json
 {
   "id": 3,
   "shop_id": 1,
   "name": "Electronics",
+  "image_url": "/uploads/categories/uuid.jpg",
   "created_at": "2025-01-01T00:00:00Z"
 }
 ```
 
-> Non-admin users see: their own shop's categories **+** warehouse categories.
+> Non-admin users see: their own shop's categories **+** warehouse categories.  
+> `image_url` — `null` until an image is uploaded.
 
 ---
 

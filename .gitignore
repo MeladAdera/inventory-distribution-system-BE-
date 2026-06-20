@@ -33,5 +33,9 @@ yarn-error.log*
 tmp/
 temp/
 
+# Uploaded files (keep folder structure, ignore contents)
+uploads/*
+!uploads/**/.gitkeep
+
 # OS files
 Thumbs.db

@@ -70,6 +70,20 @@ export class CategoriesRepository {
     return rows[0];
   }
 
+  async updateImage(id: number, imageUrl: string): Promise<void> {
+    await this.db.execute(
+      'UPDATE categories SET image_url = $1, updated_at = NOW() WHERE id = $2',
+      [imageUrl, id],
+    );
+  }
+
+  async deleteImage(id: number): Promise<void> {
+    await this.db.execute(
+      'UPDATE categories SET image_url = NULL, updated_at = NOW() WHERE id = $1',
+      [id],
+    );
+  }
+
   async deleteById(id: number): Promise<void> {
     await this.db.execute('DELETE FROM categories WHERE id = $1', [id]);
   }

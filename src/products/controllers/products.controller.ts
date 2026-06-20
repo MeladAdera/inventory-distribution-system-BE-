@@ -9,10 +9,16 @@ import {
   Query,
   ParseIntPipe,
   UseGuards,
+  UseInterceptors,
+  UploadedFile,
+  ParseFilePipe,
+  MaxFileSizeValidator,
   HttpCode,
   HttpStatus,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { ApiTags, ApiOperation, ApiBearerAuth, ApiConsumes } from '@nestjs/swagger';
+import { imageStorage, imageFileFilter } from '../../common/utils/upload.config';
 import { ProductsService } from '../services/products.service';
 import { CreateProductDto } from '../dto/create-product.dto';
 import { UpdateProductDto } from '../dto/update-product.dto';
@@ -76,6 +82,34 @@ export class ProductsController {
     @CurrentUser() user: RequestUser,
   ) {
     return this.productsService.update(id, dto, user);
+  }
+
+  @Patch(':id/image')
+  @Roles(UserRole.WAREHOUSE_ADMIN, UserRole.SHOP_OWNER)
+  @UseInterceptors(FileInterceptor('image', {
+    storage: imageStorage('products'),
+    fileFilter: imageFileFilter,
+  }))
+  @ApiConsumes('multipart/form-data')
+  @ApiOperation({ summary: 'Upload or replace product image — multipart/form-data, field name: image, max 5 MB' })
+  uploadImage(
+    @Param('id', ParseIntPipe) id: number,
+    @UploadedFile(new ParseFilePipe({ validators: [new MaxFileSizeValidator({ maxSize: 5 * 1024 * 1024 })] })) file: Express.Multer.File,
+    @CurrentUser() user: RequestUser,
+  ) {
+    const imageUrl = `/uploads/products/${file.filename}`;
+    return this.productsService.uploadImage(id, imageUrl, user);
+  }
+
+  @Delete(':id/image')
+  @Roles(UserRole.WAREHOUSE_ADMIN, UserRole.SHOP_OWNER)
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiOperation({ summary: 'Remove product image — sets image_url back to null' })
+  deleteImage(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentUser() user: RequestUser,
+  ) {
+    return this.productsService.deleteImage(id, user);
   }
 
   @Delete(':id')

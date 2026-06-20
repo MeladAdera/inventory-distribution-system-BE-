@@ -90,6 +90,23 @@ export class ProductsService {
     return this.productsRepo.update(id, dto);
   }
 
+  async uploadImage(id: number, imageUrl: string, user: RequestUser): Promise<{ image_url: string }> {
+    const product = await this.productsRepo.findById(id);
+    if (!product) throw new NotFoundException('Product not found');
+
+    this.assertOwnership(user, product);
+    await this.productsRepo.updateImage(id, imageUrl);
+    return { image_url: imageUrl };
+  }
+
+  async deleteImage(id: number, user: RequestUser): Promise<void> {
+    const product = await this.productsRepo.findById(id);
+    if (!product) throw new NotFoundException('Product not found');
+
+    this.assertOwnership(user, product);
+    await this.productsRepo.deleteImage(id);
+  }
+
   async remove(id: number, user: RequestUser): Promise<void> {
     const product = await this.productsRepo.findById(id);
     if (!product) throw new NotFoundException('Product not found');

@@ -9,10 +9,16 @@ import {
   Query,
   ParseIntPipe,
   UseGuards,
+  UseInterceptors,
+  UploadedFile,
+  ParseFilePipe,
+  MaxFileSizeValidator,
   HttpCode,
   HttpStatus,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { ApiTags, ApiOperation, ApiBearerAuth, ApiConsumes, ApiQuery } from '@nestjs/swagger';
+import { imageStorage, imageFileFilter } from '../../common/utils/upload.config';
 import { CategoriesService } from '../services/categories.service';
 import { CreateCategoryDto } from '../dto/create-category.dto';
 import { UpdateCategoryDto } from '../dto/update-category.dto';
@@ -70,6 +76,34 @@ export class CategoriesController {
     @CurrentUser() user: RequestUser,
   ) {
     return this.categoriesService.update(id, dto, user);
+  }
+
+  @Patch(':id/image')
+  @Roles(UserRole.WAREHOUSE_ADMIN, UserRole.SHOP_OWNER)
+  @UseInterceptors(FileInterceptor('image', {
+    storage: imageStorage('categories'),
+    fileFilter: imageFileFilter,
+  }))
+  @ApiConsumes('multipart/form-data')
+  @ApiOperation({ summary: 'Upload or replace category image — multipart/form-data, field name: image, max 5 MB' })
+  uploadImage(
+    @Param('id', ParseIntPipe) id: number,
+    @UploadedFile(new ParseFilePipe({ validators: [new MaxFileSizeValidator({ maxSize: 5 * 1024 * 1024 })] })) file: Express.Multer.File,
+    @CurrentUser() user: RequestUser,
+  ) {
+    const imageUrl = `/uploads/categories/${file.filename}`;
+    return this.categoriesService.uploadImage(id, imageUrl, user);
+  }
+
+  @Delete(':id/image')
+  @Roles(UserRole.WAREHOUSE_ADMIN, UserRole.SHOP_OWNER)
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiOperation({ summary: 'Remove category image — sets image_url back to null' })
+  deleteImage(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentUser() user: RequestUser,
+  ) {
+    return this.categoriesService.deleteImage(id, user);
   }
 
   @Delete(':id')

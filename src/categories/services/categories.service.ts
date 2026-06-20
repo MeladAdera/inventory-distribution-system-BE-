@@ -59,6 +59,23 @@ export class CategoriesService {
     return this.categoriesRepo.update(id, dto);
   }
 
+  async uploadImage(id: number, imageUrl: string, user: RequestUser): Promise<{ image_url: string }> {
+    const category = await this.categoriesRepo.findById(id);
+    if (!category) throw new NotFoundException('Category not found');
+
+    this.assertShopAccess(user, category.shop_id);
+    await this.categoriesRepo.updateImage(id, imageUrl);
+    return { image_url: imageUrl };
+  }
+
+  async deleteImage(id: number, user: RequestUser): Promise<void> {
+    const category = await this.categoriesRepo.findById(id);
+    if (!category) throw new NotFoundException('Category not found');
+
+    this.assertShopAccess(user, category.shop_id);
+    await this.categoriesRepo.deleteImage(id);
+  }
+
   async remove(id: number, user: RequestUser): Promise<void> {
     const category = await this.categoriesRepo.findById(id);
     if (!category) throw new NotFoundException('Category not found');

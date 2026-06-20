@@ -169,6 +169,20 @@ export class ProductsRepository {
     return rows[0];
   }
 
+  async updateImage(id: number, imageUrl: string): Promise<void> {
+    await this.db.execute(
+      'UPDATE products SET image_url = $1, updated_at = NOW() WHERE id = $2',
+      [imageUrl, id],
+    );
+  }
+
+  async deleteImage(id: number): Promise<void> {
+    await this.db.execute(
+      'UPDATE products SET image_url = NULL, updated_at = NOW() WHERE id = $1',
+      [id],
+    );
+  }
+
   async softDelete(id: number): Promise<void> {
     await this.db.execute(
       'UPDATE products SET is_active = FALSE, updated_at = NOW() WHERE id = $1',

@@ -9,6 +9,7 @@ export class Product {
   price!: number;
   source!: 'WAREHOUSE' | 'LOCAL';
   is_global!: boolean;
+  image_url!: string | null;
   is_active!: boolean;
   created_at!: Date;
   updated_at!: Date;
