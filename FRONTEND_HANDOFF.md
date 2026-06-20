@@ -256,7 +256,8 @@ Request → 401?
   "phone": "+20100000000",
   "type": "SHOP",
   "is_active": true,
-  "created_at": "2025-01-01T00:00:00Z"
+  "created_at": "2025-01-01T00:00:00Z",
+  "updated_at": "2025-01-01T00:00:00Z"
 }
 ```
 
@@ -454,7 +455,8 @@ No body required. Sets `image_url` back to `null`.
   "shop_id": 1,
   "name": "Electronics",
   "image_url": "/uploads/categories/uuid.jpg",
-  "created_at": "2025-01-01T00:00:00Z"
+  "created_at": "2025-01-01T00:00:00Z",
+  "updated_at": "2025-01-01T00:00:00Z"
 }
 ```
 
@@ -767,10 +769,12 @@ All list endpoints support pagination via query params, **except `GET /shops`** 
 ```json
 {
   "data": [ /* array of items */ ],
-  "total": 150,
   "page": 1,
   "limit": 10,
-  "totalPages": 15
+  "total": 150,
+  "totalPages": 15,
+  "hasNext": true,
+  "hasPrev": false
 }
 ```
 
@@ -794,10 +798,12 @@ For lists:
   "success": true,
   "data": {
     "data": [ /* items */ ],
-    "total": 150,
     "page": 1,
     "limit": 10,
-    "totalPages": 15
+    "total": 150,
+    "totalPages": 15,
+    "hasNext": true,
+    "hasPrev": false
   },
   "timestamp": "2025-01-15T10:00:00Z"
 }
