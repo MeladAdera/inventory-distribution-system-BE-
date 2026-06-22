@@ -54,20 +54,57 @@ export class OrdersService {
     const hasDuplicates = new Set(productIds).size !== productIds.length;
     if (hasDuplicates) throw new BadRequestException('Duplicate products in order');
 
-    const existing = await this.inventoryRepo.findByShopAndProducts(warehouse.id, productIds);
-    if (existing.length !== productIds.length) {
-      const foundIds = new Set(existing.map((inv) => inv.product_id));
-      const missingId = productIds.find((id) => !foundIds.has(id));
-      throw new BadRequestException(
-        `Product ${missingId} does not exist in warehouse inventory`,
-      );
-    }
-
     const totalItems = dto.items.reduce((sum, i) => sum + i.quantity, 0);
 
     const order = await this.db.transaction(async (client) => {
+      // Lock inventory rows to prevent concurrent orders from over-committing the same stock.
+      const warehouseInventories = await this.inventoryRepo.findByShopAndProductsForUpdate(
+        warehouse.id,
+        productIds,
+        client,
+      );
+
+      if (warehouseInventories.length !== productIds.length) {
+        const foundIds = new Set(warehouseInventories.map((inv) => inv.product_id));
+        const missingId = productIds.find((id) => !foundIds.has(id));
+        throw new BadRequestException(`Product ${missingId} does not exist in warehouse inventory`);
+      }
+
+      const warehouseMap = new Map(warehouseInventories.map((inv) => [inv.product_id, inv]));
+
+      for (const item of dto.items) {
+        const inv = warehouseMap.get(item.productId)!;
+        if (inv.current_quantity < item.quantity) {
+          const name = `"${inv.product_name}"`;
+          const message = inv.current_quantity === 0
+            ? `Product ${name} is out of stock and cannot be ordered`
+            : `Insufficient stock for product ${name} (available: ${inv.current_quantity}, required: ${item.quantity})`;
+          throw new BadRequestException(message);
+        }
+      }
+
       const created = await this.ordersRepo.insert(warehouse.id, toShopId, totalItems, client);
       await this.ordersRepo.insertItems(created.id, dto.items, client);
+
+      // Deduct from warehouse immediately so stock is unavailable for subsequent orders.
+      for (const item of dto.items) {
+        const warehouseInv = warehouseMap.get(item.productId)!;
+        await this.inventoryRepo.adjust(warehouseInv.id, -item.quantity, client);
+        await this.auditLogsService.log(
+          {
+            shop_id: warehouse.id,
+            user_id: user.id,
+            type: 'INVENTORY',
+            action: 'TRANSFER_OUT',
+            entity_type: 'inventory',
+            entity_id: warehouseInv.id,
+            quantity: item.quantity,
+            notes: `Order #${created.id} — reserved for shop ${toShopId}`,
+          },
+          client,
+        );
+      }
+
       return created;
     });
 
@@ -158,6 +195,10 @@ export class OrdersService {
         await this.transferInventory(id, order.from_shop_id, order.to_shop_id, user.id, client);
       }
 
+      if (dto.status === 'CANCELLED') {
+        await this.restoreWarehouseInventory(id, order.from_shop_id, user.id, client);
+      }
+
       return { result, order };
     });
 
@@ -168,7 +209,7 @@ export class OrdersService {
 
   private async transferInventory(
     orderId: number,
-    warehouseShopId: number,
+    _warehouseShopId: number,
     toShopId: number,
     userId: number,
     client: import('pg').PoolClient,
@@ -176,57 +217,12 @@ export class OrdersService {
     const items = await this.ordersRepo.findItemsByOrderId(orderId, client);
     const productIds = items.map((i) => i.product_id);
 
-    // 1 query — fetch all warehouse inventory records for this order's products
-    const warehouseInventories = await this.inventoryRepo.findByShopAndProducts(
-      warehouseShopId,
-      productIds,
-      client,
-    );
-    const warehouseMap = new Map(warehouseInventories.map((inv) => [inv.product_id, inv]));
-
-    // Validate all stock in memory before touching anything
+    // Warehouse stock was already deducted at order creation — only add to shop now.
     for (const item of items) {
-      const inv = warehouseMap.get(item.product_id);
-      if (!inv) {
-        throw new BadRequestException(
-          `Warehouse inventory record missing for product ${item.product_id}`,
-        );
-      }
-      if (inv.current_quantity < item.quantity) {
-        throw new BadRequestException(
-          `Insufficient warehouse stock for product ${item.product_id} (available: ${inv.current_quantity}, required: ${item.quantity})`,
-        );
-      }
-    }
-
-    // Deduct from warehouse + upsert into shop (N queries each — row-specific)
-    for (const item of items) {
-      const warehouseInv = warehouseMap.get(item.product_id)!;
-
-      await this.inventoryRepo.adjust(warehouseInv.id, -item.quantity, client);
-      await this.auditLogsService.log(
-        {
-          shop_id: warehouseShopId,
-          user_id: userId,
-          type: 'INVENTORY',
-          action: 'TRANSFER_OUT',
-          entity_type: 'inventory',
-          entity_id: warehouseInv.id,
-          quantity: item.quantity,
-          notes: `Order #${orderId} — transferred to shop ${toShopId}`,
-        },
-        client,
-      );
-
       await this.inventoryRepo.upsertStockIn(toShopId, item.product_id, item.quantity, client);
     }
 
-    // 1 query — fetch all resulting shop inventory records for TRANSFER_IN audit logs
-    const shopInventories = await this.inventoryRepo.findByShopAndProducts(
-      toShopId,
-      productIds,
-      client,
-    );
+    const shopInventories = await this.inventoryRepo.findByShopAndProducts(toShopId, productIds, client);
     const shopMap = new Map(shopInventories.map((inv) => [inv.product_id, inv]));
 
     for (const item of items) {
@@ -240,6 +236,41 @@ export class OrdersService {
           entity_id: shopMap.get(item.product_id)?.id,
           quantity: item.quantity,
           notes: `Order #${orderId} — received from warehouse`,
+        },
+        client,
+      );
+    }
+  }
+
+  private async restoreWarehouseInventory(
+    orderId: number,
+    warehouseShopId: number,
+    userId: number,
+    client: import('pg').PoolClient,
+  ): Promise<void> {
+    const items = await this.ordersRepo.findItemsByOrderId(orderId, client);
+    const productIds = items.map((i) => i.product_id);
+
+    const warehouseInventories = await this.inventoryRepo.findByShopAndProductsForUpdate(
+      warehouseShopId,
+      productIds,
+      client,
+    );
+    const warehouseMap = new Map(warehouseInventories.map((inv) => [inv.product_id, inv]));
+
+    for (const item of items) {
+      const warehouseInv = warehouseMap.get(item.product_id)!;
+      await this.inventoryRepo.adjust(warehouseInv.id, item.quantity, client);
+      await this.auditLogsService.log(
+        {
+          shop_id: warehouseShopId,
+          user_id: userId,
+          type: 'INVENTORY',
+          action: 'TRANSFER_IN',
+          entity_type: 'inventory',
+          entity_id: warehouseInv.id,
+          quantity: item.quantity,
+          notes: `Order #${orderId} — cancelled, stock returned to warehouse`,
         },
         client,
       );

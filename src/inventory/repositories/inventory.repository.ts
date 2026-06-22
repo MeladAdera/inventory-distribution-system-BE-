@@ -139,6 +139,22 @@ export class InventoryRepository {
     return this.db.query<Inventory>(sql, [shopId, productIds]);
   }
 
+  async findByShopAndProductsForUpdate(
+    shopId: number,
+    productIds: number[],
+    client: pg.PoolClient,
+  ): Promise<(Inventory & { product_name: string })[]> {
+    const result = await client.query<Inventory & { product_name: string }>(
+      `SELECT i.*, p.name AS product_name
+       FROM inventory i
+       JOIN products p ON p.id = i.product_id
+       WHERE i.shop_id = $1 AND i.product_id = ANY($2)
+       FOR UPDATE OF i`,
+      [shopId, productIds],
+    );
+    return result.rows;
+  }
+
   async findByShopAndProduct(shopId: number, productId: number, client?: pg.PoolClient): Promise<Inventory | null> {
     const sql = 'SELECT * FROM inventory WHERE shop_id = $1 AND product_id = $2';
     if (client) {

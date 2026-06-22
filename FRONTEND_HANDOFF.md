@@ -585,7 +585,12 @@ CANCELLED    CANCELLED
 | `COMPLETED` | Order fully closed | Yes |
 | `CANCELLED` | Order cancelled before shipping | Yes |
 
-> When status changes to `RECEIVED`, warehouse inventory is automatically decremented and transferred to the shop's inventory inside a single DB transaction. No inventory side effects occur on cancellation.
+> **Inventory side-effects:**
+> - **Order creation (`PENDING`)** — warehouse stock is validated and deducted immediately. If any product is out of stock or has insufficient quantity, the request is rejected with `400 Bad Request` before the order is created.
+> - **`RECEIVED`** — the reserved stock is transferred into the shop's inventory (no further warehouse deduction).
+> - **`CANCELLED`** — the previously deducted warehouse stock is restored. Cancellation is only possible from `PENDING` or `PROCESSING`.
+>
+> This means `GET /inventory` for the warehouse will reflect reduced stock as soon as an order is placed, not only when it is received.
 
 **Query Params for** `GET /orders`
 
@@ -822,6 +827,16 @@ For lists:
   "timestamp": "2025-01-15T10:00:00Z"
 }
 ```
+
+`message` is always a **plain string**. If multiple validation errors occur on the same request they are joined with `'; '` (e.g. `"productId must be an integer; quantity must be a positive number"`).
+
+**Order creation stock errors (`400`):**
+
+| Scenario | `message` example |
+|----------|-------------------|
+| Product has zero stock | `Product "Milk 1L" is out of stock and cannot be ordered` |
+| Product has some stock but not enough | `Insufficient stock for product "Milk 1L" (available: 2, required: 5)` |
+| Product not in warehouse inventory | `Product 42 does not exist in warehouse inventory` |
 
 | Status Code | Meaning |
 |-------------|---------|
