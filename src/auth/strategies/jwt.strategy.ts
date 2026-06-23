@@ -32,11 +32,11 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     const user = await this.usersService.findByIdForAuth(payload.sub);
 
     if (!user || !user.is_active) {
-      throw new UnauthorizedException('Your account has been deactivated');
+      throw new UnauthorizedException('auth.ACCOUNT_DEACTIVATED');
     }
 
     if (user.shop_id !== null && user.shop_is_active === false) {
-      throw new UnauthorizedException('Your shop has been deactivated');
+      throw new UnauthorizedException('auth.SHOP_DEACTIVATED');
     }
 
     return {

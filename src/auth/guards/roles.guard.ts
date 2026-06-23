@@ -27,11 +27,11 @@ export class RolesGuard implements CanActivate {
     // No user on the request means JwtAuthGuard didn't run or the token was
     // missing — this is unauthenticated (401), not unauthorized (403).
     if (!user) {
-      throw new UnauthorizedException('Authentication required');
+      throw new UnauthorizedException('common.UNAUTHORIZED');
     }
 
     if (!required.includes(user.role)) {
-      throw new ForbiddenException('You do not have permission to perform this action');
+      throw new ForbiddenException('common.FORBIDDEN');
     }
 
     return true;

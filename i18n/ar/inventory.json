@@ -1,0 +1,5 @@
+{
+  "NOT_FOUND": "سجل المخزون غير موجود",
+  "INSUFFICIENT_STOCK": "المخزون غير كافٍ. المطلوب: {{requested}}، المتاح: {{available}}",
+  "PRODUCT_ALREADY_IN_SHOP": "هذا المنتج مُتتبَّع بالفعل في مخزون هذا المتجر"
+}

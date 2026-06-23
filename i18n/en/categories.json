@@ -1,0 +1,5 @@
+{
+  "NOT_FOUND": "Category not found",
+  "NAME_TAKEN": "A category with this name already exists",
+  "HAS_PRODUCTS": "Cannot delete a category that still has products"
+}

@@ -1,0 +1,7 @@
+{
+  "NOT_FOUND": "User not found",
+  "EMAIL_TAKEN": "A user with this email already exists",
+  "CANNOT_DEACTIVATE_SELF": "You cannot deactivate your own account",
+  "CANNOT_DELETE_SELF": "You cannot delete your own account",
+  "INVALID_ROLE": "Invalid role assignment"
+}

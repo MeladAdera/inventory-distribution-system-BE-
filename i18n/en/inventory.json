@@ -1,0 +1,5 @@
+{
+  "NOT_FOUND": "Inventory record not found",
+  "INSUFFICIENT_STOCK": "Insufficient stock. Requested: {{requested}}, available: {{available}}",
+  "PRODUCT_ALREADY_IN_SHOP": "This product is already tracked in this shop's inventory"
+}

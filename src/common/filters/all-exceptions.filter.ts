@@ -5,18 +5,22 @@ import {
   HttpException,
   HttpStatus,
   Logger,
+  Injectable,
 } from '@nestjs/common';
+import { I18nService, I18nContext } from 'nestjs-i18n';
 
-// Catches anything that is NOT an HttpException (DB errors, TypeErrors, etc.)
-// and returns the same { success, statusCode, message, error } envelope the
-// frontend expects, while logging the full stack server-side.
+@Injectable()
 @Catch()
 export class AllExceptionsFilter implements ExceptionFilter {
   private readonly logger = new Logger(AllExceptionsFilter.name);
 
+  constructor(private readonly i18n: I18nService) {}
+
   catch(exception: unknown, host: ArgumentsHost): void {
     const ctx = host.switchToHttp();
     const response = ctx.getResponse<import('express').Response>();
+    const req = ctx.getRequest<{ i18nLang?: string }>();
+    const lang = I18nContext.current()?.lang ?? req.i18nLang ?? 'en';
 
     const status =
       exception instanceof HttpException
@@ -26,7 +30,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
     const message =
       exception instanceof HttpException
         ? exception.message
-        : 'Internal server error';
+        : this.i18n.translate('common.INTERNAL_SERVER_ERROR', { lang });
 
     if (!(exception instanceof HttpException)) {
       this.logger.error(

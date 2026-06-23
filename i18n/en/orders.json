@@ -1,0 +1,8 @@
+{
+  "NOT_FOUND": "Order not found",
+  "INSUFFICIENT_STOCK": "Insufficient stock for product \"{{product}}\". Requested: {{requested}}, available: {{available}}",
+  "INVALID_STATUS_TRANSITION": "Cannot transition order from {{from}} to {{to}}",
+  "CANNOT_CANCEL": "Only pending or processing orders can be cancelled",
+  "SELF_ORDER": "A shop cannot place an order to itself",
+  "EMPTY_ITEMS": "An order must contain at least one item"
+}

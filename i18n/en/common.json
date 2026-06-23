@@ -1,0 +1,7 @@
+{
+  "NOT_FOUND": "Resource not found",
+  "FORBIDDEN": "You do not have permission to perform this action",
+  "UNAUTHORIZED": "Authentication is required",
+  "INTERNAL_SERVER_ERROR": "An unexpected error occurred",
+  "VALIDATION_ERROR": "Validation failed"
+}

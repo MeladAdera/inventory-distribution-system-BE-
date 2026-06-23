@@ -32,16 +32,16 @@ export class AuthService {
   async login(dto: LoginDto) {
     const user = await this.usersService.findByEmail(dto.email);
 
-    if (!user) throw new UnauthorizedException('Invalid credentials');
+    if (!user) throw new UnauthorizedException('auth.INVALID_CREDENTIALS');
 
     const passwordValid = await bcrypt.compare(dto.password, user.password_hash);
-    if (!passwordValid) throw new UnauthorizedException('Invalid credentials');
+    if (!passwordValid) throw new UnauthorizedException('auth.INVALID_CREDENTIALS');
 
     if (!user.is_active)
-      throw new UnauthorizedException('Your account has been deactivated');
+      throw new UnauthorizedException('auth.ACCOUNT_DEACTIVATED');
 
     if (user.shop_id !== null && user.shop_is_active === false)
-      throw new UnauthorizedException('Your shop has been deactivated');
+      throw new UnauthorizedException('auth.SHOP_DEACTIVATED');
 
     const payload = {
       sub: user.id,
@@ -70,14 +70,14 @@ export class AuthService {
     const tokenHash = this.hashToken(dto.refreshToken);
     const storedToken = await this.refreshTokensRepo.findValid(tokenHash);
 
-    if (!storedToken) throw new UnauthorizedException('Invalid or expired refresh token');
+    if (!storedToken) throw new UnauthorizedException('auth.REFRESH_TOKEN_INVALID');
 
     const user = await this.usersService.findByIdForAuth(storedToken.user_id);
     if (!user || !user.is_active)
-      throw new UnauthorizedException('User no longer active');
+      throw new UnauthorizedException('auth.ACCOUNT_DEACTIVATED');
 
     if (user.shop_id !== null && user.shop_is_active === false)
-      throw new UnauthorizedException('Your shop has been deactivated');
+      throw new UnauthorizedException('auth.SHOP_DEACTIVATED');
 
     const payload = {
       sub: user.id,
