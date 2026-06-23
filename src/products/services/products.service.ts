@@ -32,7 +32,7 @@ export class ProductsService {
 
   async findById(id: number, user: RequestUser): Promise<Product> {
     const product = await this.productsRepo.findById(id);
-    if (!product) throw new NotFoundException('Product not found');
+    if (!product) throw new NotFoundException('products.NOT_FOUND');
 
     this.assertAccess(user, product);
     return product;
@@ -43,12 +43,12 @@ export class ProductsService {
 
     const accessible = await this.productsRepo.categoryAccessible(dto.category_id, shopId);
     if (!accessible) {
-      throw new BadRequestException('Category not found or not accessible to this shop');
+      throw new BadRequestException('products.CATEGORY_NOT_FOUND');
     }
 
     if (dto.barcode) {
       const duplicate = await this.productsRepo.findByBarcodeAndShop(dto.barcode, shopId);
-      if (duplicate) throw new ConflictException('A product with this barcode already exists in this shop');
+      if (duplicate) throw new ConflictException('products.BARCODE_TAKEN');
     }
 
     return this.productsRepo.insert(dto.name, dto.description, dto.barcode, dto.price, dto.category_id, shopId);
@@ -58,12 +58,12 @@ export class ProductsService {
     // Admin creating for a specific shop — same logic, different shopId
     const accessible = await this.productsRepo.categoryAccessible(dto.category_id, shopId);
     if (!accessible) {
-      throw new BadRequestException('Category not found or not accessible to this shop');
+      throw new BadRequestException('products.CATEGORY_NOT_FOUND');
     }
 
     if (dto.barcode) {
       const duplicate = await this.productsRepo.findByBarcodeAndShop(dto.barcode, shopId);
-      if (duplicate) throw new ConflictException('A product with this barcode already exists in this shop');
+      if (duplicate) throw new ConflictException('products.BARCODE_TAKEN');
     }
 
     return this.productsRepo.insert(dto.name, dto.description, dto.barcode, dto.price, dto.category_id, shopId);
@@ -71,19 +71,19 @@ export class ProductsService {
 
   async update(id: number, dto: UpdateProductDto, user: RequestUser): Promise<Product> {
     const product = await this.productsRepo.findById(id);
-    if (!product) throw new NotFoundException('Product not found');
+    if (!product) throw new NotFoundException('products.NOT_FOUND');
 
     this.assertOwnership(user, product);
 
     if (dto.barcode && dto.barcode !== product.barcode) {
       const duplicate = await this.productsRepo.findByBarcodeAndShop(dto.barcode, product.shop_id, id);
-      if (duplicate) throw new ConflictException('A product with this barcode already exists in this shop');
+      if (duplicate) throw new ConflictException('products.BARCODE_TAKEN');
     }
 
     if (dto.category_id && dto.category_id !== product.category_id) {
       const accessible = await this.productsRepo.categoryAccessible(dto.category_id, product.shop_id);
       if (!accessible) {
-        throw new BadRequestException('Category not found or not accessible to this shop');
+        throw new BadRequestException('products.CATEGORY_NOT_FOUND');
       }
     }
 
@@ -92,7 +92,7 @@ export class ProductsService {
 
   async uploadImage(id: number, imageUrl: string, user: RequestUser): Promise<{ image_url: string }> {
     const product = await this.productsRepo.findById(id);
-    if (!product) throw new NotFoundException('Product not found');
+    if (!product) throw new NotFoundException('products.NOT_FOUND');
 
     this.assertOwnership(user, product);
     await this.productsRepo.updateImage(id, imageUrl);
@@ -101,7 +101,7 @@ export class ProductsService {
 
   async deleteImage(id: number, user: RequestUser): Promise<void> {
     const product = await this.productsRepo.findById(id);
-    if (!product) throw new NotFoundException('Product not found');
+    if (!product) throw new NotFoundException('products.NOT_FOUND');
 
     this.assertOwnership(user, product);
     await this.productsRepo.deleteImage(id);
@@ -109,7 +109,7 @@ export class ProductsService {
 
   async remove(id: number, user: RequestUser): Promise<void> {
     const product = await this.productsRepo.findById(id);
-    if (!product) throw new NotFoundException('Product not found');
+    if (!product) throw new NotFoundException('products.NOT_FOUND');
 
     this.assertOwnership(user, product);
     await this.productsRepo.softDelete(id);
@@ -127,14 +127,14 @@ export class ProductsService {
   private assertAccess(user: RequestUser, product: Product): void {
     if (user.role === UserRole.WAREHOUSE_ADMIN) return;
     if (product.shop_id === user.shopId || product.source === 'WAREHOUSE') return;
-    throw new ForbiddenException('You do not have access to this product');
+    throw new ForbiddenException('products.ACCESS_DENIED');
   }
 
   // Write access: admin can edit any; shop owner can only edit their own shop's products
   private assertOwnership(user: RequestUser, product: Product): void {
     if (user.role === UserRole.WAREHOUSE_ADMIN) return;
     if (product.shop_id !== user.shopId) {
-      throw new ForbiddenException('You can only modify products belonging to your own shop');
+      throw new ForbiddenException('products.MODIFY_OWN_ONLY');
     }
   }
 }

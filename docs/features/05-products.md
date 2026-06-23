@@ -216,3 +216,19 @@ src/products/
 src/database/migrations/
 └── 09-AddProductPriceAndSoftDelete.sql
 ```
+
+---
+
+## Error Keys (i18n)
+
+Translation files: `i18n/en/products.json`, `i18n/ar/products.json`
+
+| Key | HTTP | Thrown when |
+|---|---|---|
+| `products.NOT_FOUND` | 404 | Product ID does not exist |
+| `products.CATEGORY_NOT_FOUND` | 400 | `category_id` does not exist or is not accessible to the target shop |
+| `products.BARCODE_TAKEN` | 409 | A product with the same barcode already exists in the same shop |
+| `products.ACCESS_DENIED` | 403 | Non-admin tries to read a product that belongs to another shop (not a warehouse product) |
+| `products.MODIFY_OWN_ONLY` | 403 | Non-admin tries to update/delete a product from another shop |
+
+> See `docs/features/10-i18n-localization.md` for how keys are detected and translated.

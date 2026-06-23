@@ -1,5 +1,8 @@
 {
   "NOT_FOUND": "Product not found",
   "NAME_TAKEN": "A product with this name already exists",
-  "CATEGORY_NOT_FOUND": "The specified category does not exist"
+  "CATEGORY_NOT_FOUND": "Category not found or not accessible to this shop",
+  "BARCODE_TAKEN": "A product with this barcode already exists in this shop",
+  "ACCESS_DENIED": "You do not have access to this product",
+  "MODIFY_OWN_ONLY": "You can only modify products belonging to your own shop"
 }
