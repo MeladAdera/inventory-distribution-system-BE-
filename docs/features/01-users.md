@@ -165,3 +165,21 @@ Every users endpoint returns this shape (no `password_hash`):
 - `findPaginated` uses `COUNT(*) OVER()` window function — total count and page data come from one query, not two.
 - Shop scoping is applied in the service (`shopIdScope` param), not the repository. The repository is scope-agnostic.
 - `SafeUser` is a separate class from `User` — the entity file has both. `User` (with `password_hash`) is used only by `AuthService` for login. All other callers use `SafeUser`.
+
+---
+
+## Error Keys (i18n)
+
+Translation files: `i18n/en/users.json`, `i18n/ar/users.json`
+
+| Key | HTTP | Thrown when |
+|---|---|---|
+| `users.NOT_FOUND` | 404 | User ID does not exist or is outside the caller's shop scope |
+| `users.EMAIL_TAKEN` | 409 | Email is already registered to another user |
+| `users.CANNOT_DEACTIVATE_SELF` | 400 | Caller tries to deactivate their own account |
+| `users.CANNOT_DEACTIVATE_WAREHOUSE_ADMIN` | 403 | Anyone tries to deactivate the warehouse admin |
+| `users.SHOP_OWNER_UPDATE_RESTRICTED` | 403 | `SHOP_OWNER` tries to update a non-employee |
+| `users.SHOP_OWNER_DEACTIVATE_RESTRICTED` | 403 | `SHOP_OWNER` tries to deactivate a non-employee |
+| `users.NO_FIELDS_TO_UPDATE` | 400 | `PATCH` body resolves to no updatable fields |
+
+> See `docs/features/10-i18n-localization.md` for how keys are detected and translated.

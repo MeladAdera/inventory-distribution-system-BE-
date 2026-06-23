@@ -3,5 +3,9 @@
   "EMAIL_TAKEN": "يوجد مستخدم بهذا البريد الإلكتروني مسبقاً",
   "CANNOT_DEACTIVATE_SELF": "لا يمكنك تعطيل حسابك الخاص",
   "CANNOT_DELETE_SELF": "لا يمكنك حذف حسابك الخاص",
-  "INVALID_ROLE": "تعيين دور غير صالح"
+  "INVALID_ROLE": "تعيين دور غير صالح",
+  "SHOP_OWNER_UPDATE_RESTRICTED": "يمكن لمالك المتجر تعديل موظفيه فقط",
+  "NO_FIELDS_TO_UPDATE": "لم يتم تقديم أي حقول للتحديث",
+  "CANNOT_DEACTIVATE_WAREHOUSE_ADMIN": "لا يمكن تعطيل حساب مدير المستودع",
+  "SHOP_OWNER_DEACTIVATE_RESTRICTED": "يمكن لمالك المتجر تعطيل موظفيه فقط"
 }

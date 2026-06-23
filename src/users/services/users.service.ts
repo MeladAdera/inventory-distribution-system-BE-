@@ -34,7 +34,7 @@ export class UsersService {
 
   async createShopOwner(dto: CreateShopOwnerDto): Promise<User> {
     const existing = await this.usersRepo.findByEmail(dto.email);
-    if (existing) throw new ConflictException('Email already in use');
+    if (existing) throw new ConflictException('users.EMAIL_TAKEN');
 
     const passwordHash = await bcrypt.hash(dto.password, 10);
 
@@ -56,7 +56,7 @@ export class UsersService {
     owner: { id: number; shopId: number },
   ): Promise<User> {
     const existing = await this.usersRepo.findByEmail(dto.email);
-    if (existing) throw new ConflictException('Email already in use');
+    if (existing) throw new ConflictException('users.EMAIL_TAKEN');
 
     const passwordHash = await bcrypt.hash(dto.password, 10);
 
@@ -88,7 +88,7 @@ export class UsersService {
         : undefined;
 
     const user = await this.usersRepo.findById(id, shopIdScope);
-    if (!user) throw new NotFoundException(`User with id ${id} not found`);
+    if (!user) throw new NotFoundException('users.NOT_FOUND');
     return user;
   }
 
@@ -107,19 +107,19 @@ export class UsersService {
       requestUser.role === UserRole.SHOP_OWNER &&
       target.role !== UserRole.EMPLOYEE
     ) {
-      throw new ForbiddenException('Shop owners can only update their employees');
+      throw new ForbiddenException('users.SHOP_OWNER_UPDATE_RESTRICTED');
     }
 
     // Guard email uniqueness when the email is being changed
     if (dto.email && dto.email !== target.email) {
       const existing = await this.usersRepo.findByEmail(dto.email);
-      if (existing) throw new ConflictException('Email already in use');
+      if (existing) throw new ConflictException('users.EMAIL_TAKEN');
     }
 
     const updated = await this.usersRepo.update(id, dto);
     // update() returns null only if no fields were provided — dto validation
     // guarantees at least one field, but guard defensively
-    if (!updated) throw new BadRequestException('No fields to update');
+    if (!updated) throw new BadRequestException('users.NO_FIELDS_TO_UPDATE');
     return updated;
   }
 
@@ -127,7 +127,7 @@ export class UsersService {
 
   async deactivateUser(id: number, requestUser: RequestUser): Promise<SafeUser> {
     if (id === requestUser.id) {
-      throw new BadRequestException('You cannot deactivate your own account');
+      throw new BadRequestException('users.CANNOT_DEACTIVATE_SELF');
     }
 
     // Resolve target (also enforces shop scope for SHOP_OWNER)
@@ -135,7 +135,7 @@ export class UsersService {
 
     // The warehouse admin account must stay active
     if (target.role === UserRole.WAREHOUSE_ADMIN) {
-      throw new ForbiddenException('The warehouse admin account cannot be deactivated');
+      throw new ForbiddenException('users.CANNOT_DEACTIVATE_WAREHOUSE_ADMIN');
     }
 
     // SHOP_OWNER can only deactivate employees in their own shop
@@ -143,11 +143,11 @@ export class UsersService {
       requestUser.role === UserRole.SHOP_OWNER &&
       target.role !== UserRole.EMPLOYEE
     ) {
-      throw new ForbiddenException('Shop owners can only deactivate their employees');
+      throw new ForbiddenException('users.SHOP_OWNER_DEACTIVATE_RESTRICTED');
     }
 
     const deactivated = await this.usersRepo.deactivate(id);
-    if (!deactivated) throw new NotFoundException(`User with id ${id} not found`);
+    if (!deactivated) throw new NotFoundException('users.NOT_FOUND');
     return deactivated;
   }
 }

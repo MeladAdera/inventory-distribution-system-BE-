@@ -3,5 +3,9 @@
   "EMAIL_TAKEN": "A user with this email already exists",
   "CANNOT_DEACTIVATE_SELF": "You cannot deactivate your own account",
   "CANNOT_DELETE_SELF": "You cannot delete your own account",
-  "INVALID_ROLE": "Invalid role assignment"
+  "INVALID_ROLE": "Invalid role assignment",
+  "SHOP_OWNER_UPDATE_RESTRICTED": "Shop owners can only update their own employees",
+  "NO_FIELDS_TO_UPDATE": "No fields provided to update",
+  "CANNOT_DEACTIVATE_WAREHOUSE_ADMIN": "The warehouse admin account cannot be deactivated",
+  "SHOP_OWNER_DEACTIVATE_RESTRICTED": "Shop owners can only deactivate their own employees"
 }
