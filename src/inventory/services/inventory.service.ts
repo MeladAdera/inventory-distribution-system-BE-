@@ -40,7 +40,7 @@ export class InventoryService {
 
   async findById(id: number, user: RequestUser): Promise<InventoryWithProduct> {
     const item = await this.inventoryRepo.findById(id);
-    if (!item) throw new NotFoundException('Inventory record not found');
+    if (!item) throw new NotFoundException('inventory.NOT_FOUND');
 
     this.assertReadAccess(user, item.shop_id);
     return item;
@@ -79,21 +79,25 @@ export class InventoryService {
 
   async adjust(id: number, dto: AdjustInventoryDto, user: RequestUser): Promise<InventoryWithProduct> {
     const item = await this.inventoryRepo.findById(id);
-    if (!item) throw new NotFoundException('Inventory record not found');
+    if (!item) throw new NotFoundException('inventory.NOT_FOUND');
 
     this.assertWriteAccess(user, item.shop_id);
 
     const newQuantity = item.current_quantity + dto.adjustment;
     if (newQuantity < 0) {
-      throw new BadRequestException(
-        `Adjustment would result in negative stock (current: ${item.current_quantity}, adjustment: ${dto.adjustment})`,
-      );
+      throw new BadRequestException({
+        key: 'inventory.NEGATIVE_STOCK',
+        args: { current: item.current_quantity, adjustment: dto.adjustment },
+      });
     }
 
     const result = await this.db.transaction(async (client) => {
       const adjusted = await this.inventoryRepo.adjust(id, dto.adjustment, client);
       if (!adjusted) {
-        throw new BadRequestException('Adjustment would result in negative stock');
+        throw new BadRequestException({
+          key: 'inventory.NEGATIVE_STOCK',
+          args: { current: item.current_quantity, adjustment: dto.adjustment },
+        });
       }
 
       await this.auditLogsService.log(
@@ -130,11 +134,11 @@ export class InventoryService {
 
   private assertReadAccess(user: RequestUser, shopId: number): void {
     if (user.role === UserRole.WAREHOUSE_ADMIN) return;
-    if (user.shopId !== shopId) throw new ForbiddenException('You do not have access to this inventory record');
+    if (user.shopId !== shopId) throw new ForbiddenException('inventory.ACCESS_DENIED');
   }
 
   private assertWriteAccess(user: RequestUser, shopId: number): void {
     if (user.role === UserRole.WAREHOUSE_ADMIN) return;
-    if (user.shopId !== shopId) throw new ForbiddenException('You can only modify inventory for your own shop');
+    if (user.shopId !== shopId) throw new ForbiddenException('inventory.MODIFY_OWN_ONLY');
   }
 }

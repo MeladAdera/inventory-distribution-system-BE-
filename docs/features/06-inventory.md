@@ -252,3 +252,19 @@ src/audit-logs/
 src/database/migrations/
 └── 10-AddInventoryLowStockThreshold.sql
 ```
+
+---
+
+## Error Keys (i18n)
+
+Translation files: `i18n/en/inventory.json`, `i18n/ar/inventory.json`
+
+| Key | HTTP | Args | Thrown when |
+|---|---|---|---|
+| `inventory.NOT_FOUND` | 404 | — | Inventory record ID does not exist |
+| `inventory.NEGATIVE_STOCK` | 400 | `{current}`, `{adjustment}` | Adjustment would bring stock below zero |
+| `inventory.ACCESS_DENIED` | 403 | — | Non-admin tries to read another shop's inventory record |
+| `inventory.MODIFY_OWN_ONLY` | 403 | — | Non-admin tries to adjust another shop's inventory |
+
+> Keys with args are thrown using the object form: `throw new BadRequestException({ key, args })`.
+> See `docs/features/10-i18n-localization.md` for full details.

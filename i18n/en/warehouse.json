@@ -1,5 +1,5 @@
 {
   "NOT_FOUND": "Warehouse record not found",
-  "INSUFFICIENT_STOCK": "Insufficient warehouse stock. Requested: {{requested}}, available: {{available}}",
+  "INSUFFICIENT_STOCK": "Insufficient warehouse stock. Requested: {requested}, available: {available}",
   "PRODUCT_ALREADY_IN_WAREHOUSE": "This product already exists in the warehouse"
 }

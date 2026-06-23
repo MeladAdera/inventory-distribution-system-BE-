@@ -1,5 +1,8 @@
 {
   "NOT_FOUND": "Inventory record not found",
-  "INSUFFICIENT_STOCK": "Insufficient stock. Requested: {{requested}}, available: {{available}}",
-  "PRODUCT_ALREADY_IN_SHOP": "This product is already tracked in this shop's inventory"
+  "INSUFFICIENT_STOCK": "Insufficient stock. Requested: {requested}, available: {available}",
+  "PRODUCT_ALREADY_IN_SHOP": "This product is already tracked in this shop's inventory",
+  "NEGATIVE_STOCK": "Adjustment would result in negative stock (current: {current}, adjustment: {adjustment})",
+  "ACCESS_DENIED": "You do not have access to this inventory record",
+  "MODIFY_OWN_ONLY": "You can only modify inventory for your own shop"
 }

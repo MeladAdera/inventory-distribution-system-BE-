@@ -1,5 +1,5 @@
 {
   "NOT_FOUND": "سجل المستودع غير موجود",
-  "INSUFFICIENT_STOCK": "مخزون المستودع غير كافٍ. المطلوب: {{requested}}، المتاح: {{available}}",
+  "INSUFFICIENT_STOCK": "مخزون المستودع غير كافٍ. المطلوب: {requested}، المتاح: {available}",
   "PRODUCT_ALREADY_IN_WAREHOUSE": "هذا المنتج موجود بالفعل في المستودع"
 }
