@@ -30,7 +30,7 @@ export class CategoriesService {
 
   async findById(id: number, user: RequestUser): Promise<Category> {
     const category = await this.categoriesRepo.findById(id);
-    if (!category) throw new NotFoundException('Category not found');
+    if (!category) throw new NotFoundException('categories.NOT_FOUND');
 
     this.assertShopAccess(user, category.shop_id);
     return category;
@@ -40,20 +40,20 @@ export class CategoriesService {
     const targetShopId = this.resolveShopId(user, shopId);
 
     const duplicate = await this.categoriesRepo.findByNameAndShop(dto.name, targetShopId);
-    if (duplicate) throw new ConflictException('A category with this name already exists in this shop');
+    if (duplicate) throw new ConflictException('categories.NAME_TAKEN');
 
     return this.categoriesRepo.insert(dto.name, targetShopId);
   }
 
   async update(id: number, dto: UpdateCategoryDto, user: RequestUser): Promise<Category> {
     const category = await this.categoriesRepo.findById(id);
-    if (!category) throw new NotFoundException('Category not found');
+    if (!category) throw new NotFoundException('categories.NOT_FOUND');
 
     this.assertShopAccess(user, category.shop_id);
 
     if (dto.name) {
       const duplicate = await this.categoriesRepo.findByNameAndShop(dto.name, category.shop_id, id);
-      if (duplicate) throw new ConflictException('A category with this name already exists in this shop');
+      if (duplicate) throw new ConflictException('categories.NAME_TAKEN');
     }
 
     return this.categoriesRepo.update(id, dto);
@@ -61,7 +61,7 @@ export class CategoriesService {
 
   async uploadImage(id: number, imageUrl: string, user: RequestUser): Promise<{ image_url: string }> {
     const category = await this.categoriesRepo.findById(id);
-    if (!category) throw new NotFoundException('Category not found');
+    if (!category) throw new NotFoundException('categories.NOT_FOUND');
 
     this.assertShopAccess(user, category.shop_id);
     await this.categoriesRepo.updateImage(id, imageUrl);
@@ -70,7 +70,7 @@ export class CategoriesService {
 
   async deleteImage(id: number, user: RequestUser): Promise<void> {
     const category = await this.categoriesRepo.findById(id);
-    if (!category) throw new NotFoundException('Category not found');
+    if (!category) throw new NotFoundException('categories.NOT_FOUND');
 
     this.assertShopAccess(user, category.shop_id);
     await this.categoriesRepo.deleteImage(id);
@@ -78,15 +78,13 @@ export class CategoriesService {
 
   async remove(id: number, user: RequestUser): Promise<void> {
     const category = await this.categoriesRepo.findById(id);
-    if (!category) throw new NotFoundException('Category not found');
+    if (!category) throw new NotFoundException('categories.NOT_FOUND');
 
     this.assertShopAccess(user, category.shop_id);
 
     const inUse = await this.categoriesRepo.hasProducts(id);
     if (inUse) {
-      throw new BadRequestException(
-        'Cannot delete this category — it has products assigned to it. Reassign or delete the products first.',
-      );
+      throw new BadRequestException('categories.HAS_PRODUCTS');
     }
 
     await this.categoriesRepo.deleteById(id);
@@ -105,7 +103,7 @@ export class CategoriesService {
   // Non-admins can only touch categories that belong to their shop.
   private assertShopAccess(user: RequestUser, categoryShopId: number): void {
     if (user.role !== UserRole.WAREHOUSE_ADMIN && categoryShopId !== user.shopId) {
-      throw new ForbiddenException('You can only manage categories for your own shop');
+      throw new ForbiddenException('categories.MANAGE_OWN_ONLY');
     }
   }
 }

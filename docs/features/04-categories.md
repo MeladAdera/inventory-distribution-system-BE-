@@ -175,3 +175,18 @@ WHERE c.shop_id = $1 OR s.type = 'WAREHOUSE'
 ORDER BY s.type DESC, c.name
 ```
 Warehouse categories sort first (`DESC` on type puts `WAREHOUSE` before `SHOP`).
+
+---
+
+## Error Keys (i18n)
+
+Translation files: `i18n/en/categories.json`, `i18n/ar/categories.json`
+
+| Key | HTTP | Thrown when |
+|---|---|---|
+| `categories.NOT_FOUND` | 404 | Category ID does not exist |
+| `categories.NAME_TAKEN` | 409 | A category with the same name already exists in that shop |
+| `categories.HAS_PRODUCTS` | 400 | Attempting to delete a category that still has products assigned |
+| `categories.MANAGE_OWN_ONLY` | 403 | Non-admin tries to read/update/delete a category from another shop |
+
+> See `docs/features/10-i18n-localization.md` for how keys are detected and translated.
