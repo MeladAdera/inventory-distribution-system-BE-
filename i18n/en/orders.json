@@ -1,8 +1,19 @@
 {
   "NOT_FOUND": "Order not found",
-  "INSUFFICIENT_STOCK": "Insufficient stock for product \"{product}\". Requested: {requested}, available: {available}",
-  "INVALID_STATUS_TRANSITION": "Cannot transition order from {from} to {to}",
-  "CANNOT_CANCEL": "Only pending or processing orders can be cancelled",
+  "SHOP_ID_REQUIRED": "shopId is required when creating an order as WAREHOUSE_ADMIN",
+  "WAREHOUSE_NOT_FOUND": "Warehouse not found",
+  "DUPLICATE_PRODUCTS": "Duplicate products in order",
+  "PRODUCT_NOT_IN_WAREHOUSE": "Product {productId} does not exist in warehouse inventory",
+  "OUT_OF_STOCK": "Product \"{product}\" is out of stock and cannot be ordered",
+  "INSUFFICIENT_STOCK": "Insufficient stock for product \"{product}\" (available: {available}, required: {required})",
+  "CANNOT_CANCEL": "Cannot cancel an order with status {status}. Only PENDING and PROCESSING orders can be cancelled",
+  "CANCEL_OWN_ONLY": "You can only cancel orders assigned to your shop",
+  "CANCEL_PENDING_ONLY": "Shop owners can only cancel PENDING orders",
+  "UPDATE_OWN_ONLY": "You can only update status for orders assigned to your shop",
+  "SHIPPED_TO_RECEIVED_ONLY": "Shop owners can only mark a SHIPPED order as RECEIVED",
+  "INVALID_STATUS_TRANSITION": "Invalid transition: {from} → {to}. Expected next status: {expected}",
+  "CONCURRENT_UPDATE": "Order status was modified by another request. Please retry.",
+  "ACCESS_DENIED": "You do not have access to this order",
   "SELF_ORDER": "A shop cannot place an order to itself",
   "EMPTY_ITEMS": "An order must contain at least one item"
 }

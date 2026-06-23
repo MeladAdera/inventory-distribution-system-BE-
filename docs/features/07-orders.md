@@ -263,3 +263,30 @@ src/inventory/inventory.module.ts      now also exports InventoryRepository
 src/database/migrations/
 └── 03-CreateOrdersSystem.sql          orders + order_items tables (pre-existing)
 ```
+
+---
+
+## Error Keys (i18n)
+
+Translation files: `i18n/en/orders.json`, `i18n/ar/orders.json`
+
+| Key | HTTP | Args | Thrown when |
+|---|---|---|---|
+| `orders.NOT_FOUND` | 404 | — | Order ID does not exist |
+| `orders.SHOP_ID_REQUIRED` | 400 | — | WAREHOUSE_ADMIN creates order without providing `shopId` |
+| `orders.WAREHOUSE_NOT_FOUND` | 400 | — | No warehouse shop found in the database |
+| `orders.DUPLICATE_PRODUCTS` | 400 | — | Same product appears more than once in order items |
+| `orders.PRODUCT_NOT_IN_WAREHOUSE` | 400 | `{productId}` | Ordered product has no warehouse inventory record |
+| `orders.OUT_OF_STOCK` | 400 | `{product}` | Product stock is zero |
+| `orders.INSUFFICIENT_STOCK` | 400 | `{product}`, `{available}`, `{required}` | Not enough stock for the requested quantity |
+| `orders.CANNOT_CANCEL` | 400 | `{status}` | Trying to cancel an order that is SHIPPED, RECEIVED, COMPLETED, or already CANCELLED |
+| `orders.CANCEL_OWN_ONLY` | 403 | — | SHOP_OWNER tries to cancel an order not assigned to their shop |
+| `orders.CANCEL_PENDING_ONLY` | 403 | — | SHOP_OWNER tries to cancel a non-PENDING order |
+| `orders.UPDATE_OWN_ONLY` | 403 | — | SHOP_OWNER tries to update status of an order not assigned to their shop |
+| `orders.SHIPPED_TO_RECEIVED_ONLY` | 403 | — | SHOP_OWNER tries a status update other than SHIPPED → RECEIVED |
+| `orders.INVALID_STATUS_TRANSITION` | 400 | `{from}`, `{to}`, `{expected}` | Status jump skips the required next state |
+| `orders.CONCURRENT_UPDATE` | 409 | — | Optimistic lock failed — another request changed the status first |
+| `orders.ACCESS_DENIED` | 403 | — | User tries to read an order not involving their shop |
+
+> Keys with args are thrown using the object form: `throw new BadRequestException({ key, args })`.
+> See `docs/features/10-i18n-localization.md` for full details.

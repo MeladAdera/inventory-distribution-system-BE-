@@ -41,18 +41,18 @@ export class OrdersService {
   async createOrder(dto: CreateOrderDto, user: RequestUser): Promise<Order> {
     let toShopId: number;
     if (user.role === UserRole.WAREHOUSE_ADMIN) {
-      if (!dto.shopId) throw new BadRequestException('shopId is required when creating an order as WAREHOUSE_ADMIN');
+      if (!dto.shopId) throw new BadRequestException('orders.SHOP_ID_REQUIRED');
       toShopId = dto.shopId;
     } else {
       toShopId = user.shopId!;
     }
 
     const warehouse = await this.ordersRepo.findWarehouseShop();
-    if (!warehouse) throw new BadRequestException('Warehouse not found');
+    if (!warehouse) throw new BadRequestException('orders.WAREHOUSE_NOT_FOUND');
 
     const productIds = dto.items.map((i) => i.productId);
     const hasDuplicates = new Set(productIds).size !== productIds.length;
-    if (hasDuplicates) throw new BadRequestException('Duplicate products in order');
+    if (hasDuplicates) throw new BadRequestException('orders.DUPLICATE_PRODUCTS');
 
     const totalItems = dto.items.reduce((sum, i) => sum + i.quantity, 0);
 
@@ -67,7 +67,7 @@ export class OrdersService {
       if (warehouseInventories.length !== productIds.length) {
         const foundIds = new Set(warehouseInventories.map((inv) => inv.product_id));
         const missingId = productIds.find((id) => !foundIds.has(id));
-        throw new BadRequestException(`Product ${missingId} does not exist in warehouse inventory`);
+        throw new BadRequestException({ key: 'orders.PRODUCT_NOT_IN_WAREHOUSE', args: { productId: missingId } });
       }
 
       const warehouseMap = new Map(warehouseInventories.map((inv) => [inv.product_id, inv]));
@@ -75,11 +75,13 @@ export class OrdersService {
       for (const item of dto.items) {
         const inv = warehouseMap.get(item.productId)!;
         if (inv.current_quantity < item.quantity) {
-          const name = `"${inv.product_name}"`;
-          const message = inv.current_quantity === 0
-            ? `Product ${name} is out of stock and cannot be ordered`
-            : `Insufficient stock for product ${name} (available: ${inv.current_quantity}, required: ${item.quantity})`;
-          throw new BadRequestException(message);
+          if (inv.current_quantity === 0) {
+            throw new BadRequestException({ key: 'orders.OUT_OF_STOCK', args: { product: inv.product_name } });
+          }
+          throw new BadRequestException({
+            key: 'orders.INSUFFICIENT_STOCK',
+            args: { product: inv.product_name, available: inv.current_quantity, required: item.quantity },
+          });
         }
       }
 
@@ -123,7 +125,7 @@ export class OrdersService {
 
   async findById(id: number, user: RequestUser): Promise<OrderWithItems> {
     const order = await this.ordersRepo.findById(id);
-    if (!order) throw new NotFoundException('Order not found');
+    if (!order) throw new NotFoundException('orders.NOT_FOUND');
     this.assertReadAccess(user, order);
     return order;
   }
@@ -131,43 +133,42 @@ export class OrdersService {
   async updateStatus(id: number, dto: UpdateOrderStatusDto, user: RequestUser): Promise<Order> {
     // Quick existence check before opening a transaction (avoids unnecessary lock).
     const preCheck = await this.ordersRepo.findById(id);
-    if (!preCheck) throw new NotFoundException('Order not found');
+    if (!preCheck) throw new NotFoundException('orders.NOT_FOUND');
 
     const updated = await this.db.transaction(async (client) => {
       // Lock the row so concurrent requests cannot both pass validation and both
       // run transferInventory (which would double-deduct warehouse stock).
       const order = await this.ordersRepo.findByIdForUpdate(id, client);
-      if (!order) throw new NotFoundException('Order not found');
+      if (!order) throw new NotFoundException('orders.NOT_FOUND');
 
       if (dto.status === 'CANCELLED') {
         const cancellable: OrderStatus[] = ['PENDING', 'PROCESSING'];
         if (!cancellable.includes(order.status)) {
-          throw new BadRequestException(
-            `Cannot cancel an order with status ${order.status}. Only PENDING and PROCESSING orders can be cancelled.`,
-          );
+          throw new BadRequestException({ key: 'orders.CANNOT_CANCEL', args: { status: order.status } });
         }
         if (user.role === UserRole.SHOP_OWNER) {
           if (order.to_shop_id !== user.shopId) {
-            throw new ForbiddenException('You can only cancel orders assigned to your shop');
+            throw new ForbiddenException('orders.CANCEL_OWN_ONLY');
           }
           if (order.status !== 'PENDING') {
-            throw new ForbiddenException('Shop owners can only cancel PENDING orders');
+            throw new ForbiddenException('orders.CANCEL_PENDING_ONLY');
           }
         }
       } else {
         if (user.role === UserRole.SHOP_OWNER) {
           if (order.to_shop_id !== user.shopId) {
-            throw new ForbiddenException('You can only update status for orders assigned to your shop');
+            throw new ForbiddenException('orders.UPDATE_OWN_ONLY');
           }
           if (order.status !== 'SHIPPED' || dto.status !== 'RECEIVED') {
-            throw new ForbiddenException('Shop owners can only mark a SHIPPED order as RECEIVED');
+            throw new ForbiddenException('orders.SHIPPED_TO_RECEIVED_ONLY');
           }
         }
         const expected = NEXT_STATUS[order.status];
         if (expected !== dto.status) {
-          throw new BadRequestException(
-            `Invalid transition: ${order.status} → ${dto.status}. Expected next status: ${expected ?? 'none (terminal state)'}`,
-          );
+          throw new BadRequestException({
+            key: 'orders.INVALID_STATUS_TRANSITION',
+            args: { from: order.status, to: dto.status, expected: expected ?? 'none' },
+          });
         }
       }
 
@@ -175,7 +176,7 @@ export class OrdersService {
       // a race that slips through between lock acquisition and the UPDATE.
       const result = await this.ordersRepo.updateStatus(id, dto.status, order.status, client);
       if (!result) {
-        throw new ConflictException('Order status was modified by another request. Please retry.');
+        throw new ConflictException('orders.CONCURRENT_UPDATE');
       }
 
       await this.auditLogsService.log(
@@ -280,7 +281,7 @@ export class OrdersService {
   private assertReadAccess(user: RequestUser, order: Order): void {
     if (user.role === UserRole.WAREHOUSE_ADMIN) return;
     if (order.from_shop_id !== user.shopId && order.to_shop_id !== user.shopId) {
-      throw new ForbiddenException('You do not have access to this order');
+      throw new ForbiddenException('orders.ACCESS_DENIED');
     }
   }
 }
