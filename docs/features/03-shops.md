@@ -150,3 +150,18 @@ Login now enforces shop status. After password validation, `auth.service.ts` che
 2. `user.shop_id !== null && shop.is_active === false` → `401 Your shop has been deactivated`
 
 This is achieved via a single `LEFT JOIN shops` in `UsersRepository.findByEmail` — no extra round trip to the database.
+
+---
+
+## Error Keys (i18n)
+
+Translation files: `i18n/en/shops.json`, `i18n/ar/shops.json`
+
+| Key | HTTP | Thrown when |
+|---|---|---|
+| `shops.NOT_FOUND` | 404 | Shop ID does not exist |
+| `shops.VIEW_OWN_ONLY` | 403 | Non-admin tries to view a shop other than their own |
+| `shops.UPDATE_OWN_ONLY` | 403 | `SHOP_OWNER` tries to update a shop other than their own |
+| `shops.CANNOT_DEACTIVATE_WAREHOUSE` | 400 | Anyone tries to set the warehouse shop to inactive |
+
+> See `docs/features/10-i18n-localization.md` for how keys are detected and translated.

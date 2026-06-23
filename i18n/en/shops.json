@@ -1,5 +1,8 @@
 {
   "NOT_FOUND": "Shop not found",
   "NAME_TAKEN": "A shop with this name already exists",
-  "DEACTIVATED": "This shop has been deactivated"
+  "DEACTIVATED": "This shop has been deactivated",
+  "VIEW_OWN_ONLY": "You can only view your own shop",
+  "UPDATE_OWN_ONLY": "You can only update your own shop",
+  "CANNOT_DEACTIVATE_WAREHOUSE": "The warehouse shop cannot be deactivated"
 }

@@ -1,5 +1,8 @@
 {
   "NOT_FOUND": "المتجر غير موجود",
   "NAME_TAKEN": "يوجد متجر بهذا الاسم مسبقاً",
-  "DEACTIVATED": "تم تعطيل هذا المتجر"
+  "DEACTIVATED": "تم تعطيل هذا المتجر",
+  "VIEW_OWN_ONLY": "يمكنك عرض متجرك الخاص فقط",
+  "UPDATE_OWN_ONLY": "يمكنك تعديل متجرك الخاص فقط",
+  "CANNOT_DEACTIVATE_WAREHOUSE": "لا يمكن تعطيل متجر المستودع"
 }

@@ -24,20 +24,20 @@ export class ShopsService {
     }
 
     const shop = await this.shopsRepo.findById(user.shopId!);
-    if (!shop) throw new NotFoundException('Shop not found');
+    if (!shop) throw new NotFoundException('shops.NOT_FOUND');
     return shop;
   }
 
   // Any authenticated user can call this, but non-admins are locked to their own shop
   async findById(id: number, user: RequestUser): Promise<Shop> {
     const shop = await this.shopsRepo.findById(id);
-    if (!shop) throw new NotFoundException('Shop not found');
+    if (!shop) throw new NotFoundException('shops.NOT_FOUND');
 
     if (
       user.role !== UserRole.WAREHOUSE_ADMIN &&
       shop.id !== user.shopId
     ) {
-      throw new ForbiddenException('You can only view your own shop');
+      throw new ForbiddenException('shops.VIEW_OWN_ONLY');
     }
 
     return shop;
@@ -48,13 +48,13 @@ export class ShopsService {
   // EMPLOYEE → forbidden (enforced at controller level via @Roles)
   async update(id: number, dto: UpdateShopDto, user: RequestUser): Promise<Shop> {
     const shop = await this.shopsRepo.findById(id);
-    if (!shop) throw new NotFoundException('Shop not found');
+    if (!shop) throw new NotFoundException('shops.NOT_FOUND');
 
     if (
       user.role === UserRole.SHOP_OWNER &&
       shop.id !== user.shopId
     ) {
-      throw new ForbiddenException('You can only update your own shop');
+      throw new ForbiddenException('shops.UPDATE_OWN_ONLY');
     }
 
     return this.shopsRepo.update(id, dto);
@@ -64,10 +64,10 @@ export class ShopsService {
   // Cannot deactivate the warehouse itself
   async updateStatus(id: number, dto: UpdateShopStatusDto): Promise<Shop> {
     const shop = await this.shopsRepo.findById(id);
-    if (!shop) throw new NotFoundException('Shop not found');
+    if (!shop) throw new NotFoundException('shops.NOT_FOUND');
 
     if (shop.type === ShopType.WAREHOUSE && !dto.isActive) {
-      throw new BadRequestException('The warehouse shop cannot be deactivated');
+      throw new BadRequestException('shops.CANNOT_DEACTIVATE_WAREHOUSE');
     }
 
     return this.shopsRepo.updateStatus(id, dto.isActive);
