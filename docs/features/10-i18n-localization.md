@@ -100,7 +100,7 @@ throw new BadRequestException({
 Translation file (`en/orders.json`):
 ```json
 {
-  "INSUFFICIENT_STOCK": "Insufficient stock for \"{{product}}\". Requested: {{requested}}, available: {{available}}"
+  "INSUFFICIENT_STOCK": "Insufficient stock for \"{product}\". Requested: {requested}, available: {available}"
 }
 ```
 
