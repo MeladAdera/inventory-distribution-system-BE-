@@ -1,7 +1,7 @@
 import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
 import * as pg from 'pg';
 import { AuditLogsRepository, CreateAuditLogData } from '../repositories/audit-logs.repository';
-import { AuditLog } from '../entities/audit-log.entity';
+import { AuditLog, AuditLogDetail } from '../entities/audit-log.entity';
 import { AuditLogQueryDto } from '../dto/audit-log-query.dto';
 import { UserRole } from '../../common/enums/user-role.enum';
 import { paginate, PaginatedResponse } from '../../common/utils/pagination.util';
@@ -21,7 +21,7 @@ export class AuditLogsService {
     return paginate(result.data, query.page, query.limit, result.total);
   }
 
-  async findById(id: number, user: RequestUser): Promise<AuditLog> {
+  async findById(id: number, user: RequestUser): Promise<AuditLogDetail> {
     const log = await this.auditLogsRepo.findById(id);
     if (!log) throw new NotFoundException('Audit log not found');
 

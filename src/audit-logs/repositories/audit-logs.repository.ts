@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import * as pg from 'pg';
 import { DatabaseService } from '../../database/database.service';
-import { AuditLog } from '../entities/audit-log.entity';
+import { AuditLog, AuditLogDetail } from '../entities/audit-log.entity';
 import { AuditLogQueryDto } from '../dto/audit-log-query.dto';
 
 export interface CreateAuditLogData {
@@ -68,8 +68,13 @@ export class AuditLogsRepository {
     const offsetIdx = idx++;
 
     const rows = await this.db.query<AuditLog & { total_count: string }>(
-      `SELECT al.*, COUNT(*) OVER() AS total_count
+      `SELECT al.*,
+              u.name AS user_name,
+              s.name AS shop_name,
+              COUNT(*) OVER() AS total_count
        FROM audit_logs al
+       LEFT JOIN users  u ON u.id = al.user_id
+       LEFT JOIN shops  s ON s.id = al.shop_id
        ${whereClause}
        ORDER BY al.created_at DESC
        LIMIT $${limitIdx} OFFSET $${offsetIdx}`,
@@ -82,9 +87,18 @@ export class AuditLogsRepository {
     };
   }
 
-  findById(id: number): Promise<AuditLog | null> {
-    return this.db.queryOne<AuditLog>(
-      'SELECT * FROM audit_logs WHERE id = $1',
+  findById(id: number): Promise<AuditLogDetail | null> {
+    return this.db.queryOne<AuditLogDetail>(
+      `SELECT al.*,
+              u.name  AS user_name,
+              s.name  AS shop_name,
+              p.name  AS product_name
+       FROM audit_logs al
+       LEFT JOIN users     u   ON u.id   = al.user_id
+       LEFT JOIN shops     s   ON s.id   = al.shop_id
+       LEFT JOIN inventory inv ON inv.id = al.entity_id AND al.entity_type = 'inventory'
+       LEFT JOIN products  p   ON p.id   = inv.product_id
+       WHERE al.id = $1`,
       [id],
     );
   }

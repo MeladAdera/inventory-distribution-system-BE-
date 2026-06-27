@@ -686,7 +686,7 @@ Read-only. Tracks all significant actions in the system.
 | Method | Path | Auth | Roles | Description |
 |--------|------|------|-------|-------------|
 | GET | `/audit-logs` | JWT | All | List logs (admin: all shops; others: own shop) |
-| GET | `/audit-logs/:id` | JWT | All | Get single log record |
+| GET | `/audit-logs/:id` | JWT | All | Get single log record with full details |
 
 **Query Params for** `GET /audit-logs`
 
@@ -696,18 +696,20 @@ Read-only. Tracks all significant actions in the system.
 | `userId` | number | Filter by user |
 | `type` | string | Log type |
 | `action` | string | Action performed |
-| `entityType` | string | e.g., `product`, `order` |
+| `entityType` | string | e.g., `inventory`, `order` |
 | `entityId` | number | ID of affected entity |
 | `fromDate` | ISO date | Start of date range |
 | `toDate` | ISO date | End of date range |
 | `page` / `limit` | number | Pagination |
 
-**Audit Log Object:**
+**Audit Log Object (list — `GET /audit-logs`):**
 ```json
 {
   "id": 100,
   "shop_id": 2,
+  "shop_name": "Cairo Branch",
   "user_id": 5,
+  "user_name": "Sara Ali",
   "type": "INVENTORY",
   "action": "STOCK_IN",
   "entity_type": "inventory",
@@ -718,6 +720,44 @@ Read-only. Tracks all significant actions in the system.
   "created_at": "2025-01-15T10:00:00Z"
 }
 ```
+
+> `shop_name` and `user_name` are always resolved from their IDs — no need to look them up separately.  
+> `shop_name` is `null` for `ORDER / STATUS_CHANGED` logs (those are not scoped to a single shop).
+
+**Audit Log Object (detail — `GET /audit-logs/:id`):**
+
+Same fields as the list object, plus `product_name`:
+
+```json
+{
+  "id": 100,
+  "shop_id": 2,
+  "shop_name": "Cairo Branch",
+  "user_id": 5,
+  "user_name": "Sara Ali",
+  "type": "INVENTORY",
+  "action": "STOCK_IN",
+  "entity_type": "inventory",
+  "entity_id": 7,
+  "quantity": 50,
+  "amount": null,
+  "notes": "Received from supplier",
+  "created_at": "2025-01-15T10:00:00Z",
+  "product_name": "Laptop 15\""
+}
+```
+
+> `product_name` is populated for all `INVENTORY` actions and `null` for `ORDER / STATUS_CHANGED` logs.
+
+**Action types and how to read them:**
+
+| `type` | `action` | `entity_type` | `entity_id` points to | What `quantity` means | What `notes` contains |
+|--------|----------|--------------|----------------------|-----------------------|-----------------------|
+| `INVENTORY` | `STOCK_IN` | `inventory` | inventory row | Units added | Optional supplier note |
+| `INVENTORY` | `ADJUSTMENT` | `inventory` | inventory row | Adjustment amount (negative = removal) | Reason for adjustment |
+| `INVENTORY` | `TRANSFER_OUT` | `inventory` | warehouse inventory row | Units deducted | `"Order #15 — reserved for shop 2"` |
+| `INVENTORY` | `TRANSFER_IN` | `inventory` | shop inventory row | Units received (or restored) | `"Order #15 — received from warehouse"` or `"Order #15 — cancelled, stock returned to warehouse"` |
+| `ORDER` | `STATUS_CHANGED` | `order` | order row | `null` | `"PENDING → PROCESSING"` |
 
 ---
 

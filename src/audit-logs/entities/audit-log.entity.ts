@@ -10,4 +10,10 @@ export class AuditLog {
   amount!: number | null;
   notes!: string | null;
   created_at!: Date;
+  user_name!: string | null;
+  shop_name!: string | null;
+}
+
+export class AuditLogDetail extends AuditLog {
+  product_name!: string | null;
 }
