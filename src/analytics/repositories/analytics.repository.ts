@@ -13,6 +13,22 @@ export interface TrendRow {
   value: number;
 }
 
+export interface ProductByShopRawRow {
+  product_id: number;
+  product_name: string;
+  total_quantity: number;
+  shop_id: number;
+  shop_name: string;
+  shop_quantity: number;
+}
+
+export interface ProductByShopRow {
+  product_id: number;
+  product_name: string;
+  total_quantity: number;
+  shops: { shop_id: number; shop_name: string; quantity: number }[];
+}
+
 @Injectable()
 export class AnalyticsRepository {
   constructor(private readonly db: DatabaseService) {}

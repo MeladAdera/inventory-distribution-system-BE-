@@ -22,6 +22,7 @@
    - [Notifications](#notifications)
    - [Audit Logs](#audit-logs)
    - [Analytics](#analytics)
+   - [Receipts](#receipts)
 5. [Pagination](#5-pagination)
 6. [Response Format](#6-response-format)
 7. [Error Format](#7-error-format)
@@ -801,6 +802,109 @@ Labels format per period: `daily` → `YYYY-MM-DD`, `weekly` → `YYYY-Www`, `mo
 
 ---
 
+### Receipts
+
+A Receipt records a batch consumption event — one or more inventory items decreased together in a single atomic operation. Receipts are immutable after creation.
+
+| Method | Path | Auth | Roles | Description |
+|--------|------|------|-------|-------------|
+| POST | `/receipts` | JWT | All | Create a receipt — batch-decreases inventory atomically |
+| GET | `/receipts` | JWT | All | List receipts (admin: all shops; others: own shop only) |
+| GET | `/receipts/:id` | JWT | All | Get receipt detail with all items |
+
+**Create Receipt** `POST /receipts`
+```json
+{
+  "items": [
+    { "inventoryId": 7, "quantity": 5 },
+    { "inventoryId": 8, "quantity": 3 }
+  ],
+  "notes": "End of day stock count"
+}
+```
+
+- `inventoryId` — the inventory row ID (same ID from `GET /inventory`)
+- `quantity` — always a positive number (units consumed)
+- `notes` — optional free-text reason for the batch decrease
+- `shop_id` is taken from the authenticated user's account — not sent by the client
+- All items are applied atomically — if any would bring a quantity below zero the entire request is rejected with `400`
+
+**Response `201`:**
+```json
+{
+  "id": 1,
+  "shop_id": 2,
+  "created_by": 5,
+  "notes": "End of day stock count",
+  "created_at": "2026-06-27T10:00:00Z",
+  "total_price": 37.00,
+  "items": [
+    {
+      "id": 1,
+      "inventory_id": 7,
+      "product_id": 10,
+      "product_name": "Tuna Leo",
+      "quantity": 5,
+      "price": "6.00",
+      "quantity_before": 12,
+      "quantity_after": 7
+    },
+    {
+      "id": 2,
+      "inventory_id": 8,
+      "product_id": 11,
+      "product_name": "Sardine Leo",
+      "quantity": 3,
+      "price": "2.33",
+      "quantity_before": 4,
+      "quantity_after": 1
+    }
+  ]
+}
+```
+
+> `price` is a snapshot captured at receipt creation time — it does not change if the product price is updated later.  
+> `total_price` is the sum of `quantity × price` for every item in the receipt.
+
+**Receipt creation errors (`400`):**
+
+| Scenario | `message` |
+|----------|-----------|
+| Not enough stock | `receipt.NEGATIVE_STOCK` |
+| Same `inventoryId` appears twice in `items` | `receipt.DUPLICATE_INVENTORY_IDS` |
+
+**Query Params for** `GET /receipts`
+
+| Param | Type | Description |
+|-------|------|-------------|
+| `shopId` | number | Admin only — filter by shop |
+| `createdBy` | number | Filter by user ID |
+| `fromDate` | ISO date | Start of date range (inclusive) |
+| `toDate` | ISO date | End of date range (inclusive) |
+| `page` / `limit` | number | Pagination |
+
+**Receipt List Object (`GET /receipts`):**
+```json
+{
+  "id": 1,
+  "shop_id": 2,
+  "shop_name": "Cairo Branch",
+  "created_by": 5,
+  "created_by_name": "Sara Ali",
+  "total_items": 2,
+  "notes": "End of day stock count",
+  "created_at": "2026-06-27T10:00:00Z"
+}
+```
+
+**Receipt Detail Object (`GET /receipts/:id`):**
+
+Same shape as the `POST` response above — includes the full `items` array with `price` per item, `quantity_before`/`quantity_after` snapshots, and `total_price`.
+
+> Each receipt creation also writes one `INVENTORY / ADJUSTMENT` audit log entry per item with `notes` set to `"Receipt #<id>"`, so the audit log trail stays consistent with single-item adjustments.
+
+---
+
 ## 5. Pagination
 
 All list endpoints support pagination via query params, **except `GET /shops`** (which is never large enough to need it and returns all results directly):
@@ -945,6 +1049,7 @@ OUT_OF_STOCK   — quantity = 0
 |------|----------|
 | Dashboard | `GET /inventory?lowStock=true`, `GET /orders`, `GET /notifications` |
 | My Inventory | `GET /inventory`, `PATCH /inventory/:id` |
+| Receipts | `GET /receipts`, `POST /receipts`, `GET /receipts/:id` |
 | Place Order | `GET /products?source=WAREHOUSE`, `POST /orders` |
 | My Orders | `GET /orders`, `GET /orders/:id` |
 | Employees | `GET /users`, `POST /users/employees`, `DELETE /users/:id` |
@@ -954,6 +1059,7 @@ OUT_OF_STOCK   — quantity = 0
 | Page | Key APIs |
 |------|----------|
 | Inventory | `GET /inventory` |
+| Receipts | `GET /receipts`, `POST /receipts`, `GET /receipts/:id` |
 | Orders | `GET /orders` |
 | Notifications | `GET /notifications`, `PATCH /notifications/:id/read` |
 

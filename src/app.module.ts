@@ -22,6 +22,7 @@ import { ShopsModule } from './shops/shops.module';
 import { AuditLogsModule } from './audit-logs/audit-logs.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { AnalyticsModule } from './analytics/analytics.module';
+import { ReceiptsModule } from './receipts/receipts.module';
 
 @Module({
   imports: [
@@ -64,6 +65,7 @@ import { AnalyticsModule } from './analytics/analytics.module';
     AuditLogsModule,
     NotificationsModule,
     AnalyticsModule,
+    ReceiptsModule,
   ],
   controllers: [AppController],
   providers: [
