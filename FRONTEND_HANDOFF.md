@@ -764,12 +764,14 @@ Same fields as the list object, plus `product_name`:
 
 ### Analytics
 
-Powers the dashboard charts. Both endpoints aggregate `order_items` across **COMPLETED orders only**. `WAREHOUSE_ADMIN` sees all shops; `SHOP_OWNER` and `EMPLOYEE` are automatically scoped to their own shop.
+Powers the dashboard charts. All endpoints aggregate `order_items` across **COMPLETED orders only**, filtered by `updated_at` (when the order reached COMPLETED status). `WAREHOUSE_ADMIN` sees all shops; `SHOP_OWNER` and `EMPLOYEE` are automatically scoped to their own shop.
 
 | Method | Path | Auth | Roles | Description |
 |--------|------|------|-------|-------------|
 | GET | `/analytics/top-products` | JWT | All | Top N products by total units consumed |
 | GET | `/analytics/consumption-trend` | JWT | All | Units consumed over time (daily / weekly / monthly) |
+| GET | `/analytics/products-by-shop` | JWT | `WAREHOUSE_ADMIN` | Top N products with per-shop consumption breakdown |
+| GET | `/analytics/shop-consumption` | JWT | All | Per-product consumption for a shop, sourced from receipts |
 
 **Top Products** `GET /analytics/top-products`
 
@@ -799,6 +801,110 @@ Powers the dashboard charts. Both endpoints aggregate `order_items` across **COM
 ```
 
 Labels format per period: `daily` → `YYYY-MM-DD`, `weekly` → `YYYY-Www`, `monthly` → `YYYY-MM`. Array is sorted ascending — feed directly to your chart library. Days/weeks/months with zero consumption are omitted (no zero-padding).
+
+**Shop Consumption** `GET /analytics/shop-consumption`
+
+| Param | Type | Default | Description |
+|-------|------|---------|-------------|
+| `period` | string | `daily` | `daily` (last 14 days) · `weekly` (last 8 weeks) · `monthly` (last 6 months) |
+| `shopId` | number | — | **Required for `WAREHOUSE_ADMIN`** — which shop to inspect. Ignored for `SHOP_OWNER` / `EMPLOYEE` (auto-scoped to their own shop from the JWT) |
+| `page` | number | `1` | Page number |
+| `limit` | number | `10` | Products per page — use this to control how many bars the chart renders at once |
+
+**Response:**
+```json
+{
+  "data": [
+    { "product_id": 3, "product_name": "gl-t-shirt",   "quantity": 631 },
+    { "product_id": 4, "product_name": "Monitor Stand", "quantity": 22  },
+    { "product_id": 2, "product_name": "Water",         "quantity": 14  }
+  ],
+  "page": 1,
+  "limit": 10,
+  "total": 8,
+  "totalPages": 1,
+  "hasNext": false,
+  "hasPrev": false
+}
+```
+
+> Sorted by `quantity` descending — most consumed product first. The sort order is consistent across pages.  
+> Products with zero consumption in the selected period are excluded entirely.  
+> If `shopId` does not exist, the response returns an empty `data` array (not a `404`).  
+> **Data source:** `receipt_items` — counts actual inventory decreases created by shop staff, not warehouse orders. This reflects what the shop *used*, not what it *received*.  
+> **Chart usage:** set `limit` to however many bars fit on screen (e.g. `10`), then use `hasNext` / `hasPrev` to render prev/next navigation buttons. `total` and `totalPages` let you show "Page 1 of 3 (8 products)" labels.
+
+**Error (`400`)** — returned only when `WAREHOUSE_ADMIN` omits `shopId`:
+```json
+{ "message": "shopId is required for WAREHOUSE_ADMIN" }
+```
+
+---
+
+**Products by Shop** `GET /analytics/products-by-shop`
+
+| Param | Type | Default | Description |
+|-------|------|---------|-------------|
+| `period` | string | `daily` | `daily` (last 14 days) · `weekly` (last 8 weeks) · `monthly` (last 6 months) |
+| `limit` | number | `10` | Max products to return, sorted by total consumption descending (max 50) |
+| `shopId` | number | — | Filter to a single shop. Omit to see all shops grouped together |
+
+**Response — no `shopId` (all shops grouped):**
+```json
+[
+  {
+    "product_id": 5,
+    "product_name": "Water Bottle 500ml",
+    "total_quantity": 3620,
+    "shops": [
+      { "shop_id": 2, "shop_name": "Cairo Branch", "quantity": 2100 },
+      { "shop_id": 3, "shop_name": "Alex Branch",  "quantity": 1220 },
+      { "shop_id": 4, "shop_name": "Giza Branch",  "quantity": 300  }
+    ]
+  },
+  {
+    "product_id": 9,
+    "product_name": "Chocolate Bar 100g",
+    "total_quantity": 750,
+    "shops": [
+      { "shop_id": 2, "shop_name": "Cairo Branch", "quantity": 750 }
+    ]
+  }
+]
+```
+
+**Response — with `shopId` (single shop):**
+
+Same structure, but `total_quantity` reflects only that shop's consumption and `shops` contains only the one requested shop:
+```json
+[
+  {
+    "product_id": 5,
+    "product_name": "Water Bottle 500ml",
+    "total_quantity": 2100,
+    "shops": [
+      { "shop_id": 2, "shop_name": "Cairo Branch", "quantity": 2100 }
+    ]
+  }
+]
+```
+
+**Field definitions:**
+
+| Field | Description |
+|-------|-------------|
+| `product_id` | Product ID |
+| `product_name` | Product name |
+| `total_quantity` | Sum of quantities across all included shops within the period |
+| `shops` | Shops that consumed this product — only shops with `quantity > 0` |
+| `shops[].shop_id` | Shop ID |
+| `shops[].shop_name` | Shop name |
+| `shops[].quantity` | Units consumed by this shop within the period |
+
+> Products are sorted by `total_quantity` descending (highest first). Within each product, `shops` is sorted by `quantity` descending.  
+> Products with zero consumption in the selected period are excluded entirely.  
+> If `shopId` does not exist, the response is an empty array (not a `404`).  
+> The response is not paginated — it is capped by `limit`.
 
 ---
 
@@ -1036,7 +1142,7 @@ OUT_OF_STOCK   — quantity = 0
 ### Warehouse Admin Views
 | Page | Key APIs |
 |------|----------|
-| Dashboard | `GET /inventory?lowStock=true`, `GET /orders?status=PENDING`, `GET /notifications` |
+| Dashboard | `GET /inventory?lowStock=true`, `GET /orders?status=PENDING`, `GET /notifications`, `GET /analytics/products-by-shop` |
 | Shops Management | `GET /shops`, `POST /users/shop-owners`, `PATCH /shops/:id/status` |
 | Warehouse Inventory | `GET /inventory`, `POST /inventory/stock-in`, `PATCH /inventory/:id` |
 | Incoming Orders | `GET /orders`, `PATCH /orders/:id/status` |
@@ -1047,7 +1153,7 @@ OUT_OF_STOCK   — quantity = 0
 ### Shop Owner Views
 | Page | Key APIs |
 |------|----------|
-| Dashboard | `GET /inventory?lowStock=true`, `GET /orders`, `GET /notifications` |
+| Dashboard | `GET /inventory?lowStock=true`, `GET /orders`, `GET /notifications`, `GET /analytics/shop-consumption` |
 | My Inventory | `GET /inventory`, `PATCH /inventory/:id` |
 | Receipts | `GET /receipts`, `POST /receipts`, `GET /receipts/:id` |
 | Place Order | `GET /products?source=WAREHOUSE`, `POST /orders` |
@@ -1062,6 +1168,7 @@ OUT_OF_STOCK   — quantity = 0
 | Receipts | `GET /receipts`, `POST /receipts`, `GET /receipts/:id` |
 | Orders | `GET /orders` |
 | Notifications | `GET /notifications`, `PATCH /notifications/:id/read` |
+| Consumption Chart | `GET /analytics/shop-consumption` |
 
 ---
 

@@ -1,7 +1,7 @@
 import { Controller, Get, Query, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { AnalyticsService } from '../services/analytics.service';
-import { TopProductsQueryDto, ConsumptionTrendQueryDto, TrendPeriod } from '../dto/analytics-query.dto';
+import { TopProductsQueryDto, ConsumptionTrendQueryDto, ProductsByShopQueryDto, ShopConsumptionQueryDto, TrendPeriod } from '../dto/analytics-query.dto';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../auth/guards/roles.guard';
 import { Roles } from '../../auth/decorators/roles.decorator';
@@ -38,5 +38,36 @@ export class AnalyticsController {
     @CurrentUser() user: RequestUser,
   ) {
     return this.analyticsService.getConsumptionTrend(query.period ?? TrendPeriod.DAILY, user);
+  }
+
+  @Get('shop-consumption')
+  @Roles(UserRole.WAREHOUSE_ADMIN, UserRole.SHOP_OWNER, UserRole.EMPLOYEE)
+  @ApiOperation({
+    summary: 'Per-product consumption for a shop from receipts. Admin: requires ?shopId. Shop owner/employee: auto-scoped to own shop.',
+  })
+  getShopConsumption(
+    @Query() query: ShopConsumptionQueryDto,
+    @CurrentUser() user: RequestUser,
+  ) {
+    return this.analyticsService.getShopConsumption(
+      query.period ?? TrendPeriod.DAILY,
+      query.shopId,
+      user,
+      query.page,
+      query.limit,
+    );
+  }
+
+  @Get('products-by-shop')
+  @Roles(UserRole.WAREHOUSE_ADMIN)
+  @ApiOperation({
+    summary: 'Top products by consumption broken down per shop. WAREHOUSE_ADMIN only. ?period=daily|weekly|monthly &limit=10 &shopId=2',
+  })
+  getProductsByShop(@Query() query: ProductsByShopQueryDto) {
+    return this.analyticsService.getProductsByShop(
+      query.period ?? TrendPeriod.DAILY,
+      query.limit ?? 10,
+      query.shopId,
+    );
   }
 }

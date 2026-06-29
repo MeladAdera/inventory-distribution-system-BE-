@@ -1,5 +1,6 @@
-import { Injectable } from '@nestjs/common';
-import { AnalyticsRepository, TopProductRow, TrendRow } from '../repositories/analytics.repository';
+import { Injectable, BadRequestException } from '@nestjs/common';
+import { AnalyticsRepository, TopProductRow, TrendRow, ProductByShopRow, ProductByShopRawRow, ShopConsumptionRow } from '../repositories/analytics.repository';
+import { paginate, PaginatedResponse } from '../../common/utils/pagination.util';
 import { TrendPeriod } from '../dto/analytics-query.dto';
 import { RequestUser } from '../../common/interfaces/request-user.interface';
 import { UserRole } from '../../common/enums/user-role.enum';
@@ -20,5 +21,66 @@ export class AnalyticsService {
       ? undefined
       : (user.shopId ?? undefined);
     return this.analyticsRepository.getConsumptionTrend(period, shopId);
+  }
+
+  async getShopConsumption(
+    period: TrendPeriod,
+    shopId: number | undefined,
+    user: RequestUser,
+    page: number,
+    limit: number,
+  ): Promise<PaginatedResponse<ShopConsumptionRow>> {
+    const offset = (page - 1) * limit;
+
+    let resolvedShopId: number;
+
+    if (user.role === UserRole.WAREHOUSE_ADMIN) {
+      if (shopId === undefined) {
+        throw new BadRequestException('shopId is required for WAREHOUSE_ADMIN');
+      }
+      resolvedShopId = shopId;
+    } else {
+      if (user.shopId === null) {
+        throw new BadRequestException('User has no associated shop');
+      }
+      resolvedShopId = user.shopId;
+    }
+
+    const { data, total } = await this.analyticsRepository.getShopConsumption(
+      period,
+      resolvedShopId,
+      limit,
+      offset,
+    );
+
+    return paginate(data, page, limit, total);
+  }
+
+  async getProductsByShop(
+    period: TrendPeriod,
+    limit: number,
+    shopId?: number,
+  ): Promise<ProductByShopRow[]> {
+    const rows: ProductByShopRawRow[] = await this.analyticsRepository.getProductsByShop(period, limit, shopId);
+
+    const map = new Map<number, ProductByShopRow>();
+
+    for (const row of rows) {
+      if (!map.has(row.product_id)) {
+        map.set(row.product_id, {
+          product_id: row.product_id,
+          product_name: row.product_name,
+          total_quantity: row.total_quantity,
+          shops: [],
+        });
+      }
+      map.get(row.product_id)!.shops.push({
+        shop_id: row.shop_id,
+        shop_name: row.shop_name,
+        quantity: row.shop_quantity,
+      });
+    }
+
+    return Array.from(map.values());
   }
 }
