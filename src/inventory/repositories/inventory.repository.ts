@@ -63,6 +63,11 @@ export class InventoryRepository {
       params.push(query.productId);
     }
 
+    if (query.shop_id) {
+      conditions.push(`i.shop_id = $${idx++}`);
+      params.push(query.shop_id);
+    }
+
     params.push(query.limit, query.offset);
     const limitIdx = idx++;
     const offsetIdx = idx++;

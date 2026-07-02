@@ -29,7 +29,7 @@ export class InventoryController {
   constructor(private readonly inventoryService: InventoryService) {}
 
   @Get()
-  @ApiOperation({ summary: 'List inventory — admin sees all shops, others see own shop. Filters: ?lowStock=true, ?productId=' })
+  @ApiOperation({ summary: 'List inventory — admin sees all shops, others see own shop. Filters: ?lowStock=true, ?productId=, ?shop_id= (WAREHOUSE_ADMIN only)' })
   findAll(
     @CurrentUser() user: RequestUser,
     @Query() query: InventoryQueryDto,
@@ -51,9 +51,8 @@ export class InventoryController {
   ) {
     return this.inventoryService.findById(id, user);
   }
-
   @Post('stock-in')
-  @Roles(UserRole.WAREHOUSE_ADMIN, UserRole.SHOP_OWNER)
+  @Roles(UserRole.WAREHOUSE_ADMIN, UserRole.SHOP_OWNER, UserRole.EMPLOYEE)
   @ApiOperation({ summary: 'Receive stock — creates inventory record if it does not exist, then increases quantity' })
   stockIn(
     @Body() dto: StockInDto,
