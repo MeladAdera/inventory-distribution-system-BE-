@@ -190,6 +190,7 @@ Request → 401?
 | GET | `/users/:id` | JWT | `WAREHOUSE_ADMIN`, `SHOP_OWNER` | Get a single user |
 | PATCH | `/users/:id` | JWT | `WAREHOUSE_ADMIN`, `SHOP_OWNER` | Update name/email |
 | DELETE | `/users/:id` | JWT | `WAREHOUSE_ADMIN`, `SHOP_OWNER` | Soft-deactivate a user |
+| PATCH | `/users/:id/activate` | JWT | `WAREHOUSE_ADMIN`, `SHOP_OWNER` | Reactivate a deactivated user |
 
 **Create Shop Owner** `POST /users/shop-owners`
 ```json
@@ -236,6 +237,14 @@ Request → 401?
   "updated_at": "2025-01-01T00:00:00Z"
 }
 ```
+
+**Reactivate a User** `PATCH /users/:id/activate`
+
+No body required. Sets `is_active` back to `true` for a previously deactivated user. `SHOP_OWNER` can only reactivate employees in their own shop — targeting anyone else returns `403`. Calling it on an already-active user is a no-op (still `200`).
+
+**Response `200`:** the updated `SafeUser` (same shape as above) with `is_active: true`.
+
+> Pair this with the `DELETE /users/:id` button in any user list/detail UI — show "Deactivate" for active users and "Activate" for inactive ones.
 
 ---
 
@@ -1147,7 +1156,7 @@ OUT_OF_STOCK   — quantity = 0
 | Warehouse Inventory | `GET /inventory`, `POST /inventory/stock-in`, `PATCH /inventory/:id` |
 | Incoming Orders | `GET /orders`, `PATCH /orders/:id/status` |
 | Products & Categories | `GET /products`, `GET /categories`, CRUD endpoints |
-| Users Management | `GET /users`, `PATCH /users/:id`, `DELETE /users/:id` |
+| Users Management | `GET /users`, `PATCH /users/:id`, `DELETE /users/:id`, `PATCH /users/:id/activate` |
 | Audit Logs | `GET /audit-logs` |
 
 ### Shop Owner Views
@@ -1158,7 +1167,7 @@ OUT_OF_STOCK   — quantity = 0
 | Receipts | `GET /receipts`, `POST /receipts`, `GET /receipts/:id` |
 | Place Order | `GET /products?source=WAREHOUSE`, `POST /orders` |
 | My Orders | `GET /orders`, `GET /orders/:id` |
-| Employees | `GET /users`, `POST /users/employees`, `DELETE /users/:id` |
+| Employees | `GET /users`, `POST /users/employees`, `DELETE /users/:id`, `PATCH /users/:id/activate` |
 | My Shop | `GET /shops/:id`, `PATCH /shops/:id` |
 
 ### Employee Views

@@ -103,4 +103,18 @@ export class UsersController {
   ) {
     return this.usersService.deactivateUser(id, user);
   }
+
+  // ── Activate ───────────────────────────────────────────────────────────────
+
+  @Patch(':id/activate')
+  @Roles(UserRole.WAREHOUSE_ADMIN, UserRole.SHOP_OWNER)
+  @ApiOperation({
+    summary: 'Reactivate a previously deactivated user — WAREHOUSE_ADMIN any user, SHOP_OWNER own employees only',
+  })
+  activateUser(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentUser() user: RequestUser,
+  ) {
+    return this.usersService.activateUser(id, user);
+  }
 }

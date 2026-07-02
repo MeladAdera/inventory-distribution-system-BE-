@@ -201,6 +201,25 @@ Expected: `200` with `SafeUser` where `is_active: false`. The user still exists 
 
 ---
 
+## Step 13b — Reactivate a user
+
+```bash
+curl -X PATCH http://localhost:3000/users/$EMP_ID/activate \
+  -H "Authorization: Bearer $ADMIN_TOKEN"
+```
+
+Expected: `200` with `SafeUser` where `is_active: true`.
+
+```bash
+# Calling it again on an already-active user is a no-op, not an error
+curl -X PATCH http://localhost:3000/users/$EMP_ID/activate \
+  -H "Authorization: Bearer $ADMIN_TOKEN"
+```
+
+Expected: `200`, still `is_active: true`.
+
+---
+
 ## Step 14 — Guard: cannot deactivate yourself
 
 ```bash

@@ -7,5 +7,6 @@
   "SHOP_OWNER_UPDATE_RESTRICTED": "يمكن لمالك المتجر تعديل موظفيه فقط",
   "NO_FIELDS_TO_UPDATE": "لم يتم تقديم أي حقول للتحديث",
   "CANNOT_DEACTIVATE_WAREHOUSE_ADMIN": "لا يمكن تعطيل حساب مدير المستودع",
-  "SHOP_OWNER_DEACTIVATE_RESTRICTED": "يمكن لمالك المتجر تعطيل موظفيه فقط"
+  "SHOP_OWNER_DEACTIVATE_RESTRICTED": "يمكن لمالك المتجر تعطيل موظفيه فقط",
+  "SHOP_OWNER_ACTIVATE_RESTRICTED": "يمكن لمالك المتجر تفعيل موظفيه فقط"
 }

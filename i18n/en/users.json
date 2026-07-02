@@ -7,5 +7,6 @@
   "SHOP_OWNER_UPDATE_RESTRICTED": "Shop owners can only update their own employees",
   "NO_FIELDS_TO_UPDATE": "No fields provided to update",
   "CANNOT_DEACTIVATE_WAREHOUSE_ADMIN": "The warehouse admin account cannot be deactivated",
-  "SHOP_OWNER_DEACTIVATE_RESTRICTED": "Shop owners can only deactivate their own employees"
+  "SHOP_OWNER_DEACTIVATE_RESTRICTED": "Shop owners can only deactivate their own employees",
+  "SHOP_OWNER_ACTIVATE_RESTRICTED": "Shop owners can only activate their own employees"
 }

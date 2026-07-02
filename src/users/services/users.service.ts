@@ -150,4 +150,23 @@ export class UsersService {
     if (!deactivated) throw new NotFoundException('users.NOT_FOUND');
     return deactivated;
   }
+
+  // ── Activate ────────────────────────────────────────────────────────────────
+
+  async activateUser(id: number, requestUser: RequestUser): Promise<SafeUser> {
+    // Resolve target (also enforces shop scope for SHOP_OWNER)
+    const target = await this.findById(id, requestUser);
+
+    // SHOP_OWNER can only activate employees in their own shop
+    if (
+      requestUser.role === UserRole.SHOP_OWNER &&
+      target.role !== UserRole.EMPLOYEE
+    ) {
+      throw new ForbiddenException('users.SHOP_OWNER_ACTIVATE_RESTRICTED');
+    }
+
+    const activated = await this.usersRepo.activate(id);
+    if (!activated) throw new NotFoundException('users.NOT_FOUND');
+    return activated;
+  }
 }

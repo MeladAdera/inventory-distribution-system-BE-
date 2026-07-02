@@ -119,6 +119,8 @@ Use this table to know exactly what message to expect for each scenario.
 | Trying to deactivate self | `You cannot deactivate your own account` | `لا يمكنك تعطيل حسابك الخاص` |
 | No update fields sent | `No fields provided to update` | `لم يتم تقديم أي حقول للتحديث` |
 | Shop owner updating non-employee | `Shop owners can only update their own employees` | `يمكن لمالك المتجر تعديل موظفيه فقط` |
+| Shop owner deactivating non-employee | `Shop owners can only deactivate their own employees` | `يمكن لمالك المتجر تعطيل موظفيه فقط` |
+| Shop owner activating non-employee | `Shop owners can only activate their own employees` | `يمكن لمالك المتجر تفعيل موظفيه فقط` |
 
 ### Shops
 

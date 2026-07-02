@@ -16,6 +16,7 @@ User management for the entire system. The `WAREHOUSE_ADMIN` provisions shop own
 - Deactivation is a soft delete — `is_active` is set to `FALSE`. The account remains in the database and can be seen in audit logs.
 - The `WAREHOUSE_ADMIN` account cannot be deactivated by anyone.
 - A user cannot deactivate their own account.
+- A deactivated user can be reactivated — `is_active` is set back to `TRUE`. Reactivating an already-active user is a no-op (still returns `200`).
 
 ---
 
@@ -29,6 +30,7 @@ User management for the entire system. The `WAREHOUSE_ADMIN` provisions shop own
 | `GET /users/:id` | Any user | Own shop only | 403 |
 | `PATCH /users/:id` | Any user | Own employees only | 403 |
 | `DELETE /users/:id` | Any non-admin user | Own employees only | 403 |
+| `PATCH /users/:id/activate` | Any user | Own employees only | 403 |
 
 ---
 
@@ -139,6 +141,22 @@ Soft-deletes a user by setting `is_active = FALSE`.
 
 ---
 
+### `PATCH /users/:id/activate`
+**Role:** `WAREHOUSE_ADMIN`, `SHOP_OWNER`
+
+Reactivates a previously deactivated user by setting `is_active = TRUE`. No body required.
+
+**Guards:**
+- `SHOP_OWNER` can only activate their own employees (`403` otherwise)
+
+**Returns:** The activated `SafeUser` with `is_active: true`.
+
+**Errors:**
+- `404` — user not found (or out of scope)
+- `403` — SHOP_OWNER targeting a non-employee
+
+---
+
 ## SafeUser Shape
 
 Every users endpoint returns this shape (no `password_hash`):
@@ -180,6 +198,7 @@ Translation files: `i18n/en/users.json`, `i18n/ar/users.json`
 | `users.CANNOT_DEACTIVATE_WAREHOUSE_ADMIN` | 403 | Anyone tries to deactivate the warehouse admin |
 | `users.SHOP_OWNER_UPDATE_RESTRICTED` | 403 | `SHOP_OWNER` tries to update a non-employee |
 | `users.SHOP_OWNER_DEACTIVATE_RESTRICTED` | 403 | `SHOP_OWNER` tries to deactivate a non-employee |
+| `users.SHOP_OWNER_ACTIVATE_RESTRICTED` | 403 | `SHOP_OWNER` tries to activate a non-employee |
 | `users.NO_FIELDS_TO_UPDATE` | 400 | `PATCH` body resolves to no updatable fields |
 
 > See `docs/features/10-i18n-localization.md` for how keys are detected and translated.

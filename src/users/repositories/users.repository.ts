@@ -166,4 +166,15 @@ export class UsersRepository {
     );
     return rows[0] ?? null;
   }
+
+  async activate(id: number): Promise<SafeUser | null> {
+    const rows = await this.db.query<SafeUser>(
+      `UPDATE users
+       SET is_active = TRUE, updated_at = NOW()
+       WHERE id = $1
+       RETURNING id, shop_id, name, email, role, is_active, created_at, updated_at`,
+      [id],
+    );
+    return rows[0] ?? null;
+  }
 }
