@@ -187,6 +187,57 @@ Use this table to know exactly what message to expect for each scenario.
 
 ---
 
+## Notifications — Localized at Read Time
+
+Notification `title` and `message` are also translated based on `Accept-Language`. This works differently from error messages — notifications are stored as **i18n keys + args** in the database, then translated when `GET /notifications` is called.
+
+### How it works
+
+```
+DB stores:  title = "notifications.ORDER_CREATED_TITLE"
+            args  = { "orderId": 28 }
+
+GET /notifications (Accept-Language: en) → title = "New Order #28"
+GET /notifications (Accept-Language: ar) → title = "طلب جديد #28"
+```
+
+The same row in the DB renders differently per request — no duplicate storage.
+
+### What the response looks like
+
+```json
+{
+  "id": 129,
+  "title": "طلب جديد #28",
+  "message": "تم تقديم الطلب #28 وهو في انتظار المراجعة.",
+  "type": "ORDER_CREATED",
+  "args": { "orderId": 28 },
+  "is_read": false,
+  "created_at": "2026-06-29T17:25:12.336Z"
+}
+```
+
+> `title` and `message` are ready to display — no client-side translation needed.  
+> `args` exposes the raw interpolation values in case the UI needs them for custom rendering.
+
+### Notification message reference
+
+| `type` | `args` keys | EN title | AR title |
+|--------|------------|----------|----------|
+| `ORDER_CREATED` | `orderId` | `New Order #28` | `طلب جديد #28` |
+| `ORDER_STATUS` | `orderId`, `status` | `Order #28 Updated` | `تحديث الطلب #28` |
+| `LOW_STOCK` | `productName` | `Low Stock: Widget` | `مخزون منخفض: Widget` |
+
+### Important constraint
+
+`?lang=ar` does **not** work for `GET /notifications` — it is rejected by the DTO validator (`forbidNonWhitelisted: true`). Always use the `Accept-Language: ar` header.
+
+### Legacy notifications
+
+Notifications created before this upgrade have `args: null`. Their `title` and `message` are plain English strings stored verbatim — they are returned as-is regardless of language, since there is no key to translate.
+
+---
+
 ## Testing Without Code Changes
 
 You can test both languages right now using the `?lang=` param in Postman or a browser:

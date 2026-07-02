@@ -1,0 +1,9 @@
+{
+  "NOT_FOUND": "الإشعار غير موجود",
+  "ORDER_CREATED_TITLE": "طلب جديد #{orderId}",
+  "ORDER_CREATED_MESSAGE": "تم تقديم الطلب #{orderId} وهو في انتظار المراجعة.",
+  "ORDER_STATUS_TITLE": "تحديث الطلب #{orderId}",
+  "ORDER_STATUS_MESSAGE": "الطلب #{orderId} أصبح الآن {status}.",
+  "LOW_STOCK_TITLE": "مخزون منخفض: {productName}",
+  "LOW_STOCK_MESSAGE": "المنتج \"{productName}\" أقل من الحد الأدنى للمخزون."
+}

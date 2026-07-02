@@ -5,6 +5,7 @@ export class Notification {
   title!: string;
   message!: string | null;
   type!: string | null;
+  args!: Record<string, unknown> | null;
   is_read!: boolean;
   created_at!: Date;
 }

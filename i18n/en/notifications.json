@@ -1,0 +1,9 @@
+{
+  "NOT_FOUND": "Notification not found",
+  "ORDER_CREATED_TITLE": "New Order #{orderId}",
+  "ORDER_CREATED_MESSAGE": "Order #{orderId} has been submitted and is waiting for review.",
+  "ORDER_STATUS_TITLE": "Order #{orderId} Updated",
+  "ORDER_STATUS_MESSAGE": "Order #{orderId} is now {status}.",
+  "LOW_STOCK_TITLE": "Low Stock: {productName}",
+  "LOW_STOCK_MESSAGE": "Product \"{productName}\" is below the minimum stock level."
+}

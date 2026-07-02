@@ -9,6 +9,7 @@ export interface CreateNotificationData {
   title: string;
   message?: string;
   type?: string;
+  args?: Record<string, unknown> | null;
 }
 
 interface PaginatedNotifications {
@@ -22,10 +23,17 @@ export class NotificationsRepository {
 
   async insert(data: CreateNotificationData): Promise<Notification> {
     const rows = await this.db.query<Notification>(
-      `INSERT INTO notifications (shop_id, user_id, title, message, type)
-       VALUES ($1, $2, $3, $4, $5)
+      `INSERT INTO notifications (shop_id, user_id, title, message, type, args)
+       VALUES ($1, $2, $3, $4, $5, $6)
        RETURNING *`,
-      [data.shop_id, data.user_id ?? null, data.title, data.message ?? null, data.type ?? null],
+      [
+        data.shop_id,
+        data.user_id ?? null,
+        data.title,
+        data.message ?? null,
+        data.type ?? null,
+        data.args ? JSON.stringify(data.args) : null,
+      ],
     );
     return rows[0];
   }
@@ -77,13 +85,16 @@ export class NotificationsRepository {
     );
   }
 
-  async hasUnreadLowStock(shopId: number, title: string): Promise<boolean> {
+  async hasUnreadLowStock(shopId: number, productName: string): Promise<boolean> {
     const row = await this.db.queryOne<{ exists: boolean }>(
       `SELECT EXISTS (
          SELECT 1 FROM notifications
-         WHERE shop_id = $1 AND type = 'LOW_STOCK' AND title = $2 AND is_read = FALSE
+         WHERE shop_id = $1
+           AND type = 'LOW_STOCK'
+           AND args->>'productName' = $2
+           AND is_read = FALSE
        ) AS exists`,
-      [shopId, title],
+      [shopId, productName],
     );
     return row?.exists ?? false;
   }
