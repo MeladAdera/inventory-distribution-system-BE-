@@ -1,0 +1,4 @@
+{
+  "NOT_FOUND": "Audit log not found",
+  "ACCESS_DENIED": "You do not have access to this audit log"
+}

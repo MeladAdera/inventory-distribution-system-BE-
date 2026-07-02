@@ -178,6 +178,13 @@ Use this table to know exactly what message to expect for each scenario.
 
 > Note: product names, status values, and quantities in messages are dynamic and reflect the actual request.
 
+### Audit Logs
+
+| Scenario | EN | AR |
+|---|---|---|
+| Audit log not found | `Audit log not found` | `سجل المراجعة غير موجود` |
+| Accessing another shop's log | `You do not have access to this audit log` | `ليس لديك صلاحية الوصول إلى هذا السجل` |
+
 ---
 
 ## Testing Without Code Changes

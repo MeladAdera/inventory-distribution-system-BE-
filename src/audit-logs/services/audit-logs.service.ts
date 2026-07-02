@@ -23,10 +23,10 @@ export class AuditLogsService {
 
   async findById(id: number, user: RequestUser): Promise<AuditLogDetail> {
     const log = await this.auditLogsRepo.findById(id);
-    if (!log) throw new NotFoundException('Audit log not found');
+    if (!log) throw new NotFoundException('audit-logs.NOT_FOUND');
 
     if (user.role !== UserRole.WAREHOUSE_ADMIN && log.shop_id !== user.shopId) {
-      throw new ForbiddenException('You do not have access to this audit log');
+      throw new ForbiddenException('audit-logs.ACCESS_DENIED');
     }
 
     return log;
