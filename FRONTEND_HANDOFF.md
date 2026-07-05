@@ -314,9 +314,13 @@ No body required. Sets `is_active` back to `true` for a previously deactivated u
   "description": "Core i7 laptop",
   "barcode": "1234567890",
   "price": 1200.00,
+  "cost_price": 850.00,
   "category_id": 3
 }
 ```
+
+> `price` — **selling price** (what the product is sold for). Required, must be > 0.  
+> `cost_price` — **buying price** (what it cost to acquire). Optional, must be ≥ 0, defaults to `0`. Used for profit analytics (see [Analytics](#analytics)). Also updatable via `PATCH /products/:id`.
 
 **Query Params for** `GET /products`
 
@@ -379,6 +383,7 @@ No body required. Sets `image_url` back to `null`.
   "description": "Core i7 laptop",
   "barcode": "1234567890",
   "price": "1200.00",
+  "cost_price": "850.00",
   "source": "WAREHOUSE",
   "is_global": true,
   "image_url": "/uploads/products/uuid.jpg",
@@ -401,6 +406,7 @@ Same fields as above, plus `current_quantity` from the inventory table:
   "description": "Core i7 laptop",
   "barcode": "1234567890",
   "price": "1200.00",
+  "cost_price": "850.00",
   "source": "WAREHOUSE",
   "is_global": true,
   "image_url": "/uploads/products/uuid.jpg",
@@ -414,7 +420,8 @@ Same fields as above, plus `current_quantity` from the inventory table:
 > `source: "WAREHOUSE"` — product defined at the warehouse level.  
 > `source: "LOCAL"` — product defined by a shop.  
 > `current_quantity` — returns `0` if no inventory record exists yet for this product.  
-> `image_url` — `null` until an image is uploaded.
+> `image_url` — `null` until an image is uploaded.  
+> `cost_price` — **visibility rule:** `WAREHOUSE_ADMIN` always sees it; `SHOP_OWNER` / `EMPLOYEE` see it only on their own shop's products. On warehouse products it comes back as `null` for shop users (the warehouse's margin is not exposed). Render the field only when it is non-null.
 
 ---
 
@@ -792,7 +799,7 @@ Same fields as the list object, plus `product_name`:
 
 ### Analytics
 
-Powers the dashboard charts. All endpoints aggregate `order_items` across **COMPLETED orders only**, filtered by `updated_at` (when the order reached COMPLETED status). `WAREHOUSE_ADMIN` sees all shops; `SHOP_OWNER` and `EMPLOYEE` are automatically scoped to their own shop.
+Powers the dashboard charts. Order-based endpoints aggregate `order_items` across **COMPLETED orders only**, filtered by `updated_at` (when the order reached COMPLETED status); receipt-based endpoints (`shop-consumption`, and the profit endpoints when scoped to a shop) aggregate `receipt_items` by `created_at`. `WAREHOUSE_ADMIN` sees all shops; `SHOP_OWNER` and `EMPLOYEE` are automatically scoped to their own shop.
 
 | Method | Path | Auth | Roles | Description |
 |--------|------|------|-------|-------------|
@@ -800,6 +807,8 @@ Powers the dashboard charts. All endpoints aggregate `order_items` across **COMP
 | GET | `/analytics/consumption-trend` | JWT | All | Units consumed over time (daily / weekly / monthly) |
 | GET | `/analytics/products-by-shop` | JWT | `WAREHOUSE_ADMIN` | Top N products with per-shop consumption breakdown |
 | GET | `/analytics/shop-consumption` | JWT | All | Per-product consumption for a shop, sourced from receipts |
+| GET | `/analytics/profit-summary` | JWT | `WAREHOUSE_ADMIN`, `SHOP_OWNER` | Revenue, cost and profit totals for the period |
+| GET | `/analytics/profit-trend` | JWT | `WAREHOUSE_ADMIN`, `SHOP_OWNER` | Revenue / cost / profit per time bucket |
 
 **Top Products** `GET /analytics/top-products`
 
@@ -933,6 +942,60 @@ Same structure, but `total_quantity` reflects only that shop's consumption and `
 > Products with zero consumption in the selected period are excluded entirely.  
 > If `shopId` does not exist, the response is an empty array (not a `404`).  
 > The response is not paginated — it is capped by `limit`.
+
+---
+
+**Profit Summary** `GET /analytics/profit-summary`
+
+Profit is computed from **price snapshots taken at transaction time** (`price` and `cost_price` stored on each order/receipt item), so changing a product's prices later never rewrites historical profit.
+
+| Param | Type | Default | Description |
+|-------|------|---------|-------------|
+| `period` | string | `daily` | `daily` (last 14 days) · `weekly` (last 8 weeks) · `monthly` (last 6 months) |
+| `shopId` | number | — | `WAREHOUSE_ADMIN` only — view a specific shop's **sales** profit instead of warehouse profit. Ignored for `SHOP_OWNER` (auto-scoped to their own shop from the JWT) |
+
+**Scoping — who sees which profit:**
+
+| Caller | Data source | Meaning |
+|--------|-------------|---------|
+| `WAREHOUSE_ADMIN` (no `shopId`) | `order_items` of **COMPLETED orders** | Warehouse profit: what shops paid minus warehouse cost |
+| `WAREHOUSE_ADMIN` + `?shopId=` | `receipt_items` of that shop | That shop's sales profit: customer sales minus cost |
+| `SHOP_OWNER` | `receipt_items` of own shop | Own shop's sales profit |
+| `EMPLOYEE` | — | `403` — profit data is owner-level information |
+
+**Response:**
+```json
+{
+  "revenue": 20352.27,
+  "cost": 13143.75,
+  "profit": 7208.52
+}
+```
+
+| Field | Description |
+|-------|-------------|
+| `revenue` | Σ `quantity × price` (selling price snapshot) |
+| `cost` | Σ `quantity × cost_price` (buying price snapshot) |
+| `profit` | `revenue − cost` |
+
+> All three are plain numbers (float), ready for display — no string parsing needed.  
+> Transactions recorded **before the cost-price feature existed** have `cost_price = 0`, so their profit equals full revenue. Expect inflated profit on old data until new transactions accumulate.  
+> An empty period returns zeros (`{ "revenue": 0, "cost": 0, "profit": 0 }`), never a `404`.
+
+**Profit Trend** `GET /analytics/profit-trend`
+
+Same params, scoping and field meanings as `profit-summary`, but bucketed over time for charts:
+
+```json
+[
+  { "label": "2026-W21", "revenue": 1296.60, "cost": 835.00,  "profit": 461.60  },
+  { "label": "2026-W25", "revenue": 2466.60, "cost": 1575.50, "profit": 891.10  },
+  { "label": "2026-W26", "revenue": 6536.87, "cost": 4277.75, "profit": 2259.12 }
+]
+```
+
+> Label formats and sorting match `consumption-trend`: `daily` → `YYYY-MM-DD`, `weekly` → `YYYY-Www`, `monthly` → `YYYY-MM`, ascending, zero buckets omitted (no zero-padding).  
+> **Chart usage:** render `revenue` and `profit` as two series (line or grouped bar); `cost` is derivable as the gap between them.
 
 ---
 
@@ -1171,6 +1234,7 @@ OUT_OF_STOCK   — quantity = 0
 | Page | Key APIs |
 |------|----------|
 | Dashboard | `GET /inventory?lowStock=true`, `GET /orders?status=PENDING`, `GET /notifications`, `GET /analytics/products-by-shop` |
+| Profit Dashboard | `GET /analytics/profit-summary`, `GET /analytics/profit-trend` (warehouse-wide, or per shop with `?shopId=`) |
 | Shops Management | `GET /shops`, `POST /users/shop-owners`, `PATCH /shops/:id/status` |
 | Warehouse Inventory | `GET /inventory`, `POST /inventory/stock-in`, `PATCH /inventory/:id` |
 | Incoming Orders | `GET /orders`, `PATCH /orders/:id/status` |
@@ -1182,6 +1246,7 @@ OUT_OF_STOCK   — quantity = 0
 | Page | Key APIs |
 |------|----------|
 | Dashboard | `GET /inventory?lowStock=true`, `GET /orders`, `GET /notifications`, `GET /analytics/shop-consumption` |
+| Profit Dashboard | `GET /analytics/profit-summary`, `GET /analytics/profit-trend` (auto-scoped to own shop; not available to employees) |
 | My Inventory | `GET /inventory`, `PATCH /inventory/:id` |
 | Receipts | `GET /receipts`, `POST /receipts`, `GET /receipts/:id` |
 | Place Order | `GET /products?source=WAREHOUSE`, `POST /orders` |

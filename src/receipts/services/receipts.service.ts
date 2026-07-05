@@ -70,6 +70,7 @@ export class ReceiptsService {
           productId: inv.product_id,
           quantity: item.quantity,
           price: inv.price,
+          costPrice: inv.cost_price,
           quantityBefore: inv.current_quantity,
           quantityAfter,
         });

@@ -163,9 +163,9 @@ export class InventoryRepository {
   async findByIdsForUpdate(
     ids: number[],
     client: pg.PoolClient,
-  ): Promise<(Inventory & { product_name: string; price: string })[]> {
-    const result = await client.query<Inventory & { product_name: string; price: string }>(
-      `SELECT i.*, p.name AS product_name, p.price
+  ): Promise<(Inventory & { product_name: string; price: string; cost_price: string })[]> {
+    const result = await client.query<Inventory & { product_name: string; price: string; cost_price: string }>(
+      `SELECT i.*, p.name AS product_name, p.price, p.cost_price
        FROM inventory i
        JOIN products p ON p.id = i.product_id
        WHERE i.id = ANY($1::int[])

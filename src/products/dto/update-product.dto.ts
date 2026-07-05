@@ -4,6 +4,7 @@ import {
   IsNumber,
   IsPositive,
   IsInt,
+  Min,
   MinLength,
   MaxLength,
 } from 'class-validator';
@@ -28,12 +29,19 @@ export class UpdateProductDto {
   @IsString()
   barcode?: string;
 
-  @ApiPropertyOptional({ description: 'Must be greater than 0' })
+  @ApiPropertyOptional({ description: 'Selling price. Must be greater than 0' })
   @IsOptional()
   @Type(() => Number)
   @IsNumber({ maxDecimalPlaces: 2 })
   @IsPositive()
   price?: number;
+
+  @ApiPropertyOptional({ description: 'Buying price (cost). Used for profit tracking.' })
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0)
+  cost_price?: number;
 
   @ApiPropertyOptional()
   @IsOptional()

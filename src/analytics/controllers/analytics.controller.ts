@@ -1,7 +1,7 @@
 import { Controller, Get, Query, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { AnalyticsService } from '../services/analytics.service';
-import { TopProductsQueryDto, ConsumptionTrendQueryDto, ProductsByShopQueryDto, ShopConsumptionQueryDto, TrendPeriod } from '../dto/analytics-query.dto';
+import { TopProductsQueryDto, ConsumptionTrendQueryDto, ProductsByShopQueryDto, ShopConsumptionQueryDto, ProfitQueryDto, TrendPeriod } from '../dto/analytics-query.dto';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../auth/guards/roles.guard';
 import { Roles } from '../../auth/decorators/roles.decorator';
@@ -56,6 +56,31 @@ export class AnalyticsController {
       query.page,
       query.limit,
     );
+  }
+
+  // EMPLOYEE deliberately excluded — profit/margin data is owner-level information
+  @Get('profit-summary')
+  @Roles(UserRole.WAREHOUSE_ADMIN, UserRole.SHOP_OWNER)
+  @ApiOperation({
+    summary: 'Revenue, cost and profit for the period. Admin: warehouse profit from COMPLETED orders, or ?shopId= for a shop\'s sales profit. Shop owner: own shop\'s sales profit from receipts.',
+  })
+  getProfitSummary(
+    @Query() query: ProfitQueryDto,
+    @CurrentUser() user: RequestUser,
+  ) {
+    return this.analyticsService.getProfitSummary(query.period ?? TrendPeriod.DAILY, query.shopId, user);
+  }
+
+  @Get('profit-trend')
+  @Roles(UserRole.WAREHOUSE_ADMIN, UserRole.SHOP_OWNER)
+  @ApiOperation({
+    summary: 'Revenue/cost/profit over time buckets. Same scoping as profit-summary. ?period=daily (14 days) | weekly (8 weeks) | monthly (6 months)',
+  })
+  getProfitTrend(
+    @Query() query: ProfitQueryDto,
+    @CurrentUser() user: RequestUser,
+  ) {
+    return this.analyticsService.getProfitTrend(query.period ?? TrendPeriod.DAILY, query.shopId, user);
   }
 
   @Get('products-by-shop')

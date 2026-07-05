@@ -27,7 +27,8 @@ export class ProductsService {
       result = await this.productsRepo.findPaginatedForShop(user.shopId!, query);
     }
 
-    return paginate(result.data, query.page, query.limit, result.total);
+    const data = result.data.map((p) => this.hideCostFromNonOwners(user, p));
+    return paginate(data, query.page, query.limit, result.total);
   }
 
   async findById(id: number, user: RequestUser): Promise<Product> {
@@ -35,7 +36,7 @@ export class ProductsService {
     if (!product) throw new NotFoundException('products.NOT_FOUND');
 
     this.assertAccess(user, product);
-    return product;
+    return this.hideCostFromNonOwners(user, product);
   }
 
   async create(dto: CreateProductDto, user: RequestUser): Promise<Product> {
@@ -51,7 +52,7 @@ export class ProductsService {
       if (duplicate) throw new ConflictException('products.BARCODE_TAKEN');
     }
 
-    return this.productsRepo.insert(dto.name, dto.description, dto.barcode, dto.price, dto.category_id, shopId);
+    return this.productsRepo.insert(dto.name, dto.description, dto.barcode, dto.price, dto.cost_price ?? 0, dto.category_id, shopId);
   }
 
   async createForShop(dto: CreateProductDto, shopId: number): Promise<Product> {
@@ -66,7 +67,7 @@ export class ProductsService {
       if (duplicate) throw new ConflictException('products.BARCODE_TAKEN');
     }
 
-    return this.productsRepo.insert(dto.name, dto.description, dto.barcode, dto.price, dto.category_id, shopId);
+    return this.productsRepo.insert(dto.name, dto.description, dto.barcode, dto.price, dto.cost_price ?? 0, dto.category_id, shopId);
   }
 
   async update(id: number, dto: UpdateProductDto, user: RequestUser): Promise<Product> {
@@ -128,6 +129,14 @@ export class ProductsService {
     if (user.role === UserRole.WAREHOUSE_ADMIN) return;
     if (product.shop_id === user.shopId || product.source === 'WAREHOUSE') return;
     throw new ForbiddenException('products.ACCESS_DENIED');
+  }
+
+  // cost_price reveals the owner's margin — only the admin and the owning shop may see it
+  private hideCostFromNonOwners(user: RequestUser, product: Product): Product {
+    if (user.role === UserRole.WAREHOUSE_ADMIN || product.shop_id === user.shopId) {
+      return product;
+    }
+    return { ...product, cost_price: null };
   }
 
   // Write access: admin can edit any; shop owner can only edit their own shop's products

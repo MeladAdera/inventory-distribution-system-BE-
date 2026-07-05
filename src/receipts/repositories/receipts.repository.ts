@@ -14,6 +14,7 @@ export interface ReceiptItemInsert {
   productId: number;
   quantity: number;
   price: string;
+  costPrice: string;
   quantityBefore: number;
   quantityAfter: number;
 }
@@ -44,13 +45,13 @@ export class ReceiptsRepository {
   ): Promise<void> {
     const params: unknown[] = [receiptId];
     const placeholders = items.map((item, i) => {
-      params.push(item.inventoryId, item.productId, item.quantity, item.price, item.quantityBefore, item.quantityAfter);
-      const base = i * 6;
-      return `($1, $${base + 2}, $${base + 3}, $${base + 4}, $${base + 5}, $${base + 6}, $${base + 7})`;
+      params.push(item.inventoryId, item.productId, item.quantity, item.price, item.costPrice, item.quantityBefore, item.quantityAfter);
+      const base = i * 7;
+      return `($1, $${base + 2}, $${base + 3}, $${base + 4}, $${base + 5}, $${base + 6}, $${base + 7}, $${base + 8})`;
     });
 
     await client.query(
-      `INSERT INTO receipt_items (receipt_id, inventory_id, product_id, quantity, price, quantity_before, quantity_after)
+      `INSERT INTO receipt_items (receipt_id, inventory_id, product_id, quantity, price, cost_price, quantity_before, quantity_after)
        VALUES ${placeholders.join(', ')}`,
       params,
     );

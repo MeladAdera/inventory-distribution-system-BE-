@@ -40,6 +40,20 @@ export class ShopConsumptionQueryDto extends PaginationDto {
   shopId?: number;
 }
 
+export class ProfitQueryDto {
+  @ApiPropertyOptional({ enum: TrendPeriod, default: TrendPeriod.DAILY })
+  @IsOptional()
+  @IsEnum(TrendPeriod)
+  period?: TrendPeriod = TrendPeriod.DAILY;
+
+  @ApiPropertyOptional({ description: 'WAREHOUSE_ADMIN only — view a specific shop\'s profit (from receipts). Omit for warehouse profit (from completed orders). Ignored for SHOP_OWNER (uses their own shop).' })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  shopId?: number;
+}
+
 export class ProductsByShopQueryDto {
   @ApiPropertyOptional({ enum: TrendPeriod, default: TrendPeriod.DAILY })
   @IsOptional()

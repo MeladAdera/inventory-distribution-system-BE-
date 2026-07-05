@@ -1,5 +1,5 @@
 import { Injectable, BadRequestException } from '@nestjs/common';
-import { AnalyticsRepository, TopProductRow, TrendRow, ProductByShopRow, ProductByShopRawRow, ShopConsumptionRow } from '../repositories/analytics.repository';
+import { AnalyticsRepository, TopProductRow, TrendRow, ProductByShopRow, ProductByShopRawRow, ShopConsumptionRow, ProfitSummaryRow, ProfitTrendRow } from '../repositories/analytics.repository';
 import { paginate, PaginatedResponse } from '../../common/utils/pagination.util';
 import { TrendPeriod } from '../dto/analytics-query.dto';
 import { RequestUser } from '../../common/interfaces/request-user.interface';
@@ -54,6 +54,32 @@ export class AnalyticsService {
     );
 
     return paginate(data, page, limit, total);
+  }
+
+  // Admin: warehouse profit (orders), or a shop's profit when shopId is given.
+  // Shop owner: always their own shop's profit (receipts).
+  getProfitSummary(period: TrendPeriod, shopId: number | undefined, user: RequestUser): Promise<ProfitSummaryRow> {
+    if (user.role === UserRole.WAREHOUSE_ADMIN) {
+      return shopId !== undefined
+        ? this.analyticsRepository.getShopProfitSummary(period, shopId)
+        : this.analyticsRepository.getWarehouseProfitSummary(period);
+    }
+    if (user.shopId === null) {
+      throw new BadRequestException('User has no associated shop');
+    }
+    return this.analyticsRepository.getShopProfitSummary(period, user.shopId);
+  }
+
+  getProfitTrend(period: TrendPeriod, shopId: number | undefined, user: RequestUser): Promise<ProfitTrendRow[]> {
+    if (user.role === UserRole.WAREHOUSE_ADMIN) {
+      return shopId !== undefined
+        ? this.analyticsRepository.getShopProfitTrend(period, shopId)
+        : this.analyticsRepository.getWarehouseProfitTrend(period);
+    }
+    if (user.shopId === null) {
+      throw new BadRequestException('User has no associated shop');
+    }
+    return this.analyticsRepository.getShopProfitTrend(period, user.shopId);
   }
 
   async getProductsByShop(

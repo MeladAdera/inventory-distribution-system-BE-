@@ -133,17 +133,18 @@ export class ProductsRepository {
     description: string | undefined,
     barcode: string | undefined,
     price: number,
+    costPrice: number,
     categoryId: number,
     shopId: number,
   ): Promise<Product> {
     const rows = await this.db.query<Product>(
-      `INSERT INTO products (name, description, barcode, price, category_id, shop_id, source, is_global)
-       SELECT $1, $2, $3, $4, $5, s.id,
+      `INSERT INTO products (name, description, barcode, price, cost_price, category_id, shop_id, source, is_global)
+       SELECT $1, $2, $3, $4, $5, $6, s.id,
          CASE WHEN s.type = 'WAREHOUSE' THEN 'WAREHOUSE' ELSE 'LOCAL' END,
          CASE WHEN s.type = 'WAREHOUSE' THEN TRUE ELSE FALSE END
-       FROM shops s WHERE s.id = $6
+       FROM shops s WHERE s.id = $7
        RETURNING *`,
-      [name, description ?? null, barcode ?? null, price, categoryId, shopId],
+      [name, description ?? null, barcode ?? null, price, costPrice, categoryId, shopId],
     );
     return rows[0];
   }
@@ -157,6 +158,7 @@ export class ProductsRepository {
     if (dto.description !== undefined) { fields.push(`description = $${idx++}`); values.push(dto.description); }
     if (dto.barcode !== undefined)     { fields.push(`barcode = $${idx++}`);     values.push(dto.barcode); }
     if (dto.price !== undefined)       { fields.push(`price = $${idx++}`);       values.push(dto.price); }
+    if (dto.cost_price !== undefined)  { fields.push(`cost_price = $${idx++}`);  values.push(dto.cost_price); }
     if (dto.category_id !== undefined) { fields.push(`category_id = $${idx++}`); values.push(dto.category_id); }
 
     fields.push(`updated_at = NOW()`);

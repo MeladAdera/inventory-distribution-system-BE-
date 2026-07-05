@@ -34,25 +34,25 @@ export class OrdersRepository {
 
   async insertItems(orderId: number, items: OrderItemDto[], client: pg.PoolClient): Promise<OrderItem[]> {
     const productIds = items.map((i) => i.productId);
-    const priceRows = await client.query<{ id: number; price: string }>(
-      `SELECT id, price FROM products WHERE id = ANY($1::int[])`,
+    const priceRows = await client.query<{ id: number; price: string; cost_price: string }>(
+      `SELECT id, price, cost_price FROM products WHERE id = ANY($1::int[])`,
       [productIds],
     );
-    const priceMap = new Map(priceRows.rows.map((r) => [r.id, r.price]));
+    const priceMap = new Map(priceRows.rows.map((r) => [r.id, r]));
 
     const params: unknown[] = [orderId];
     const placeholders = items.map((item, i) => {
-      const price = priceMap.get(item.productId);
-      if (price === undefined) {
+      const product = priceMap.get(item.productId);
+      if (product === undefined) {
         throw new Error(`Price not found for product ${item.productId}`);
       }
-      params.push(item.productId, item.quantity, price);
-      const base = i * 3;
-      return `($1, $${base + 2}, $${base + 3}, $${base + 4})`;
+      params.push(item.productId, item.quantity, product.price, product.cost_price);
+      const base = i * 4;
+      return `($1, $${base + 2}, $${base + 3}, $${base + 4}, $${base + 5})`;
     });
 
     const result = await client.query<OrderItem>(
-      `INSERT INTO order_items (order_id, product_id, quantity, price)
+      `INSERT INTO order_items (order_id, product_id, quantity, price, cost_price)
        VALUES ${placeholders.join(', ')}
        RETURNING *`,
       params,

@@ -101,29 +101,29 @@ async function seedCategories(): Promise<void> {
 
 async function seedProducts(): Promise<void> {
   await client.query(`
-    INSERT INTO products (id, shop_id, category_id, name, description, barcode, price, is_global, source, is_active) VALUES
+    INSERT INTO products (id, shop_id, category_id, name, description, barcode, price, cost_price, is_global, source, is_active) VALUES
       -- Warehouse global products (is_global = TRUE, source = 'WAREHOUSE')
-      (1,  1, 1, 'USB-C Hub 7-Port',      '7-port USB-C hub with 4K HDMI',      'WH-ELEC-001', 45.99,  TRUE, 'WAREHOUSE', TRUE),
-      (2,  1, 1, 'Wireless Mouse',        'Ergonomic 2.4GHz wireless mouse',    'WH-ELEC-002', 24.99,  TRUE, 'WAREHOUSE', TRUE),
-      (3,  1, 1, 'Mechanical Keyboard',   'TKL mechanical keyboard, blue switch','WH-ELEC-003', 89.99,  TRUE, 'WAREHOUSE', TRUE),
-      (4,  1, 1, 'Monitor Stand',         'Adjustable aluminum monitor stand',  'WH-ELEC-004', 34.99,  TRUE, 'WAREHOUSE', TRUE),
-      (5,  1, 2, 'Water Bottle 500ml',    'Still mineral water, 500ml',         'WH-BEV-001',   0.99,  TRUE, 'WAREHOUSE', TRUE),
-      (6,  1, 2, 'Orange Juice 1L',       'Fresh-squeezed orange juice 1L',     'WH-BEV-002',   2.49,  TRUE, 'WAREHOUSE', TRUE),
-      (7,  1, 2, 'Energy Drink 250ml',    'Caffeinated energy drink 250ml',     'WH-BEV-003',   1.99,  TRUE, 'WAREHOUSE', TRUE),
-      (8,  1, 3, 'Potato Chips 150g',     'Salted potato chips family pack',    'WH-SNK-001',   1.49,  TRUE, 'WAREHOUSE', TRUE),
-      (9,  1, 3, 'Chocolate Bar 100g',    'Milk chocolate bar',                 'WH-SNK-002',   1.29,  TRUE, 'WAREHOUSE', TRUE),
-      (10, 1, 4, 'All-Purpose Cleaner',   '1L multi-surface spray cleaner',     'WH-CLN-001',   3.99,  TRUE, 'WAREHOUSE', TRUE),
-      (11, 1, 5, 'Hand Sanitizer 500ml',  'Alcohol-based hand sanitizer',       'WH-PER-001',   4.99,  TRUE, 'WAREHOUSE', TRUE),
+      (1,  1, 1, 'USB-C Hub 7-Port',      '7-port USB-C hub with 4K HDMI',      'WH-ELEC-001', 45.99, 32.50,  TRUE, 'WAREHOUSE', TRUE),
+      (2,  1, 1, 'Wireless Mouse',        'Ergonomic 2.4GHz wireless mouse',    'WH-ELEC-002', 24.99, 16.75,  TRUE, 'WAREHOUSE', TRUE),
+      (3,  1, 1, 'Mechanical Keyboard',   'TKL mechanical keyboard, blue switch','WH-ELEC-003', 89.99, 62.00,  TRUE, 'WAREHOUSE', TRUE),
+      (4,  1, 1, 'Monitor Stand',         'Adjustable aluminum monitor stand',  'WH-ELEC-004', 34.99, 22.50,  TRUE, 'WAREHOUSE', TRUE),
+      (5,  1, 2, 'Water Bottle 500ml',    'Still mineral water, 500ml',         'WH-BEV-001',   0.99,  0.55,  TRUE, 'WAREHOUSE', TRUE),
+      (6,  1, 2, 'Orange Juice 1L',       'Fresh-squeezed orange juice 1L',     'WH-BEV-002',   2.49,  1.60,  TRUE, 'WAREHOUSE', TRUE),
+      (7,  1, 2, 'Energy Drink 250ml',    'Caffeinated energy drink 250ml',     'WH-BEV-003',   1.99,  1.20,  TRUE, 'WAREHOUSE', TRUE),
+      (8,  1, 3, 'Potato Chips 150g',     'Salted potato chips family pack',    'WH-SNK-001',   1.49,  0.85,  TRUE, 'WAREHOUSE', TRUE),
+      (9,  1, 3, 'Chocolate Bar 100g',    'Milk chocolate bar',                 'WH-SNK-002',   1.29,  0.75,  TRUE, 'WAREHOUSE', TRUE),
+      (10, 1, 4, 'All-Purpose Cleaner',   '1L multi-surface spray cleaner',     'WH-CLN-001',   3.99,  2.40,  TRUE, 'WAREHOUSE', TRUE),
+      (11, 1, 5, 'Hand Sanitizer 500ml',  'Alcohol-based hand sanitizer',       'WH-PER-001',   4.99,  3.10,  TRUE, 'WAREHOUSE', TRUE),
 
       -- Downtown Shop local products (source = 'LOCAL')
-      (12, 2, 6, 'Phone Case iPhone 15',  'Protective silicone case',           'DT-LOC-001',  12.99, FALSE, 'LOCAL',     TRUE),
-      (13, 2, 8, 'Granola Bar',           'Oat and honey granola bar',          'DT-LOC-002',   2.29, FALSE, 'LOCAL',     TRUE),
+      (12, 2, 6, 'Phone Case iPhone 15',  'Protective silicone case',           'DT-LOC-001',  12.99,  7.50, FALSE, 'LOCAL',     TRUE),
+      (13, 2, 8, 'Granola Bar',           'Oat and honey granola bar',          'DT-LOC-002',   2.29,  1.30, FALSE, 'LOCAL',     TRUE),
 
       -- Uptown Shop local products
-      (14, 3, 9, 'Cable Organizer',       'Silicone cable management clips',    'UT-LOC-001',   7.49, FALSE, 'LOCAL',     TRUE),
+      (14, 3, 9, 'Cable Organizer',       'Silicone cable management clips',    'UT-LOC-001',   7.49,  4.25, FALSE, 'LOCAL',     TRUE),
 
       -- Inactive product (to test filtering)
-      (15, 1, 1, 'Old USB Hub (disc.)',   'Discontinued product',               NULL,            0.00,  TRUE, 'WAREHOUSE', FALSE)
+      (15, 1, 1, 'Old USB Hub (disc.)',   'Discontinued product',               NULL,            0.00,  0.00,  TRUE, 'WAREHOUSE', FALSE)
   `);
   await client.query(`SELECT setval('products_id_seq', 15)`);
 }
@@ -329,6 +329,14 @@ async function seedOrders(): Promise<void> {
       -- Order 23 (PENDING)
       (23, 1,   3, 45.99),
       (23, 3,   2, 89.99)
+  `);
+
+  // Backfill cost snapshots from the products' current cost
+  await client.query(`
+    UPDATE order_items oi
+    SET cost_price = p.cost_price
+    FROM products p
+    WHERE p.id = oi.product_id
   `);
 }
 

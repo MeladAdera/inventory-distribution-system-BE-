@@ -7,6 +7,8 @@ export class Product {
   description!: string | null;
   barcode!: string | null;
   price!: number;
+  // Buying price. Null in API responses when hidden from non-owners.
+  cost_price!: number | null;
   source!: 'WAREHOUSE' | 'LOCAL';
   is_global!: boolean;
   image_url!: string | null;

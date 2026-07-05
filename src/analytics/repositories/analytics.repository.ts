@@ -40,9 +40,105 @@ export interface ProductByShopRow {
   shops: { shop_id: number; shop_name: string; quantity: number }[];
 }
 
+export interface ProfitSummaryRow {
+  revenue: number;
+  cost: number;
+  profit: number;
+}
+
+export interface ProfitTrendRow extends ProfitSummaryRow {
+  label: string;
+}
+
 @Injectable()
 export class AnalyticsRepository {
   constructor(private readonly db: DatabaseService) {}
+
+  // labelExpr and intervalExpr are hardcoded per case, dateColumn is internal —
+  // nothing here derives from user input
+  private periodExprs(period: TrendPeriod, dateColumn: string): { labelExpr: string; intervalExpr: string } {
+    switch (period) {
+      case TrendPeriod.WEEKLY:
+        return {
+          labelExpr: `TO_CHAR(DATE_TRUNC('week', ${dateColumn}), 'IYYY-"W"IW')`,
+          intervalExpr: `NOW() - INTERVAL '8 weeks'`,
+        };
+      case TrendPeriod.MONTHLY:
+        return {
+          labelExpr: `TO_CHAR(DATE_TRUNC('month', ${dateColumn}), 'YYYY-MM')`,
+          intervalExpr: `NOW() - INTERVAL '6 months'`,
+        };
+      default: // daily
+        return {
+          labelExpr: `TO_CHAR(DATE(${dateColumn}), 'YYYY-MM-DD')`,
+          intervalExpr: `NOW() - INTERVAL '14 days'`,
+        };
+    }
+  }
+
+  // Warehouse profit: what shops paid (price) minus warehouse cost, from COMPLETED orders
+  async getWarehouseProfitSummary(period: TrendPeriod): Promise<ProfitSummaryRow> {
+    const { intervalExpr } = this.periodExprs(period, 'o.updated_at');
+    const row = await this.db.queryOne<ProfitSummaryRow>(
+      `SELECT COALESCE(SUM(oi.quantity * oi.price), 0)::float8                     AS revenue,
+              COALESCE(SUM(oi.quantity * oi.cost_price), 0)::float8                AS cost,
+              COALESCE(SUM(oi.quantity * (oi.price - oi.cost_price)), 0)::float8   AS profit
+       FROM order_items oi
+       JOIN orders o ON o.id = oi.order_id
+       WHERE o.status = 'COMPLETED'
+         AND o.updated_at >= ${intervalExpr}`,
+    );
+    return row!;
+  }
+
+  // Shop profit: customer sales (receipts) minus cost snapshots
+  async getShopProfitSummary(period: TrendPeriod, shopId: number): Promise<ProfitSummaryRow> {
+    const { intervalExpr } = this.periodExprs(period, 'r.created_at');
+    const row = await this.db.queryOne<ProfitSummaryRow>(
+      `SELECT COALESCE(SUM(ri.quantity * ri.price), 0)::float8                     AS revenue,
+              COALESCE(SUM(ri.quantity * ri.cost_price), 0)::float8                AS cost,
+              COALESCE(SUM(ri.quantity * (ri.price - ri.cost_price)), 0)::float8   AS profit
+       FROM receipt_items ri
+       JOIN receipts r ON r.id = ri.receipt_id
+       WHERE r.shop_id = $1
+         AND r.created_at >= ${intervalExpr}`,
+      [shopId],
+    );
+    return row!;
+  }
+
+  getWarehouseProfitTrend(period: TrendPeriod): Promise<ProfitTrendRow[]> {
+    const { labelExpr, intervalExpr } = this.periodExprs(period, 'o.updated_at');
+    return this.db.query<ProfitTrendRow>(
+      `SELECT ${labelExpr}                                                         AS label,
+              COALESCE(SUM(oi.quantity * oi.price), 0)::float8                     AS revenue,
+              COALESCE(SUM(oi.quantity * oi.cost_price), 0)::float8                AS cost,
+              COALESCE(SUM(oi.quantity * (oi.price - oi.cost_price)), 0)::float8   AS profit
+       FROM order_items oi
+       JOIN orders o ON o.id = oi.order_id
+       WHERE o.status = 'COMPLETED'
+         AND o.updated_at >= ${intervalExpr}
+       GROUP BY label
+       ORDER BY label ASC`,
+    );
+  }
+
+  getShopProfitTrend(period: TrendPeriod, shopId: number): Promise<ProfitTrendRow[]> {
+    const { labelExpr, intervalExpr } = this.periodExprs(period, 'r.created_at');
+    return this.db.query<ProfitTrendRow>(
+      `SELECT ${labelExpr}                                                         AS label,
+              COALESCE(SUM(ri.quantity * ri.price), 0)::float8                     AS revenue,
+              COALESCE(SUM(ri.quantity * ri.cost_price), 0)::float8                AS cost,
+              COALESCE(SUM(ri.quantity * (ri.price - ri.cost_price)), 0)::float8   AS profit
+       FROM receipt_items ri
+       JOIN receipts r ON r.id = ri.receipt_id
+       WHERE r.shop_id = $1
+         AND r.created_at >= ${intervalExpr}
+       GROUP BY label
+       ORDER BY label ASC`,
+      [shopId],
+    );
+  }
 
   getTopProducts(limit: number, shopId?: number): Promise<TopProductRow[]> {
     const params: unknown[] = [limit];
