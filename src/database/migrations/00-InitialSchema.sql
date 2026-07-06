@@ -43,6 +43,9 @@ CREATE TABLE categories (
 CREATE INDEX idx_categories_shop_id ON categories(shop_id);
 
 -- PRODUCTS
+-- cost_price is the current buying price, used alongside the selling price
+-- for profit tracking; order_items/receipt_items snapshot it at transaction
+-- time so profit on historical transactions isn't distorted by later changes.
 CREATE TABLE products (
   id          SERIAL PRIMARY KEY,
   category_id INTEGER         REFERENCES categories(id) ON DELETE SET NULL,
@@ -51,6 +54,7 @@ CREATE TABLE products (
   description TEXT,
   barcode     VARCHAR(100),
   price       DECIMAL(10, 2)  NOT NULL DEFAULT 0,
+  cost_price  DECIMAL(10, 2)  NOT NULL DEFAULT 0,
   is_global   BOOLEAN         DEFAULT FALSE,
   source      VARCHAR(50)     CHECK (source IN ('WAREHOUSE', 'LOCAL')),
   image_url   VARCHAR(500),
@@ -96,16 +100,47 @@ CREATE INDEX idx_orders_to_shop_id   ON orders(to_shop_id);
 CREATE INDEX idx_orders_status       ON orders(status);
 
 -- ORDER ITEMS
+-- price/cost_price are snapshots taken at order time (not live product lookups).
 CREATE TABLE order_items (
   id         SERIAL PRIMARY KEY,
   order_id   INTEGER        NOT NULL REFERENCES orders(id)   ON DELETE CASCADE,
   product_id INTEGER        NOT NULL REFERENCES products(id) ON DELETE CASCADE,
   quantity   INTEGER        NOT NULL,
-  price      DECIMAL(15, 2) NOT NULL
+  price      DECIMAL(15, 2) NOT NULL,
+  cost_price DECIMAL(15, 2) NOT NULL DEFAULT 0
 );
 
 CREATE INDEX idx_order_items_order_id   ON order_items(order_id);
 CREATE INDEX idx_order_items_product_id ON order_items(product_id);
+
+-- RECEIPTS
+CREATE TABLE receipts (
+  id         SERIAL PRIMARY KEY,
+  shop_id    INTEGER NOT NULL REFERENCES shops(id)  ON DELETE CASCADE,
+  created_by INTEGER NOT NULL REFERENCES users(id)  ON DELETE CASCADE,
+  notes      TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_receipts_shop_created ON receipts(shop_id, created_at DESC);
+CREATE INDEX idx_receipts_created_by  ON receipts(created_by);
+
+-- RECEIPT ITEMS
+-- price/cost_price mirror the order_items snapshot pattern.
+CREATE TABLE receipt_items (
+  id              SERIAL PRIMARY KEY,
+  receipt_id      INTEGER NOT NULL REFERENCES receipts(id)   ON DELETE CASCADE,
+  inventory_id    INTEGER NOT NULL REFERENCES inventory(id)  ON DELETE CASCADE,
+  product_id      INTEGER NOT NULL REFERENCES products(id)   ON DELETE CASCADE,
+  quantity        INTEGER NOT NULL CHECK (quantity > 0),
+  quantity_before INTEGER NOT NULL,
+  quantity_after  INTEGER NOT NULL CHECK (quantity_after >= 0),
+  price           DECIMAL(15, 2) NOT NULL,
+  cost_price      DECIMAL(15, 2) NOT NULL DEFAULT 0
+);
+
+CREATE INDEX idx_receipt_items_receipt_id   ON receipt_items(receipt_id);
+CREATE INDEX idx_receipt_items_inventory_id ON receipt_items(inventory_id);
 
 -- NOTIFICATIONS
 CREATE TABLE notifications (
@@ -115,6 +150,7 @@ CREATE TABLE notifications (
   title      VARCHAR(255) NOT NULL,
   message    TEXT,
   type       VARCHAR(50),
+  args       JSONB        DEFAULT NULL,
   is_read    BOOLEAN      DEFAULT FALSE,
   created_at TIMESTAMP    DEFAULT CURRENT_TIMESTAMP
 );

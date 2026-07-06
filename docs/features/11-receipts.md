@@ -200,9 +200,9 @@ All audit log writes happen inside the same transaction as the inventory adjustm
 
 ---
 
-## Migration
+## Schema
 
-`src/database/migrations/01-AddReceipts.sql`:
+Defined in `src/database/migrations/00-InitialSchema.sql`:
 
 ```sql
 CREATE TABLE receipts (
@@ -223,12 +223,16 @@ CREATE TABLE receipt_items (
   product_id      INTEGER NOT NULL REFERENCES products(id)   ON DELETE CASCADE,
   quantity        INTEGER NOT NULL CHECK (quantity > 0),
   quantity_before INTEGER NOT NULL,
-  quantity_after  INTEGER NOT NULL CHECK (quantity_after >= 0)
+  quantity_after  INTEGER NOT NULL CHECK (quantity_after >= 0),
+  price           DECIMAL(15, 2) NOT NULL,
+  cost_price      DECIMAL(15, 2) NOT NULL DEFAULT 0
 );
 
 CREATE INDEX idx_receipt_items_receipt_id   ON receipt_items(receipt_id);
 CREATE INDEX idx_receipt_items_inventory_id ON receipt_items(inventory_id);
 ```
+
+> `price`/`cost_price` are transaction-time snapshots — see [Cost Price & Profit Analytics](./13-cost-price-profit.md).
 
 The composite index `(shop_id, created_at DESC)` on `receipts` matches the primary list query pattern — filter by shop, order by date — in a single index scan.
 
@@ -283,7 +287,7 @@ src/inventory/repositories/
 └── inventory.repository.ts               + findByIdsForUpdate(ids, client)
 
 src/database/migrations/
-└── 01-AddReceipts.sql
+└── 00-InitialSchema.sql                  receipts, receipt_items tables
 ```
 
 ---

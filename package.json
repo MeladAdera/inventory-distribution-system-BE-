@@ -13,7 +13,7 @@
     "start:prod": "node dist/main.js",
     "migration:run": "ts-node -r tsconfig-paths/register src/database/migrations/runner.ts",
     "seed": "ts-node -r tsconfig-paths/register src/database/seeders/seed.ts",
-    "migration:create": "node -e \"const fs = require('fs'); const timestamp = Date.now(); const name = process.argv[1]; fs.writeFileSync(`src/migrations/${timestamp}-${name}.sql`, '-- Migration SQL here\\n'); console.log(`Created: ${timestamp}-${name}.sql`);\" ",
+    "migration:create": "node -e \"const fs = require('fs'); const timestamp = Date.now(); const name = process.argv[1]; fs.writeFileSync(`src/database/migrations/${timestamp}-${name}.sql`, '-- Migration SQL here\\n'); console.log(`Created: ${timestamp}-${name}.sql`);\" ",
     "lint": "eslint \"src/**/*.ts\" --fix",
     "format": "prettier --write \"src/**/*.ts\"",
     "test": "jest",

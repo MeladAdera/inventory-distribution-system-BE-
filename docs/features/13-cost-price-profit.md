@@ -20,7 +20,7 @@ Profit is never computed from the products table directly. Instead, both prices 
 
 ## The Snapshot Pattern
 
-**Migration:** `04-AddCostPrice.sql` adds `cost_price` to three tables:
+**Schema:** `00-InitialSchema.sql` defines `cost_price` on three tables:
 
 | Table | Role |
 |-------|------|
@@ -28,7 +28,7 @@ Profit is never computed from the products table directly. Instead, both prices 
 | `order_items` | Snapshot taken when a shop orders from the warehouse |
 | `receipt_items` | Snapshot taken when a shop sells to a customer |
 
-Prices change over time. If profit were computed by joining transactions to the *current* `products.cost_price`, a supplier price increase today would silently rewrite the profit of every past sale. Snapshotting freezes both prices at transaction time — the same pattern the codebase already used for `price` in `order_items` (migration 00) and `receipt_items` (migration 02).
+Prices change over time. If profit were computed by joining transactions to the *current* `products.cost_price`, a supplier price increase today would silently rewrite the profit of every past sale. Snapshotting freezes both prices at transaction time — the same pattern the codebase already used for `price` in `order_items` and `receipt_items`.
 
 **Where the snapshots are taken:**
 
@@ -183,7 +183,7 @@ Shops resell warehouse products at the warehouse-set `price` (shops cannot edit 
 ## Module Layout
 
 ```
-src/database/migrations/04-AddCostPrice.sql   ← schema change
+src/database/migrations/00-InitialSchema.sql   ← schema (cost_price columns)
 src/products/                                  ← entity, DTOs, insert/update, visibility rule
 src/orders/repositories/orders.repository.ts   ← cost snapshot on insertItems
 src/receipts/services/receipts.service.ts      ← cost snapshot on receipt creation

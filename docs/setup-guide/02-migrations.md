@@ -4,19 +4,17 @@ Run database migrations to create tables and schema.
 
 ## What are Migrations?
 
-Migrations are SQL files that define your database schema. They're stored in `src/migrations/` and create tables, indexes, and relationships.
+Migrations are SQL files that define your database schema. They're stored in `src/database/migrations/` and create tables, indexes, and relationships.
 
 ## Migration Files
 
 ```
-src/migrations/
-├── 00-CreateShopsAndUsers.sql
-├── 01-CreateProductsAndCategories.sql
-├── 02-CreateInventorySystem.sql
-├── 03-CreateOrdersSystem.sql
-├── 04-CreateWalletAndNotifications.sql
-└── runner.ts  (Migration executor)
+src/database/migrations/
+├── 00-InitialSchema.sql   ← complete schema, squashed (single source of truth)
+└── runner.ts              ← migration executor
 ```
+
+The schema currently lives in one squashed file rather than many incremental ones — this project hasn't shipped to a real environment yet, so there's no history to preserve. Once a real deployment has run migrations, new schema changes must be added as new numbered files (`01-...`, `02-...`) instead of editing `00-InitialSchema.sql`, since the runner tracks executed filenames in the `migrations` table and never re-runs one it already applied.
 
 ## Running Migrations
 
@@ -48,24 +46,25 @@ docker-compose exec app npm run migration:run
 
 ## What Gets Created?
 
-The migrations create these tables:
+The migration creates these tables:
 
 ### Core Tables
-- `shops` - Shop information with wallet_balance
-- `users` - Users (OWNER, EMPLOYEE, CLIENT_ADMIN roles)
+- `shops` - Warehouse and shop records
+- `users` - Users (`WAREHOUSE_ADMIN`, `SHOP_OWNER`, `EMPLOYEE` roles)
+- `refresh_tokens` - JWT refresh tokens
 
 ### Product Management
 - `categories` - Product categories (shop-specific)
-- `products` - Product catalog (with category_id, shop_id, source: WAREHOUSE/LOCAL)
+- `products` - Product catalog (category_id, shop_id, source: WAREHOUSE/LOCAL, price + cost_price)
 
 ### Inventory & Orders
 - `inventory` - Stock levels by shop and product
-- `orders` - Purchase orders
-- `order_items` - Order line items
+- `orders` / `order_items` - Purchase orders between shops
+- `receipts` / `receipt_items` - Point-of-sale stock deductions
 
 ### System
-- `notifications` - User notifications (ORDER, INVENTORY, SYSTEM types)
-- `audit_logs` - Complete audit trail (inventory, wallet, order, product, category, user actions)
+- `notifications` - User notifications
+- `audit_logs` - Complete audit trail (inventory, order, product, category, user actions)
 
 ## Verify Migrations Ran
 
@@ -80,18 +79,18 @@ Expected output shows all migration files listed with timestamps.
 
 ## Creating New Migrations
 
-### When You Add New Tables:
+### When You Add New Tables or Columns:
 
 ```bash
 # Auto-generate migration file
 npm run migration:create CreateNewTable
-# Creates: src/migrations/{TIMESTAMP}-CreateNewTable.sql
+# Creates: src/database/migrations/{TIMESTAMP}-CreateNewTable.sql
 ```
 
 ### Then Edit and Add SQL:
 
 ```sql
--- src/migrations/{timestamp}-CreateNewTable.sql
+-- src/database/migrations/{timestamp}-CreateNewTable.sql
 
 CREATE TABLE new_table (
   id SERIAL PRIMARY KEY,
