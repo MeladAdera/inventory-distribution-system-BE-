@@ -188,7 +188,7 @@ Request → 401?
 | POST | `/users/employees` | JWT | `SHOP_OWNER` | Create an employee for your shop |
 | GET | `/users` | JWT | `WAREHOUSE_ADMIN`, `SHOP_OWNER` | List users (filterable) |
 | GET | `/users/:id` | JWT | `WAREHOUSE_ADMIN`, `SHOP_OWNER` | Get a single user |
-| PATCH | `/users/:id` | JWT | `WAREHOUSE_ADMIN`, `SHOP_OWNER` | Update name/email |
+| PATCH | `/users/:id` | JWT | `WAREHOUSE_ADMIN`, `SHOP_OWNER` | Update name/email/password |
 | DELETE | `/users/:id` | JWT | `WAREHOUSE_ADMIN`, `SHOP_OWNER` | Soft-deactivate a user |
 | PATCH | `/users/:id/activate` | JWT | `WAREHOUSE_ADMIN`, `SHOP_OWNER` | Reactivate a deactivated user |
 
@@ -237,6 +237,16 @@ Request → 401?
   "updated_at": "2025-01-01T00:00:00Z"
 }
 ```
+
+**Update a User** `PATCH /users/:id`
+```json
+{
+  "name": "Ahmed Hassan",
+  "email": "ahmed@mdmarket.com",
+  "password": "newPassword123"
+}
+```
+> All fields are optional — send only what changes. `password` must be at least 6 characters and is hashed server-side (never returned in responses). `SHOP_OWNER` can only update their own employees; `WAREHOUSE_ADMIN` can update any user (including a shop owner's password/email).
 
 **Reactivate a User** `PATCH /users/:id/activate`
 

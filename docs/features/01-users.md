@@ -105,17 +105,20 @@ Returns a single user. `SHOP_OWNER` gets a `404` if the user exists but belongs 
 ### `PATCH /users/:id`
 **Role:** `WAREHOUSE_ADMIN`, `SHOP_OWNER`
 
-Updates `name` and/or `email`. At least one field must be provided. If `email` is changed, uniqueness is checked before saving.
+Updates `name`, `email`, and/or `password`. At least one field must be provided. If `email` is changed, uniqueness is checked before saving. If `password` is provided, it is hashed with bcrypt (cost factor 10) before saving — the raw value is never stored or returned.
 
-`SHOP_OWNER` can only update `EMPLOYEE` users in their own shop — attempting to update another `SHOP_OWNER` returns `403`.
+`SHOP_OWNER` can only update `EMPLOYEE` users in their own shop — attempting to update another `SHOP_OWNER` returns `403`. This is also how a shop owner resets an employee's password, and how the `WAREHOUSE_ADMIN` resets a shop owner's password — there is no separate "reset password" endpoint, it's the same generic update.
 
 **Body (all optional, at least one required):**
 ```json
 {
   "name": "Ahmed Al-Hassan",
-  "email": "newemail@mdmarket.com"
+  "email": "newemail@mdmarket.com",
+  "password": "newPassword123"
 }
 ```
+
+`password` must be at least 6 characters.
 
 **Returns:** Updated `SafeUser`.
 

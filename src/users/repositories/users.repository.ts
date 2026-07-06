@@ -126,7 +126,7 @@ export class UsersRepository {
 
   async update(
     id: number,
-    data: { name?: string; email?: string },
+    data: { name?: string; email?: string; password_hash?: string },
   ): Promise<SafeUser | null> {
     const fields: string[] = [];
     const params: unknown[] = [];
@@ -139,6 +139,10 @@ export class UsersRepository {
     if (data.email !== undefined) {
       fields.push(`email = $${idx++}`);
       params.push(data.email);
+    }
+    if (data.password_hash !== undefined) {
+      fields.push(`password_hash = $${idx++}`);
+      params.push(data.password_hash);
     }
 
     if (fields.length === 0) return null;

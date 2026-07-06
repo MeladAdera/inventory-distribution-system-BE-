@@ -116,7 +116,13 @@ export class UsersService {
       if (existing) throw new ConflictException('users.EMAIL_TAKEN');
     }
 
-    const updated = await this.usersRepo.update(id, dto);
+    const { password, ...rest } = dto;
+    const passwordHash = password ? await bcrypt.hash(password, 10) : undefined;
+
+    const updated = await this.usersRepo.update(id, {
+      ...rest,
+      password_hash: passwordHash,
+    });
     // update() returns null only if no fields were provided — dto validation
     // guarantees at least one field, but guard defensively
     if (!updated) throw new BadRequestException('users.NO_FIELDS_TO_UPDATE');

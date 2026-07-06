@@ -80,7 +80,7 @@ export class UsersController {
   @Patch(':id')
   @Roles(UserRole.WAREHOUSE_ADMIN, UserRole.SHOP_OWNER)
   @ApiOperation({
-    summary: 'Update a user\'s name or email — WAREHOUSE_ADMIN any user, SHOP_OWNER own employees only',
+    summary: 'Update a user\'s name, email, or password — WAREHOUSE_ADMIN any user, SHOP_OWNER own employees only',
   })
   updateUser(
     @Param('id', ParseIntPipe) id: number,
