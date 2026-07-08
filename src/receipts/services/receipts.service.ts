@@ -105,8 +105,9 @@ export class ReceiptsService {
             action: 'ADJUSTMENT',
             entity_type: 'inventory',
             entity_id: insert.inventoryId,
+            receipt_id: receipt.id,
             quantity: -insert.quantity,
-            notes: `Receipt #${receipt.id}`,
+            notes: dto.notes,
           },
           client,
         );
@@ -140,5 +141,37 @@ export class ReceiptsService {
     }
 
     return receipt;
+  }
+
+  async setFree(id: number, isFree: boolean, user: RequestUser): Promise<ReceiptWithItems> {
+    const receipt = await this.receiptsRepo.findById(id);
+    if (!receipt) throw new NotFoundException('receipt.NOT_FOUND');
+
+    if (user.role !== UserRole.WAREHOUSE_ADMIN && receipt.shop_id !== user.shopId) {
+      throw new ForbiddenException('receipt.ACCESS_DENIED');
+    }
+
+    if (receipt.is_free !== isFree) {
+      await this.receiptsRepo.setIsFree(id, isFree);
+
+      // One audit log entry per item — same INVENTORY type as receipt creation,
+      // so product_name resolves via the entity_id -> inventory -> product join.
+      const action = isFree ? 'MARKED_FREE' : 'UNMARKED_FREE';
+      for (const item of receipt.items) {
+        await this.auditLogsService.log({
+          shop_id: receipt.shop_id,
+          user_id: user.id,
+          type: 'INVENTORY',
+          action,
+          entity_type: 'inventory',
+          entity_id: item.inventory_id,
+          receipt_id: id,
+          amount: item.quantity * parseFloat(item.price),
+          notes: receipt.notes ?? undefined,
+        });
+      }
+    }
+
+    return this.receiptsRepo.findById(id).then((r) => r!);
   }
 }

@@ -2,6 +2,7 @@ import {
   Controller,
   Get,
   Post,
+  Patch,
   Param,
   Body,
   Query,
@@ -15,6 +16,7 @@ import { ReceiptsService } from '../services/receipts.service';
 import { RequestUser } from '../../common/interfaces/request-user.interface';
 import { CreateReceiptDto } from '../dto/create-receipt.dto';
 import { ReceiptQueryDto } from '../dto/receipt-query.dto';
+import { SetReceiptFreeDto } from '../dto/set-receipt-free.dto';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../auth/guards/roles.guard';
 import { Roles } from '../../auth/decorators/roles.decorator';
@@ -57,5 +59,16 @@ export class ReceiptsController {
     @CurrentUser() user: RequestUser,
   ) {
     return this.receiptsService.findById(id, user);
+  }
+
+  @Patch(':id/free')
+  @Roles(UserRole.WAREHOUSE_ADMIN, UserRole.SHOP_OWNER, UserRole.EMPLOYEE)
+  @ApiOperation({ summary: 'Mark/unmark a receipt as free — excludes its revenue from shop profit reports' })
+  setFree(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: SetReceiptFreeDto,
+    @CurrentUser() user: RequestUser,
+  ) {
+    return this.receiptsService.setFree(id, dto.isFree, user);
   }
 }

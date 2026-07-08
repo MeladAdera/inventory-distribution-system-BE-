@@ -61,17 +61,17 @@ export class AnalyticsRepository {
       case TrendPeriod.WEEKLY:
         return {
           labelExpr: `TO_CHAR(DATE_TRUNC('week', ${dateColumn}), 'IYYY-"W"IW')`,
-          intervalExpr: `NOW() - INTERVAL '8 weeks'`,
+          intervalExpr: `NOW() - INTERVAL '1 week'`,
         };
       case TrendPeriod.MONTHLY:
         return {
           labelExpr: `TO_CHAR(DATE_TRUNC('month', ${dateColumn}), 'YYYY-MM')`,
-          intervalExpr: `NOW() - INTERVAL '6 months'`,
+          intervalExpr: `NOW() - INTERVAL '1 month'`,
         };
       default: // daily
         return {
           labelExpr: `TO_CHAR(DATE(${dateColumn}), 'YYYY-MM-DD')`,
-          intervalExpr: `NOW() - INTERVAL '14 days'`,
+          intervalExpr: `NOW() - INTERVAL '1 day'`,
         };
     }
   }
@@ -91,13 +91,16 @@ export class AnalyticsRepository {
     return row!;
   }
 
-  // Shop profit: customer sales (receipts) minus cost snapshots
+  // Shop profit: customer sales (receipts) minus cost snapshots.
+  // Free receipts contribute no revenue but still incur cost, so they show up
+  // as a straight loss rather than being dropped from the totals entirely.
   async getShopProfitSummary(period: TrendPeriod, shopId: number): Promise<ProfitSummaryRow> {
     const { intervalExpr } = this.periodExprs(period, 'r.created_at');
     const row = await this.db.queryOne<ProfitSummaryRow>(
-      `SELECT COALESCE(SUM(ri.quantity * ri.price), 0)::float8                     AS revenue,
-              COALESCE(SUM(ri.quantity * ri.cost_price), 0)::float8                AS cost,
-              COALESCE(SUM(ri.quantity * (ri.price - ri.cost_price)), 0)::float8   AS profit
+      `SELECT COALESCE(SUM(CASE WHEN r.is_free THEN 0 ELSE ri.quantity * ri.price END), 0)::float8 AS revenue,
+              COALESCE(SUM(ri.quantity * ri.cost_price), 0)::float8                                AS cost,
+              COALESCE(SUM(CASE WHEN r.is_free THEN -(ri.quantity * ri.cost_price)
+                                 ELSE ri.quantity * (ri.price - ri.cost_price) END), 0)::float8     AS profit
        FROM receipt_items ri
        JOIN receipts r ON r.id = ri.receipt_id
        WHERE r.shop_id = $1
@@ -126,10 +129,11 @@ export class AnalyticsRepository {
   getShopProfitTrend(period: TrendPeriod, shopId: number): Promise<ProfitTrendRow[]> {
     const { labelExpr, intervalExpr } = this.periodExprs(period, 'r.created_at');
     return this.db.query<ProfitTrendRow>(
-      `SELECT ${labelExpr}                                                         AS label,
-              COALESCE(SUM(ri.quantity * ri.price), 0)::float8                     AS revenue,
-              COALESCE(SUM(ri.quantity * ri.cost_price), 0)::float8                AS cost,
-              COALESCE(SUM(ri.quantity * (ri.price - ri.cost_price)), 0)::float8   AS profit
+      `SELECT ${labelExpr}                                                                         AS label,
+              COALESCE(SUM(CASE WHEN r.is_free THEN 0 ELSE ri.quantity * ri.price END), 0)::float8 AS revenue,
+              COALESCE(SUM(ri.quantity * ri.cost_price), 0)::float8                                AS cost,
+              COALESCE(SUM(CASE WHEN r.is_free THEN -(ri.quantity * ri.cost_price)
+                                 ELSE ri.quantity * (ri.price - ri.cost_price) END), 0)::float8     AS profit
        FROM receipt_items ri
        JOIN receipts r ON r.id = ri.receipt_id
        WHERE r.shop_id = $1
@@ -181,15 +185,15 @@ export class AnalyticsRepository {
     switch (period) {
       case TrendPeriod.WEEKLY:
         labelExpr = `TO_CHAR(DATE_TRUNC('week', o.updated_at), 'IYYY-"W"IW')`;
-        intervalExpr = `NOW() - INTERVAL '8 weeks'`;
+        intervalExpr = `NOW() - INTERVAL '1 week'`;
         break;
       case TrendPeriod.MONTHLY:
         labelExpr = `TO_CHAR(DATE_TRUNC('month', o.updated_at), 'YYYY-MM')`;
-        intervalExpr = `NOW() - INTERVAL '6 months'`;
+        intervalExpr = `NOW() - INTERVAL '1 month'`;
         break;
       default: // daily
         labelExpr = `TO_CHAR(DATE(o.updated_at), 'YYYY-MM-DD')`;
-        intervalExpr = `NOW() - INTERVAL '14 days'`;
+        intervalExpr = `NOW() - INTERVAL '1 day'`;
     }
 
     return this.db.query<TrendRow>(
@@ -216,13 +220,13 @@ export class AnalyticsRepository {
     let intervalExpr: string;
     switch (period) {
       case TrendPeriod.WEEKLY:
-        intervalExpr = `NOW() - INTERVAL '8 weeks'`;
+        intervalExpr = `NOW() - INTERVAL '1 week'`;
         break;
       case TrendPeriod.MONTHLY:
-        intervalExpr = `NOW() - INTERVAL '6 months'`;
+        intervalExpr = `NOW() - INTERVAL '1 month'`;
         break;
       default:
-        intervalExpr = `NOW() - INTERVAL '14 days'`;
+        intervalExpr = `NOW() - INTERVAL '1 day'`;
     }
 
     const rows = await this.db.query<ShopConsumptionRow & { total_count: string }>(
@@ -264,13 +268,13 @@ export class AnalyticsRepository {
     let intervalExpr: string;
     switch (period) {
       case TrendPeriod.WEEKLY:
-        intervalExpr = `NOW() - INTERVAL '8 weeks'`;
+        intervalExpr = `NOW() - INTERVAL '1 week'`;
         break;
       case TrendPeriod.MONTHLY:
-        intervalExpr = `NOW() - INTERVAL '6 months'`;
+        intervalExpr = `NOW() - INTERVAL '1 month'`;
         break;
       default:
-        intervalExpr = `NOW() - INTERVAL '14 days'`;
+        intervalExpr = `NOW() - INTERVAL '1 day'`;
     }
 
     return this.db.query<ProductByShopRawRow>(

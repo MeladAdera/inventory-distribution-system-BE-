@@ -10,8 +10,8 @@ CREATE TABLE shops (
   phone      VARCHAR(20),
   type       VARCHAR(50)  NOT NULL DEFAULT 'SHOP' CHECK (type IN ('WAREHOUSE', 'SHOP')),
   is_active  BOOLEAN      NOT NULL DEFAULT TRUE,
-  created_at TIMESTAMP    DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP    DEFAULT CURRENT_TIMESTAMP
+  created_at TIMESTAMPTZ  DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMPTZ  DEFAULT CURRENT_TIMESTAMP
 );
 
 -- USERS
@@ -23,8 +23,8 @@ CREATE TABLE users (
   password_hash VARCHAR(255) NOT NULL,
   role          VARCHAR(50)  NOT NULL CHECK (role IN ('WAREHOUSE_ADMIN', 'SHOP_OWNER', 'EMPLOYEE')),
   is_active     BOOLEAN      DEFAULT TRUE,
-  created_at    TIMESTAMP    DEFAULT CURRENT_TIMESTAMP,
-  updated_at    TIMESTAMP    DEFAULT CURRENT_TIMESTAMP
+  created_at    TIMESTAMPTZ  DEFAULT CURRENT_TIMESTAMP,
+  updated_at    TIMESTAMPTZ  DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE INDEX idx_users_shop_id ON users(shop_id);
@@ -36,8 +36,8 @@ CREATE TABLE categories (
   shop_id    INTEGER      NOT NULL REFERENCES shops(id) ON DELETE CASCADE,
   name       VARCHAR(255) NOT NULL,
   image_url  VARCHAR(500),
-  created_at TIMESTAMP    DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP    DEFAULT CURRENT_TIMESTAMP
+  created_at TIMESTAMPTZ  DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMPTZ  DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE INDEX idx_categories_shop_id ON categories(shop_id);
@@ -59,8 +59,8 @@ CREATE TABLE products (
   source      VARCHAR(50)     CHECK (source IN ('WAREHOUSE', 'LOCAL')),
   image_url   VARCHAR(500),
   is_active   BOOLEAN         NOT NULL DEFAULT TRUE,
-  created_at  TIMESTAMP       DEFAULT CURRENT_TIMESTAMP,
-  updated_at  TIMESTAMP       DEFAULT CURRENT_TIMESTAMP
+  created_at  TIMESTAMPTZ     DEFAULT CURRENT_TIMESTAMP,
+  updated_at  TIMESTAMPTZ     DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE INDEX idx_products_category_id ON products(category_id);
@@ -76,7 +76,7 @@ CREATE TABLE inventory (
   product_id          INTEGER NOT NULL REFERENCES products(id) ON DELETE CASCADE,
   current_quantity    INTEGER NOT NULL DEFAULT 0,
   low_stock_threshold INTEGER NOT NULL DEFAULT 10,
-  updated_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  updated_at          TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE INDEX        idx_inventory_shop_id     ON inventory(shop_id);
@@ -91,8 +91,8 @@ CREATE TABLE orders (
   status       VARCHAR(50) NOT NULL DEFAULT 'PENDING'
                CHECK (status IN ('PENDING', 'PROCESSING', 'SHIPPED', 'RECEIVED', 'COMPLETED', 'CANCELLED')),
   total_items  INTEGER,
-  created_at   TIMESTAMP  DEFAULT CURRENT_TIMESTAMP,
-  updated_at   TIMESTAMP  DEFAULT CURRENT_TIMESTAMP
+  created_at   TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+  updated_at   TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE INDEX idx_orders_from_shop_id ON orders(from_shop_id);
@@ -114,11 +114,16 @@ CREATE INDEX idx_order_items_order_id   ON order_items(order_id);
 CREATE INDEX idx_order_items_product_id ON order_items(product_id);
 
 -- RECEIPTS
+-- is_free: customer wasn't charged. Inventory still gets deducted at cost,
+-- but a free receipt's revenue is excluded from shop profit reports (see
+-- getShopProfitSummary/getShopProfitTrend) — cost still counts, so it shows
+-- up as a straight loss rather than being dropped from totals entirely.
 CREATE TABLE receipts (
   id         SERIAL PRIMARY KEY,
   shop_id    INTEGER NOT NULL REFERENCES shops(id)  ON DELETE CASCADE,
   created_by INTEGER NOT NULL REFERENCES users(id)  ON DELETE CASCADE,
   notes      TEXT,
+  is_free    BOOLEAN NOT NULL DEFAULT FALSE,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
@@ -152,7 +157,7 @@ CREATE TABLE notifications (
   type       VARCHAR(50),
   args       JSONB        DEFAULT NULL,
   is_read    BOOLEAN      DEFAULT FALSE,
-  created_at TIMESTAMP    DEFAULT CURRENT_TIMESTAMP
+  created_at TIMESTAMPTZ  DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE INDEX idx_notifications_shop_id ON notifications(shop_id);
@@ -160,6 +165,9 @@ CREATE INDEX idx_notifications_user_id ON notifications(user_id);
 CREATE INDEX idx_notifications_is_read ON notifications(is_read);
 
 -- AUDIT LOGS
+-- receipt_id: structured back-reference to the receipt a log entry came from
+-- (receipt creation's ADJUSTMENT entries, and MARKED_FREE/UNMARKED_FREE from
+-- toggling a receipt's is_free flag) — null for everything else.
 CREATE TABLE audit_logs (
   id          SERIAL PRIMARY KEY,
   shop_id     INTEGER        REFERENCES shops(id) ON DELETE CASCADE,
@@ -168,17 +176,19 @@ CREATE TABLE audit_logs (
   action      VARCHAR(50),
   entity_type VARCHAR(50),
   entity_id   INTEGER,
+  receipt_id  INTEGER        REFERENCES receipts(id) ON DELETE SET NULL,
   quantity    INTEGER,
   amount      DECIMAL(15, 2),
   notes       TEXT,
-  created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  created_at  TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE INDEX idx_audit_logs_shop_id ON audit_logs(shop_id);
-CREATE INDEX idx_audit_logs_user_id ON audit_logs(user_id);
-CREATE INDEX idx_audit_logs_type    ON audit_logs(type);
-CREATE INDEX idx_audit_logs_action  ON audit_logs(action);
-CREATE INDEX idx_audit_logs_entity  ON audit_logs(entity_type, entity_id);
+CREATE INDEX idx_audit_logs_shop_id    ON audit_logs(shop_id);
+CREATE INDEX idx_audit_logs_user_id    ON audit_logs(user_id);
+CREATE INDEX idx_audit_logs_type       ON audit_logs(type);
+CREATE INDEX idx_audit_logs_action     ON audit_logs(action);
+CREATE INDEX idx_audit_logs_entity     ON audit_logs(entity_type, entity_id);
+CREATE INDEX idx_audit_logs_receipt_id ON audit_logs(receipt_id);
 
 -- REFRESH TOKENS
 CREATE TABLE refresh_tokens (

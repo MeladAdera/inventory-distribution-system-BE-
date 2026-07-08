@@ -6,6 +6,7 @@ export class AuditLog {
   action!: string;
   entity_type!: string | null;
   entity_id!: number | null;
+  receipt_id!: number | null;
   quantity!: number | null;
   amount!: number | null;
   notes!: string | null;

@@ -57,10 +57,17 @@ export class ReceiptsRepository {
     );
   }
 
+  setIsFree(id: number, isFree: boolean): Promise<Receipt | null> {
+    return this.db.queryOne<Receipt>(
+      `UPDATE receipts SET is_free = $2 WHERE id = $1 RETURNING *`,
+      [id, isFree],
+    );
+  }
+
   findById(id: number): Promise<ReceiptWithItems | null> {
     return this.db.queryOne<ReceiptWithItems>(
       `SELECT
-         r.id, r.shop_id, r.created_by, r.notes, r.created_at,
+         r.id, r.shop_id, r.created_by, r.notes, r.is_free, r.created_at,
          COALESCE(SUM(ri.quantity * ri.price), 0)::float8 AS total_price,
          COALESCE(
            JSON_AGG(
@@ -123,7 +130,7 @@ export class ReceiptsRepository {
 
     const rows = await this.db.query<ReceiptListItem & { total_count: string }>(
       `SELECT
-         r.id, r.shop_id, r.created_by, r.notes, r.created_at,
+         r.id, r.shop_id, r.created_by, r.notes, r.is_free, r.created_at,
          s.name           AS shop_name,
          u.name           AS created_by_name,
          COUNT(ri.id)::int AS total_items,

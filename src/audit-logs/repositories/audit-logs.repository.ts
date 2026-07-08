@@ -11,6 +11,7 @@ export interface CreateAuditLogData {
   action: string;
   entity_type?: string;
   entity_id?: number;
+  receipt_id?: number;
   quantity?: number;
   amount?: number;
   notes?: string;
@@ -52,6 +53,10 @@ export class AuditLogsRepository {
     if (query.entityId) {
       conditions.push(`al.entity_id = $${idx++}`);
       params.push(query.entityId);
+    }
+    if (query.receiptId) {
+      conditions.push(`al.receipt_id = $${idx++}`);
+      params.push(query.receiptId);
     }
     if (query.fromDate) {
       conditions.push(`al.created_at >= $${idx++}`);
@@ -105,8 +110,8 @@ export class AuditLogsRepository {
 
   async insert(data: CreateAuditLogData, client?: pg.PoolClient): Promise<AuditLog> {
     const sql = `
-      INSERT INTO audit_logs (shop_id, user_id, type, action, entity_type, entity_id, quantity, amount, notes)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+      INSERT INTO audit_logs (shop_id, user_id, type, action, entity_type, entity_id, receipt_id, quantity, amount, notes)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
       RETURNING *
     `;
     const params = [
@@ -116,6 +121,7 @@ export class AuditLogsRepository {
       data.action,
       data.entity_type ?? null,
       data.entity_id ?? null,
+      data.receipt_id ?? null,
       data.quantity ?? null,
       data.amount ?? null,
       data.notes ?? null,
