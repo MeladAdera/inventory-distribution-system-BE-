@@ -32,8 +32,10 @@ Prices change over time. If profit were computed by joining transactions to the 
 
 **Where the snapshots are taken:**
 
-- `OrdersRepository.insertItems` — selects `price, cost_price` from `products` and writes both into `order_items`.
-- `ReceiptsService.create` — the row-locking query `InventoryRepository.findByIdsForUpdate` joins `products` and carries `p.price, p.cost_price`; both are written into `receipt_items`.
+- `OrdersRepository.insertItems` — writes `price` from `products` and `cost_price` from the **warehouse's `inventory.avg_cost`** into `order_items`.
+- `ReceiptsService.create` — the row-locking query `InventoryRepository.findByIdsForUpdate` carries the shop's own **`inventory.sale_price`** and **`inventory.avg_cost`**; both are written into `receipt_items` (as `price` and `cost_price`).
+
+> **Updated:** the snapshot *sources* moved from the global `products` columns to per-shop `inventory` columns — see [14-inventory-cost-and-pricing.md](./14-inventory-cost-and-pricing.md). The snapshot *pattern* and everything below (profit formula, endpoints, scoping) are unchanged.
 
 Existing rows from before the migration have `cost_price = 0`, so historical profit equals full revenue until new transactions accumulate.
 
@@ -174,9 +176,11 @@ A shop sells 10 water bottles and 2 phone cases in one receipt:
 
 ---
 
-## Known Limitation — shop margin on warehouse products
+## ~~Known Limitation~~ — RESOLVED in [14-inventory-cost-and-pricing.md](./14-inventory-cost-and-pricing.md)
 
-Shops resell warehouse products at the warehouse-set `price` (shops cannot edit warehouse products), and the receipt snapshot copies the *warehouse's* `cost_price`. A shop's reported "profit" on warehouse items therefore reflects the full margin over the warehouse's acquisition cost — not the margin over what the shop paid the warehouse. True per-shop margin would require per-shop pricing (a shop-specific selling price and/or using the order price as the shop's cost), which does not exist yet. For `LOCAL` products the shop sets both prices, so shop profit is exact.
+> This limitation no longer applies. Cost and selling price are now tracked **per shop** on the inventory row (`avg_cost` moving average, `sale_price`), and sales snapshot those per-shop values. A shop's profit reflects its own selling price minus its own acquisition cost. See doc 14.
+
+**Original limitation (historical):** Shops resold warehouse products at the warehouse-set `price`, and the receipt snapshot copied the *warehouse's* `cost_price`, so a shop's reported profit reflected the full margin over the warehouse's acquisition cost rather than the shop's own — true per-shop margin required per-shop pricing, which did not exist yet.
 
 ---
 
@@ -187,7 +191,7 @@ src/database/migrations/00-InitialSchema.sql   ← schema (cost_price columns)
 src/products/                                  ← entity, DTOs, insert/update, visibility rule
 src/orders/repositories/orders.repository.ts   ← cost snapshot on insertItems
 src/receipts/services/receipts.service.ts      ← cost snapshot on receipt creation
-src/inventory/repositories/inventory.repository.ts ← findByIdsForUpdate carries p.cost_price
+src/inventory/repositories/inventory.repository.ts ← findByIdsForUpdate carries inventory.sale_price + avg_cost (see doc 14)
 src/analytics/                                 ← ProfitQueryDto, profit SQL, scoping, endpoints
 src/database/seeders/seed.ts                   ← realistic cost prices + order_items backfill
 ```
