@@ -57,11 +57,15 @@ export class ReceiptsRepository {
     );
   }
 
-  setIsFree(id: number, isFree: boolean): Promise<Receipt | null> {
-    return this.db.queryOne<Receipt>(
-      `UPDATE receipts SET is_free = $2 WHERE id = $1 RETURNING *`,
+  // Conditional on the value actually changing (is_free <> $2), so the caller
+  // can log the toggle exactly once — two concurrent toggles serialize on the
+  // row lock and only the one that flips it gets a row back.
+  async setIsFree(id: number, isFree: boolean, client: pg.PoolClient): Promise<Receipt | null> {
+    const result = await client.query<Receipt>(
+      `UPDATE receipts SET is_free = $2 WHERE id = $1 AND is_free <> $2 RETURNING *`,
       [id, isFree],
     );
+    return result.rows[0] ?? null;
   }
 
   findById(id: number): Promise<ReceiptWithItems | null> {

@@ -153,26 +153,34 @@ export class ReceiptsService {
       throw new ForbiddenException('receipt.ACCESS_DENIED');
     }
 
-    if (receipt.is_free !== isFree) {
-      await this.receiptsRepo.setIsFree(id, isFree);
+    // Flip the flag and write the audit trail in one transaction. The UPDATE is
+    // conditional on the value actually changing, so if the receipt is already
+    // in the requested state (or a concurrent request just set it), we log
+    // nothing — no duplicate audit entries and no partial write.
+    await this.db.transaction(async (client) => {
+      const changed = await this.receiptsRepo.setIsFree(id, isFree, client);
+      if (!changed) return;
 
       // One audit log entry per item — same INVENTORY type as receipt creation,
       // so product_name resolves via the entity_id -> inventory -> product join.
       const action = isFree ? 'MARKED_FREE' : 'UNMARKED_FREE';
       for (const item of receipt.items) {
-        await this.auditLogsService.log({
-          shop_id: receipt.shop_id,
-          user_id: user.id,
-          type: 'INVENTORY',
-          action,
-          entity_type: 'inventory',
-          entity_id: item.inventory_id,
-          receipt_id: id,
-          amount: item.quantity * parseFloat(item.price),
-          notes: receipt.notes ?? undefined,
-        });
+        await this.auditLogsService.log(
+          {
+            shop_id: receipt.shop_id,
+            user_id: user.id,
+            type: 'INVENTORY',
+            action,
+            entity_type: 'inventory',
+            entity_id: item.inventory_id,
+            receipt_id: id,
+            amount: item.quantity * parseFloat(item.price),
+            notes: receipt.notes ?? undefined,
+          },
+          client,
+        );
       }
-    }
+    });
 
     return this.receiptsRepo.findById(id).then((r) => r!);
   }
