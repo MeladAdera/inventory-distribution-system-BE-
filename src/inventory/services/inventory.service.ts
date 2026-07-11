@@ -50,6 +50,18 @@ export class InventoryService {
   async stockIn(dto: StockInDto, user: RequestUser): Promise<InventoryWithProduct> {
     const shopId = user.shopId!;
 
+    // Validate the product exists and is in this shop's scope before touching
+    // inventory: either the shop's own product or a shared warehouse product.
+    // Avoids a raw FK error on a bad id, and blocks stocking another shop's
+    // private (LOCAL) product into your own inventory.
+    const product = await this.inventoryRepo.findProductForStockIn(dto.productId);
+    if (!product) {
+      throw new NotFoundException({ key: 'inventory.PRODUCT_NOT_FOUND', args: { productId: dto.productId } });
+    }
+    if (product.shop_id !== shopId && product.source !== 'WAREHOUSE') {
+      throw new ForbiddenException('inventory.PRODUCT_NOT_IN_SCOPE');
+    }
+
     // Tri-state → number | null for the blend. Nullish coalescing keeps an
     // explicit 0 (free stock) as 0, and turns an omitted unitCost into null so
     // the repo inherits the current avg (or seeds a new row from product cost).

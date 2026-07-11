@@ -2,6 +2,8 @@
   "NOT_FOUND": "سجل المخزون غير موجود",
   "INSUFFICIENT_STOCK": "المخزون غير كافٍ. المطلوب: {requested}، المتاح: {available}",
   "PRODUCT_ALREADY_IN_SHOP": "هذا المنتج مُتتبَّع بالفعل في مخزون هذا المتجر",
+  "PRODUCT_NOT_FOUND": "المنتج {productId} غير موجود",
+  "PRODUCT_NOT_IN_SCOPE": "هذا المنتج غير متاح لمتجرك ولا يمكن إضافته إلى المخزون",
   "NEGATIVE_STOCK": "سيؤدي هذا التعديل إلى مخزون سالب (الحالي: {current}، التعديل: {adjustment})",
   "ACCESS_DENIED": "ليس لديك صلاحية الوصول إلى هذا السجل في المخزون",
   "MODIFY_OWN_ONLY": "يمكنك تعديل مخزون متجرك الخاص فقط"
