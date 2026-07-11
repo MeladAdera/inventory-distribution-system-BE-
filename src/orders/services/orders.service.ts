@@ -16,6 +16,7 @@ import { UpdateOrderStatusDto } from '../dto/update-order-status.dto';
 import { OrderQueryDto } from '../dto/order-query.dto';
 import { Order, OrderWithItems, OrderStatus } from '../entities/order.entity';
 import { UserRole } from '../../common/enums/user-role.enum';
+import { ShopType } from '../../common/enums/shop-type.enum';
 import { paginate, PaginatedResponse } from '../../common/utils/pagination.util';
 import { RequestUser } from '../../common/interfaces/request-user.interface';
 
@@ -45,6 +46,20 @@ export class OrdersService {
       toShopId = dto.shopId;
     } else {
       toShopId = user.shopId!;
+    }
+
+    // Validate the destination is a real, active shop — not the warehouse, a
+    // deactivated shop, or a non-existent id (which would otherwise surface as
+    // a raw FK violation later in the transaction).
+    const destShop = await this.ordersRepo.findShopById(toShopId);
+    if (!destShop) {
+      throw new BadRequestException({ key: 'orders.DEST_SHOP_NOT_FOUND', args: { shopId: toShopId } });
+    }
+    if (destShop.type !== ShopType.SHOP) {
+      throw new BadRequestException('orders.DEST_NOT_A_SHOP');
+    }
+    if (!destShop.is_active) {
+      throw new BadRequestException('orders.DEST_SHOP_INACTIVE');
     }
 
     const warehouse = await this.ordersRepo.findWarehouseShop();
@@ -92,7 +107,16 @@ export class OrdersService {
       // Deduct from warehouse immediately so stock is unavailable for subsequent orders.
       for (const item of dto.items) {
         const warehouseInv = warehouseMap.get(item.productId)!;
-        await this.inventoryRepo.adjust(warehouseInv.id, -item.quantity, client);
+        // The row is locked and quantity was validated above, so this should
+        // always succeed. If the DB guard (current_quantity + delta >= 0) still
+        // rejects it, fail loud rather than create an order without reserving.
+        const adjusted = await this.inventoryRepo.adjust(warehouseInv.id, -item.quantity, client);
+        if (!adjusted) {
+          throw new BadRequestException({
+            key: 'orders.INSUFFICIENT_STOCK',
+            args: { product: warehouseInv.product_name, available: warehouseInv.current_quantity, required: item.quantity },
+          });
+        }
         await this.auditLogsService.log(
           {
             shop_id: warehouse.id,
@@ -143,7 +167,11 @@ export class OrdersService {
       if (!order) throw new NotFoundException('orders.NOT_FOUND');
 
       if (dto.status === 'CANCELLED') {
-        const cancellable: OrderStatus[] = ['PENDING', 'PROCESSING'];
+        // Admins may cancel up to SHIPPED (stock is returned to the warehouse by
+        // restoreWarehouseInventory); shop owners are further restricted to
+        // PENDING in the branch below. The destination is never credited before
+        // RECEIVED, so cancelling any of these states restores to the warehouse.
+        const cancellable: OrderStatus[] = ['PENDING', 'PROCESSING', 'SHIPPED'];
         if (!cancellable.includes(order.status)) {
           throw new BadRequestException({ key: 'orders.CANNOT_CANCEL', args: { status: order.status } });
         }
