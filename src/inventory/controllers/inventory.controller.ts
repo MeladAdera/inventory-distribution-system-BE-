@@ -15,6 +15,7 @@ import { RequestUser } from '../../common/interfaces/request-user.interface';
 import { InventoryQueryDto } from '../dto/inventory-query.dto';
 import { StockInDto } from '../dto/stock-in.dto';
 import { AdjustInventoryDto } from '../dto/adjust-inventory.dto';
+import { UpdateSalePriceDto } from '../dto/update-sale-price.dto';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../auth/guards/roles.guard';
 import { Roles } from '../../auth/decorators/roles.decorator';
@@ -70,5 +71,16 @@ export class InventoryController {
     @CurrentUser() user: RequestUser,
   ) {
     return this.inventoryService.adjust(id, dto, user);
+  }
+
+  @Patch(':id/price')
+  @Roles(UserRole.WAREHOUSE_ADMIN, UserRole.SHOP_OWNER)
+  @ApiOperation({ summary: 'Set the per-shop selling price for an inventory item (shop owner: own shop only)' })
+  setSalePrice(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: UpdateSalePriceDto,
+    @CurrentUser() user: RequestUser,
+  ) {
+    return this.inventoryService.setSalePrice(id, dto, user);
   }
 }

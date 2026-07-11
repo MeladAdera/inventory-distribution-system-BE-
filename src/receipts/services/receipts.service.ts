@@ -69,8 +69,10 @@ export class ReceiptsService {
           inventoryId: item.inventoryId,
           productId: inv.product_id,
           quantity: item.quantity,
-          price: inv.price,
-          costPrice: inv.cost_price,
+          // Snapshot the shop's own selling price and moving-average cost at
+          // sale time — the basis profit reports use (receipt_items.price/.cost_price).
+          price: inv.sale_price,
+          costPrice: inv.avg_cost,
           quantityBefore: inv.current_quantity,
           quantityAfter,
         });

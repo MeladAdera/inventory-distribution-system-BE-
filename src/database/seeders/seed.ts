@@ -174,6 +174,15 @@ async function seedInventory(): Promise<void> {
       (4, 10,  22, 15),
       (4, 11,   9, 15)   -- below threshold
   `);
+
+  // Seed avg_cost and sale_price from each product's cost/price so dev profit
+  // numbers are realistic — both columns default to 0 on the raw insert above.
+  await client.query(`
+    UPDATE inventory i
+    SET avg_cost = p.cost_price, sale_price = p.price
+    FROM products p
+    WHERE p.id = i.product_id
+  `);
 }
 
 async function seedOrders(): Promise<void> {

@@ -32,11 +32,21 @@ export class OrdersRepository {
     return result.rows[0];
   }
 
-  async insertItems(orderId: number, items: OrderItemDto[], client: pg.PoolClient): Promise<OrderItem[]> {
+  async insertItems(orderId: number, fromShopId: number, items: OrderItemDto[], client: pg.PoolClient): Promise<OrderItem[]> {
     const productIds = items.map((i) => i.productId);
+    // price = the product's selling price (what the shop pays the warehouse).
+    // cost_price = the warehouse's own moving-average cost for this product, so
+    // warehouse profit reflects real basis and the shop blends a real cost on
+    // receive. Falls back to the product cost_price, then 0, if the warehouse
+    // somehow has no inventory row (shouldn't happen — stock was validated).
     const priceRows = await client.query<{ id: number; price: string; cost_price: string }>(
-      `SELECT id, price, cost_price FROM products WHERE id = ANY($1::int[])`,
-      [productIds],
+      `SELECT p.id,
+              p.price,
+              COALESCE(i.avg_cost, p.cost_price, 0) AS cost_price
+       FROM products p
+       LEFT JOIN inventory i ON i.product_id = p.id AND i.shop_id = $2
+       WHERE p.id = ANY($1::int[])`,
+      [productIds, fromShopId],
     );
     const priceMap = new Map(priceRows.rows.map((r) => [r.id, r]));
 

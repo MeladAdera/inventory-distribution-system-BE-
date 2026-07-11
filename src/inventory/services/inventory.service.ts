@@ -12,6 +12,7 @@ import { NotificationsService } from '../../notifications/services/notifications
 import { InventoryQueryDto } from '../dto/inventory-query.dto';
 import { StockInDto } from '../dto/stock-in.dto';
 import { AdjustInventoryDto } from '../dto/adjust-inventory.dto';
+import { UpdateSalePriceDto } from '../dto/update-sale-price.dto';
 import { InventoryWithProduct } from '../entities/inventory.entity';
 import { UserRole } from '../../common/enums/user-role.enum';
 import { paginate, PaginatedResponse } from '../../common/utils/pagination.util';
@@ -49,8 +50,13 @@ export class InventoryService {
   async stockIn(dto: StockInDto, user: RequestUser): Promise<InventoryWithProduct> {
     const shopId = user.shopId!;
 
+    // Tri-state → number | null for the blend. Nullish coalescing keeps an
+    // explicit 0 (free stock) as 0, and turns an omitted unitCost into null so
+    // the repo inherits the current avg (or seeds a new row from product cost).
+    const addCost = dto.unitCost ?? null;
+
     const result = await this.db.transaction(async (client) => {
-      const updated = await this.inventoryRepo.upsertStockIn(shopId, dto.productId, dto.quantity, client);
+      const updated = await this.inventoryRepo.upsertStockIn(shopId, dto.productId, dto.quantity, addCost, client);
 
       await this.auditLogsService.log(
         {
@@ -61,6 +67,9 @@ export class InventoryService {
           entity_type: 'inventory',
           entity_id: updated.id,
           quantity: dto.quantity,
+          // Log the batch's total cost only when a unit cost was actually stated
+          // (including an explicit 0); an omitted cost was inherited, not stated.
+          amount: dto.unitCost !== undefined ? dto.unitCost * dto.quantity : undefined,
           notes: dto.notes,
         },
         client,
@@ -77,6 +86,12 @@ export class InventoryService {
     return result;
   }
 
+  // Cost-neutral by design: adjust only corrects the count, it never touches
+  // avg_cost. A positive adjustment (a recount that finds extra units) values
+  // those units at the current avg_cost — correct, since no purchase happened.
+  // Edge case worth knowing: a positive adjust on an empty row (qty 0, avg 0)
+  // mints units at cost 0. That's an accepted correction-path outcome, not a
+  // bug — use stockIn (with a unitCost) when stock genuinely arrived at a cost.
   async adjust(id: number, dto: AdjustInventoryDto, user: RequestUser): Promise<InventoryWithProduct> {
     const item = await this.inventoryRepo.findById(id);
     if (!item) throw new NotFoundException('inventory.NOT_FOUND');
@@ -123,6 +138,34 @@ export class InventoryService {
     }
 
     return result;
+  }
+
+  async setSalePrice(id: number, dto: UpdateSalePriceDto, user: RequestUser): Promise<InventoryWithProduct> {
+    const item = await this.inventoryRepo.findById(id);
+    if (!item) throw new NotFoundException('inventory.NOT_FOUND');
+
+    this.assertWriteAccess(user, item.shop_id);
+
+    return this.db.transaction(async (client) => {
+      const updated = await this.inventoryRepo.updateSalePrice(id, dto.salePrice, client);
+      if (!updated) throw new NotFoundException('inventory.NOT_FOUND');
+
+      await this.auditLogsService.log(
+        {
+          shop_id: item.shop_id,
+          user_id: user.id,
+          type: 'INVENTORY',
+          action: 'PRICE_CHANGE',
+          entity_type: 'inventory',
+          entity_id: id,
+          amount: dto.salePrice,
+          notes: `Selling price: ${item.sale_price} → ${dto.salePrice}`,
+        },
+        client,
+      );
+
+      return this.inventoryRepo.findById(id, client).then((r) => r!);
+    });
   }
 
   async getLowStock(user: RequestUser): Promise<InventoryWithProduct[]> {

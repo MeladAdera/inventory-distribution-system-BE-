@@ -86,7 +86,8 @@ export class OrdersService {
       }
 
       const created = await this.ordersRepo.insert(warehouse.id, toShopId, totalItems, client);
-      await this.ordersRepo.insertItems(created.id, dto.items, client);
+      // from_shop is the warehouse — snapshot cost from its avg_cost.
+      await this.ordersRepo.insertItems(created.id, warehouse.id, dto.items, client);
 
       // Deduct from warehouse immediately so stock is unavailable for subsequent orders.
       for (const item of dto.items) {
@@ -216,17 +217,17 @@ export class OrdersService {
     client: import('pg').PoolClient,
   ): Promise<void> {
     const items = await this.ordersRepo.findItemsByOrderId(orderId, client);
-    const productIds = items.map((i) => i.product_id);
 
-    // Warehouse stock was already deducted at order creation — only add to shop now.
+    // Warehouse stock was already deducted at order creation — only add to shop
+    // now, blending the order's cost snapshot into the shop's moving average.
     for (const item of items) {
-      await this.inventoryRepo.upsertStockIn(toShopId, item.product_id, item.quantity, client);
-    }
-
-    const shopInventories = await this.inventoryRepo.findByShopAndProducts(toShopId, productIds, client);
-    const shopMap = new Map(shopInventories.map((inv) => [inv.product_id, inv]));
-
-    for (const item of items) {
+      const updated = await this.inventoryRepo.upsertStockIn(
+        toShopId,
+        item.product_id,
+        item.quantity,
+        Number(item.cost_price),
+        client,
+      );
       await this.auditLogsService.log(
         {
           shop_id: toShopId,
@@ -234,7 +235,7 @@ export class OrdersService {
           type: 'INVENTORY',
           action: 'TRANSFER_IN',
           entity_type: 'inventory',
-          entity_id: shopMap.get(item.product_id)?.id,
+          entity_id: updated.id,
           quantity: item.quantity,
           notes: `Order #${orderId} — received from warehouse`,
         },
@@ -250,18 +251,18 @@ export class OrdersService {
     client: import('pg').PoolClient,
   ): Promise<void> {
     const items = await this.ordersRepo.findItemsByOrderId(orderId, client);
-    const productIds = items.map((i) => i.product_id);
 
-    const warehouseInventories = await this.inventoryRepo.findByShopAndProductsForUpdate(
-      warehouseShopId,
-      productIds,
-      client,
-    );
-    const warehouseMap = new Map(warehouseInventories.map((inv) => [inv.product_id, inv]));
-
+    // Return units at the cost they left with (order_items.cost_price) so total
+    // warehouse inventory value is conserved even if the warehouse avg has moved
+    // since the order shipped. upsertStockIn does the blend and locks the row.
     for (const item of items) {
-      const warehouseInv = warehouseMap.get(item.product_id)!;
-      await this.inventoryRepo.adjust(warehouseInv.id, item.quantity, client);
+      const updated = await this.inventoryRepo.upsertStockIn(
+        warehouseShopId,
+        item.product_id,
+        item.quantity,
+        Number(item.cost_price),
+        client,
+      );
       await this.auditLogsService.log(
         {
           shop_id: warehouseShopId,
@@ -269,7 +270,7 @@ export class OrdersService {
           type: 'INVENTORY',
           action: 'TRANSFER_IN',
           entity_type: 'inventory',
-          entity_id: warehouseInv.id,
+          entity_id: updated.id,
           quantity: item.quantity,
           notes: `Order #${orderId} — cancelled, stock returned to warehouse`,
         },
