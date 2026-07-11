@@ -1,4 +1,4 @@
-import { Controller, Post, Get, Body, UseGuards, HttpCode, HttpStatus, Logger } from '@nestjs/common';
+import { Controller, Post, Get, Body, UseGuards, HttpCode, HttpStatus } from '@nestjs/common';
 import {
   ApiTags,
   ApiOperation,
@@ -10,6 +10,7 @@ import { Throttle } from '@nestjs/throttler';
 import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
+import { ChangePasswordDto } from './dto/change-password.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { CurrentUser } from './decorators/current-user.decorator';
 import type { RequestUser } from '../common/interfaces/request-user.interface';
@@ -17,8 +18,6 @@ import type { RequestUser } from '../common/interfaces/request-user.interface';
 @ApiTags('auth')
 @Controller('auth')
 export class AuthController {
-  private readonly logger = new Logger(AuthController.name);
-
   constructor(private readonly authService: AuthService) {}
 
   @Post('login')
@@ -29,17 +28,8 @@ export class AuthController {
     description: 'Returns access token, refresh token, and user info',
   })
   @ApiUnauthorizedResponse({ description: 'Invalid credentials or inactive account' })
-  async login(@Body() dto: LoginDto) {
-    this.logger.log('LOGIN REQUEST RECEIVED');
-    this.logger.log(`Email: ${dto.email}`);
-    try {
-      const result = await this.authService.login(dto);
-      this.logger.log(`Login success for: ${dto.email}`);
-      return result;
-    } catch (error) {
-      this.logger.warn(`Login failed for: ${dto.email} — ${(error as Error).message}`);
-      throw error;
-    }
+  login(@Body() dto: LoginDto) {
+    return this.authService.login(dto);
   }
 
   @Post('refresh')
@@ -49,6 +39,16 @@ export class AuthController {
   @ApiUnauthorizedResponse({ description: 'Refresh token is invalid, expired, or revoked' })
   refresh(@Body() dto: RefreshTokenDto) {
     return this.authService.refresh(dto);
+  }
+
+  @Post('change-password')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiOperation({ summary: 'Change your own password — verifies the current password and revokes all sessions' })
+  @ApiUnauthorizedResponse({ description: 'Current password is incorrect' })
+  changePassword(@CurrentUser() user: RequestUser, @Body() dto: ChangePasswordDto) {
+    return this.authService.changePassword(user.id, dto);
   }
 
   @Post('logout')

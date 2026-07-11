@@ -38,6 +38,15 @@ export class RefreshTokensRepository {
     );
   }
 
+  // Looks up a token regardless of revoked/expired state — used to detect reuse
+  // of an already-rotated (revoked) token.
+  findByHash(tokenHash: string): Promise<RefreshToken | null> {
+    return this.db.queryOne<RefreshToken>(
+      `SELECT * FROM refresh_tokens WHERE token_hash = $1`,
+      [tokenHash],
+    );
+  }
+
   async revoke(id: bigint): Promise<void> {
     await this.db.execute(
       `UPDATE refresh_tokens SET revoked_at = NOW() WHERE id = $1`,
