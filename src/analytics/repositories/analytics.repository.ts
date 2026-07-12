@@ -54,31 +54,42 @@ export interface ProfitTrendRow extends ProfitSummaryRow {
 export class AnalyticsRepository {
   constructor(private readonly db: DatabaseService) {}
 
+  // Single source of truth for the bucket label and the lookback window.
   // labelExpr and intervalExpr are hardcoded per case, dateColumn is internal —
-  // nothing here derives from user input
-  private periodExprs(period: TrendPeriod, dateColumn: string): { labelExpr: string; intervalExpr: string } {
+  // nothing here derives from user input.
+  //
+  // span:
+  //   'single' → one period back (last day / 7 days / 1 month) — for the
+  //              summary/leaderboard endpoints that return a single aggregate.
+  //   'trend'  → the documented multi-bucket span (14 days / 8 weeks /
+  //              6 months) so time-series endpoints return a real trend.
+  private periodExprs(
+    period: TrendPeriod,
+    dateColumn: string,
+    span: 'single' | 'trend',
+  ): { labelExpr: string; intervalExpr: string } {
     switch (period) {
       case TrendPeriod.WEEKLY:
         return {
           labelExpr: `TO_CHAR(DATE_TRUNC('week', ${dateColumn}), 'IYYY-"W"IW')`,
-          intervalExpr: `NOW() - INTERVAL '1 week'`,
+          intervalExpr: span === 'trend' ? `NOW() - INTERVAL '8 weeks'` : `NOW() - INTERVAL '1 week'`,
         };
       case TrendPeriod.MONTHLY:
         return {
           labelExpr: `TO_CHAR(DATE_TRUNC('month', ${dateColumn}), 'YYYY-MM')`,
-          intervalExpr: `NOW() - INTERVAL '1 month'`,
+          intervalExpr: span === 'trend' ? `NOW() - INTERVAL '6 months'` : `NOW() - INTERVAL '1 month'`,
         };
       default: // daily
         return {
           labelExpr: `TO_CHAR(DATE(${dateColumn}), 'YYYY-MM-DD')`,
-          intervalExpr: `NOW() - INTERVAL '1 day'`,
+          intervalExpr: span === 'trend' ? `NOW() - INTERVAL '14 days'` : `NOW() - INTERVAL '1 day'`,
         };
     }
   }
 
   // Warehouse profit: what shops paid (price) minus warehouse cost, from COMPLETED orders
   async getWarehouseProfitSummary(period: TrendPeriod): Promise<ProfitSummaryRow> {
-    const { intervalExpr } = this.periodExprs(period, 'o.updated_at');
+    const { intervalExpr } = this.periodExprs(period, 'o.updated_at', 'single');
     const row = await this.db.queryOne<ProfitSummaryRow>(
       `SELECT COALESCE(SUM(oi.quantity * oi.price), 0)::float8                     AS revenue,
               COALESCE(SUM(oi.quantity * oi.cost_price), 0)::float8                AS cost,
@@ -95,7 +106,7 @@ export class AnalyticsRepository {
   // Free receipts contribute no revenue but still incur cost, so they show up
   // as a straight loss rather than being dropped from the totals entirely.
   async getShopProfitSummary(period: TrendPeriod, shopId: number): Promise<ProfitSummaryRow> {
-    const { intervalExpr } = this.periodExprs(period, 'r.created_at');
+    const { intervalExpr } = this.periodExprs(period, 'r.created_at', 'single');
     const row = await this.db.queryOne<ProfitSummaryRow>(
       `SELECT COALESCE(SUM(CASE WHEN r.is_free THEN 0 ELSE ri.quantity * ri.price END), 0)::float8 AS revenue,
               COALESCE(SUM(ri.quantity * ri.cost_price), 0)::float8                                AS cost,
@@ -111,7 +122,7 @@ export class AnalyticsRepository {
   }
 
   getWarehouseProfitTrend(period: TrendPeriod): Promise<ProfitTrendRow[]> {
-    const { labelExpr, intervalExpr } = this.periodExprs(period, 'o.updated_at');
+    const { labelExpr, intervalExpr } = this.periodExprs(period, 'o.updated_at', 'trend');
     return this.db.query<ProfitTrendRow>(
       `SELECT ${labelExpr}                                                         AS label,
               COALESCE(SUM(oi.quantity * oi.price), 0)::float8                     AS revenue,
@@ -127,7 +138,7 @@ export class AnalyticsRepository {
   }
 
   getShopProfitTrend(period: TrendPeriod, shopId: number): Promise<ProfitTrendRow[]> {
-    const { labelExpr, intervalExpr } = this.periodExprs(period, 'r.created_at');
+    const { labelExpr, intervalExpr } = this.periodExprs(period, 'r.created_at', 'trend');
     return this.db.query<ProfitTrendRow>(
       `SELECT ${labelExpr}                                                                         AS label,
               COALESCE(SUM(CASE WHEN r.is_free THEN 0 ELSE ri.quantity * ri.price END), 0)::float8 AS revenue,
@@ -178,23 +189,7 @@ export class AnalyticsRepository {
       shopFilter = `AND o.to_shop_id = $1`;
     }
 
-    // labelExpr and intervalExpr are hardcoded per case — not derived from user input
-    let labelExpr: string;
-    let intervalExpr: string;
-
-    switch (period) {
-      case TrendPeriod.WEEKLY:
-        labelExpr = `TO_CHAR(DATE_TRUNC('week', o.updated_at), 'IYYY-"W"IW')`;
-        intervalExpr = `NOW() - INTERVAL '1 week'`;
-        break;
-      case TrendPeriod.MONTHLY:
-        labelExpr = `TO_CHAR(DATE_TRUNC('month', o.updated_at), 'YYYY-MM')`;
-        intervalExpr = `NOW() - INTERVAL '1 month'`;
-        break;
-      default: // daily
-        labelExpr = `TO_CHAR(DATE(o.updated_at), 'YYYY-MM-DD')`;
-        intervalExpr = `NOW() - INTERVAL '1 day'`;
-    }
+    const { labelExpr, intervalExpr } = this.periodExprs(period, 'o.updated_at', 'trend');
 
     return this.db.query<TrendRow>(
       `SELECT ${labelExpr} AS label,
@@ -216,18 +211,8 @@ export class AnalyticsRepository {
     limit: number,
     offset: number,
   ): Promise<PaginatedShopConsumption> {
-    // intervalExpr is hardcoded per case — not derived from user input
-    let intervalExpr: string;
-    switch (period) {
-      case TrendPeriod.WEEKLY:
-        intervalExpr = `NOW() - INTERVAL '1 week'`;
-        break;
-      case TrendPeriod.MONTHLY:
-        intervalExpr = `NOW() - INTERVAL '1 month'`;
-        break;
-      default:
-        intervalExpr = `NOW() - INTERVAL '1 day'`;
-    }
+    // Leaderboard over a single period (not a time-series), so keep the narrow window.
+    const { intervalExpr } = this.periodExprs(period, 'r.created_at', 'single');
 
     const rows = await this.db.query<ShopConsumptionRow & { total_count: string }>(
       `SELECT ri.product_id,
@@ -264,18 +249,8 @@ export class AnalyticsRepository {
       shopFilter = `AND o.to_shop_id = $2`;
     }
 
-    // intervalExpr is hardcoded per case — not derived from user input
-    let intervalExpr: string;
-    switch (period) {
-      case TrendPeriod.WEEKLY:
-        intervalExpr = `NOW() - INTERVAL '1 week'`;
-        break;
-      case TrendPeriod.MONTHLY:
-        intervalExpr = `NOW() - INTERVAL '1 month'`;
-        break;
-      default:
-        intervalExpr = `NOW() - INTERVAL '1 day'`;
-    }
+    // Leaderboard over a single period (not a time-series), so keep the narrow window.
+    const { intervalExpr } = this.periodExprs(period, 'o.updated_at', 'single');
 
     return this.db.query<ProductByShopRawRow>(
       `WITH product_shop AS (
