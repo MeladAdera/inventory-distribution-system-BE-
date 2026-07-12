@@ -63,7 +63,7 @@ export class AuditLogsRepository {
       params.push(query.fromDate);
     }
     if (query.toDate) {
-      conditions.push(`al.created_at <= $${idx++}::date + interval '1 day'`);
+      conditions.push(`al.created_at < ($${idx++}::date + interval '1 day')`);
       params.push(query.toDate);
     }
 

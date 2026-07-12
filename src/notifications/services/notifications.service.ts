@@ -68,7 +68,7 @@ export class NotificationsService {
 
   // Translates title and message if they hold an i18n key (namespace.KEY pattern).
   private translate(notification: Notification, lang: string): Notification {
-    const args = (notification.args ?? {}) as Record<string, unknown>;
+    const args = notification.args ?? {};
     return {
       ...notification,
       title: this.resolveKey(notification.title, args, lang),
