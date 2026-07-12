@@ -165,6 +165,18 @@ export class InventoryRepository {
     return result.rows;
   }
 
+  // Product scope for a manual stock-in: a shop may stock its own product or a
+  // shared warehouse product, but not another shop's private (LOCAL) product.
+  // Returns null for a non-existent or inactive product.
+  findProductForStockIn(
+    productId: number,
+  ): Promise<{ id: number; shop_id: number; source: 'WAREHOUSE' | 'LOCAL' } | null> {
+    return this.db.queryOne<{ id: number; shop_id: number; source: 'WAREHOUSE' | 'LOCAL' }>(
+      `SELECT id, shop_id, source FROM products WHERE id = $1 AND is_active = TRUE`,
+      [productId],
+    );
+  }
+
   async findByShopAndProduct(shopId: number, productId: number, client?: pg.PoolClient): Promise<Inventory | null> {
     const sql = 'SELECT * FROM inventory WHERE shop_id = $1 AND product_id = $2';
     if (client) {

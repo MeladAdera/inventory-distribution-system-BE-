@@ -113,6 +113,14 @@ export class ProductsRepository {
     );
   }
 
+  async shopExists(shopId: number): Promise<boolean> {
+    const row = await this.db.queryOne<{ exists: boolean }>(
+      `SELECT EXISTS (SELECT 1 FROM shops WHERE id = $1) AS exists`,
+      [shopId],
+    );
+    return row!.exists;
+  }
+
   // Checks the category is accessible to the target shop (own or warehouse)
   async categoryAccessible(categoryId: number, shopId: number): Promise<boolean> {
     const row = await this.db.queryOne<{ exists: boolean }>(

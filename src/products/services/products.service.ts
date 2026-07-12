@@ -56,7 +56,12 @@ export class ProductsService {
   }
 
   async createForShop(dto: CreateProductDto, shopId: number): Promise<Product> {
-    // Admin creating for a specific shop — same logic, different shopId
+    // Admin creating for a specific shop — same logic, different shopId.
+    // Validate the shop first: otherwise the INSERT ... SELECT FROM shops finds
+    // no row and silently returns undefined instead of a clear error.
+    const shopExists = await this.productsRepo.shopExists(shopId);
+    if (!shopExists) throw new NotFoundException('products.SHOP_NOT_FOUND');
+
     const accessible = await this.productsRepo.categoryAccessible(dto.category_id, shopId);
     if (!accessible) {
       throw new BadRequestException('products.CATEGORY_NOT_FOUND');

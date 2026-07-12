@@ -22,6 +22,13 @@ export class OrdersRepository {
     );
   }
 
+  findShopById(id: number): Promise<Pick<Shop, 'id' | 'type' | 'is_active'> | null> {
+    return this.db.queryOne<Pick<Shop, 'id' | 'type' | 'is_active'>>(
+      `SELECT id, type, is_active FROM shops WHERE id = $1`,
+      [id],
+    );
+  }
+
   async insert(fromShopId: number, toShopId: number, totalItems: number, client: pg.PoolClient): Promise<Order> {
     const result = await client.query<Order>(
       `INSERT INTO orders (from_shop_id, to_shop_id, status, total_items)
@@ -100,6 +107,7 @@ export class OrdersRepository {
     const rows = await this.db.query<OrderWithItems & { total_count: string }>(
       `SELECT o.*,
               s.name AS to_shop_name,
+              COALESCE(SUM(oi.quantity * oi.price), 0)::float8 AS total_price,
               COUNT(*) OVER() AS total_count,
               COALESCE(
                 JSON_AGG(

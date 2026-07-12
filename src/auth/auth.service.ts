@@ -11,6 +11,7 @@ import { UsersService } from '../users/services/users.service';
 import { RefreshTokensRepository } from './repositories/refresh-tokens.repository';
 import { LoginDto } from './dto/login.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
+import { ChangePasswordDto } from './dto/change-password.dto';
 import type { RequestUser } from '../common/interfaces/request-user.interface';
 
 @Injectable()
@@ -70,7 +71,16 @@ export class AuthService {
     const tokenHash = this.hashToken(dto.refreshToken);
     const storedToken = await this.refreshTokensRepo.findValid(tokenHash);
 
-    if (!storedToken) throw new UnauthorizedException('auth.REFRESH_TOKEN_INVALID');
+    if (!storedToken) {
+      // Reuse detection: if the token exists but is already revoked, it's a
+      // replay of a rotated token — likely stolen. Revoke the whole family so
+      // neither the attacker nor the victim can keep using it.
+      const known = await this.refreshTokensRepo.findByHash(tokenHash);
+      if (known && known.revoked_at !== null) {
+        await this.refreshTokensRepo.revokeAllForUser(known.user_id);
+      }
+      throw new UnauthorizedException('auth.REFRESH_TOKEN_INVALID');
+    }
 
     const user = await this.usersService.findByIdForAuth(storedToken.user_id);
     if (!user || !user.is_active)
@@ -94,6 +104,25 @@ export class AuthService {
 
   async logout(currentUser: RequestUser): Promise<void> {
     await this.refreshTokensRepo.revokeAllForUser(currentUser.id);
+  }
+
+  async changePassword(userId: number, dto: ChangePasswordDto): Promise<void> {
+    const user = await this.usersService.findByIdForAuth(userId);
+    if (!user || !user.is_active) {
+      throw new UnauthorizedException('auth.ACCOUNT_DEACTIVATED');
+    }
+
+    const valid = await bcrypt.compare(dto.currentPassword, user.password_hash);
+    if (!valid) {
+      throw new UnauthorizedException('auth.CURRENT_PASSWORD_INCORRECT');
+    }
+
+    const passwordHash = await bcrypt.hash(dto.newPassword, 10);
+    await this.usersService.setPasswordHash(userId, passwordHash);
+
+    // A password change signs the user out everywhere — revoke every refresh
+    // token (this session's access token remains valid until it expires).
+    await this.refreshTokensRepo.revokeAllForUser(userId);
   }
 
   // ── private helpers ──────────────────────────────────────────────────────

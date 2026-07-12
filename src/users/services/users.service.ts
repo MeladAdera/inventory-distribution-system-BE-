@@ -32,6 +32,14 @@ export class UsersService {
     return this.usersRepo.findByIdWithShop(id);
   }
 
+  // Sets a new password hash directly. The caller (AuthService.changePassword)
+  // has already authenticated the user via their current password, so there is
+  // no role/ownership check here.
+  async setPasswordHash(userId: number, passwordHash: string): Promise<void> {
+    const updated = await this.usersRepo.update(userId, { password_hash: passwordHash });
+    if (!updated) throw new NotFoundException('users.NOT_FOUND');
+  }
+
   async createShopOwner(dto: CreateShopOwnerDto): Promise<User> {
     const existing = await this.usersRepo.findByEmail(dto.email);
     if (existing) throw new ConflictException('users.EMAIL_TAKEN');

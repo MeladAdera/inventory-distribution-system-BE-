@@ -17,7 +17,6 @@ import { ProductsModule } from './products/products.module';
 import { CategoriesModule } from './categories/categories.module';
 import { InventoryModule } from './inventory/inventory.module';
 import { OrdersModule } from './orders/orders.module';
-import { WarehouseModule } from './warehouse/warehouse.module';
 import { ShopsModule } from './shops/shops.module';
 import { AuditLogsModule } from './audit-logs/audit-logs.module';
 import { NotificationsModule } from './notifications/notifications.module';
@@ -60,7 +59,6 @@ import { ReceiptsModule } from './receipts/receipts.module';
     CategoriesModule,
     InventoryModule,
     OrdersModule,
-    WarehouseModule,
     ShopsModule,
     AuditLogsModule,
     NotificationsModule,

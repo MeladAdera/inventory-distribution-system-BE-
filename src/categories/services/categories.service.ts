@@ -51,10 +51,14 @@ export class CategoriesService {
 
     this.assertShopAccess(user, category.shop_id);
 
-    if (dto.name) {
-      const duplicate = await this.categoriesRepo.findByNameAndShop(dto.name, category.shop_id, id);
-      if (duplicate) throw new ConflictException('categories.NAME_TAKEN');
+    // Nothing to change — the repo UPDATE only sets name, so calling it with an
+    // undefined name would write NULL and violate the NOT NULL constraint.
+    if (dto.name === undefined) {
+      return category;
     }
+
+    const duplicate = await this.categoriesRepo.findByNameAndShop(dto.name, category.shop_id, id);
+    if (duplicate) throw new ConflictException('categories.NAME_TAKEN');
 
     return this.categoriesRepo.update(id, dto);
   }
