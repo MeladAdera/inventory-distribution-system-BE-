@@ -160,9 +160,12 @@ async function seedCatalog(): Promise<void> {
     );
 
     for (const productName of category.products) {
+      // is_orderable = FALSE: these are catalog-only templates (name/category so
+      // a shop can self-register the product), not real warehouse stock. Flip to
+      // TRUE once the warehouse actually stocks and can fulfill orders for one.
       await client.query(
-        `INSERT INTO products (id, shop_id, category_id, name, is_global, source, is_active)
-         VALUES ($1, 1, $2, $3, TRUE, 'WAREHOUSE', TRUE)`,
+        `INSERT INTO products (id, shop_id, category_id, name, is_global, source, is_active, is_orderable)
+         VALUES ($1, 1, $2, $3, TRUE, 'WAREHOUSE', TRUE, FALSE)`,
         [productId, categoryId, productName],
       );
       productId++;

@@ -4,6 +4,7 @@ import {
   IsNumber,
   IsPositive,
   IsInt,
+  IsBoolean,
   Min,
   MinLength,
   MaxLength,
@@ -45,4 +46,13 @@ export class CreateProductDto {
   @Type(() => Number)
   @IsInt()
   category_id!: number;
+
+  @ApiPropertyOptional({
+    example: true,
+    default: true,
+    description: 'Whether a shop can order this from the warehouse. Set false for a catalog-only template with no real warehouse stock.',
+  })
+  @IsOptional()
+  @IsBoolean()
+  is_orderable?: boolean;
 }

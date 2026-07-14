@@ -562,6 +562,12 @@ Base path: `/products` — **Auth required on all routes**
 > shop's stock, 0 if not tracked). Use these to render the "Browse Products"
 > catalog cards as **Add** vs **Added ✓**. Pair with `POST /inventory` to add.
 
+> Every product also carries `is_orderable` (boolean) — whether a shop can
+> actually order it from the warehouse via `POST /orders`. `false` means it's a
+> catalog-only listing (no real warehouse stock behind it — e.g. the seeded
+> warehouse catalog). Filter with `?is_orderable=true` to build an order-item
+> picker that only offers products the warehouse can actually fulfill.
+
 ---
 
 ### `GET /products/:id`
@@ -599,6 +605,7 @@ Base path: `/products` — **Auth required on all routes**
 | `barcode` | string | optional |
 | `price` | number | required, > 0, max 2 decimal places |
 | `category_id` | number | required, must reference existing category |
+| `is_orderable` | boolean | optional, default `true`. Set `false` to create a catalog-only listing shops can browse/add but never order from the warehouse. |
 
 **Response `201`** — created `Product`
 
@@ -652,8 +659,10 @@ Creates a new order request from the shop to the warehouse.
 | Field | Type | Rules |
 |-------|------|-------|
 | `items` | array | required, min 1 item |
-| `items[].productId` | number | > 0, required |
+| `items[].productId` | number | > 0, required. Must reference a warehouse product with `is_orderable: true` |
 | `items[].quantity` | number | > 0, required |
+
+**Error `400`** — `orders.PRODUCT_NOT_ORDERABLE` if any `productId` is a catalog-only listing (`is_orderable: false`). Filter the order picker with `GET /products?is_orderable=true` to avoid offering these in the first place.
 
 **Response `201`**
 ```json

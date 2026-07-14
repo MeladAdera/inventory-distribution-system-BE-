@@ -13,6 +13,10 @@ export class Product {
   cost_price!: number | null;
   source!: 'WAREHOUSE' | 'LOCAL';
   is_global!: boolean;
+  // Whether a shop can actually order this from the warehouse. TRUE by default;
+  // catalog-only templates (no real warehouse stock) are seeded FALSE. Distinct
+  // from is_active — an orderable product can still be temporarily out of stock.
+  is_orderable!: boolean;
   image_url!: string | null;
   is_active!: boolean;
   created_at!: Date;

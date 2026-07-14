@@ -396,6 +396,7 @@ No body required. Sets `image_url` back to `null`.
   "cost_price": "850.00",
   "source": "WAREHOUSE",
   "is_global": true,
+  "is_orderable": true,
   "image_url": "/uploads/products/uuid.jpg",
   "is_active": true,
   "created_at": "2025-01-01T00:00:00Z",
@@ -410,8 +411,16 @@ No body required. Sets `image_url` back to `null`.
 > `current_quantity` (this shop's stock). Build the catalog from
 > `GET /products?source=WAREHOUSE`, group by `category_name`, render each card as
 > **Add** or **Added ✓** based on `in_inventory`, and call `POST /inventory` on
-> tap. The product then appears on the inventory page as out-of-stock, ready to
-> restock via an order.
+> tap. The product then appears on the inventory page as out-of-stock.
+>
+> **Restocking depends on `is_orderable`.** `true` (the default) means the
+> warehouse actually carries the product and it can be restocked via
+> `POST /orders`. `false` means it's a **catalog-only listing** — a name/category
+> template with no real warehouse stock (e.g. the seeded warehouse catalog) —
+> and ordering it will fail with `orders.PRODUCT_NOT_ORDERABLE`. Use
+> `GET /products?is_orderable=true` for the **order-item picker** specifically
+> (a different, narrower list than the full Browse Products catalog above, which
+> should still show catalog-only items as addable but not orderable).
 
 **Product Object (single — `GET /products/:id`):**
 
@@ -601,6 +610,10 @@ For `WAREHOUSE_ADMIN` — must supply `shopId` to set the destination:
   ]
 }
 ```
+
+> **`400 orders.PRODUCT_NOT_ORDERABLE`** if any `productId` has `is_orderable: false`
+> (a catalog-only listing). Build the order-item picker from
+> `GET /products?is_orderable=true` so this can't happen from normal use.
 
 **Update Status** `PATCH /orders/:id/status`
 ```json

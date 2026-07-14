@@ -52,7 +52,7 @@ export class ProductsService {
       if (duplicate) throw new ConflictException('products.BARCODE_TAKEN');
     }
 
-    return this.productsRepo.insert(dto.name, dto.description, dto.barcode, dto.price, dto.cost_price ?? 0, dto.category_id, shopId);
+    return this.productsRepo.insert(dto.name, dto.description, dto.barcode, dto.price, dto.cost_price ?? 0, dto.category_id, shopId, dto.is_orderable);
   }
 
   async createForShop(dto: CreateProductDto, shopId: number): Promise<Product> {
@@ -72,7 +72,7 @@ export class ProductsService {
       if (duplicate) throw new ConflictException('products.BARCODE_TAKEN');
     }
 
-    return this.productsRepo.insert(dto.name, dto.description, dto.barcode, dto.price, dto.cost_price ?? 0, dto.category_id, shopId);
+    return this.productsRepo.insert(dto.name, dto.description, dto.barcode, dto.price, dto.cost_price ?? 0, dto.category_id, shopId, dto.is_orderable);
   }
 
   async update(id: number, dto: UpdateProductDto, user: RequestUser): Promise<Product> {

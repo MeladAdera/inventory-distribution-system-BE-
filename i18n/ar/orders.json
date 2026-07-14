@@ -4,6 +4,7 @@
   "WAREHOUSE_NOT_FOUND": "المستودع غير موجود",
   "DUPLICATE_PRODUCTS": "يوجد منتجات مكررة في الطلب",
   "PRODUCT_NOT_IN_WAREHOUSE": "المنتج {productId} غير موجود في مخزون المستودع",
+  "PRODUCT_NOT_ORDERABLE": "المنتج {productId} هو عنصر كتالوج فقط ولا يمكن طلبه من المستودع",
   "DEST_SHOP_NOT_FOUND": "المتجر الوجهة {shopId} غير موجود",
   "DEST_NOT_A_SHOP": "لا يمكن إرسال الطلبات إلا إلى متجر",
   "DEST_SHOP_INACTIVE": "المتجر الوجهة غير مفعّل ولا يمكنه استلام الطلبات",

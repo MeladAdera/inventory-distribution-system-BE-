@@ -145,9 +145,9 @@ export class InventoryRepository {
     shopId: number,
     productIds: number[],
     client: pg.PoolClient,
-  ): Promise<(Inventory & { product_name: string })[]> {
-    const result = await client.query<Inventory & { product_name: string }>(
-      `SELECT i.*, p.name AS product_name
+  ): Promise<(Inventory & { product_name: string; is_orderable: boolean })[]> {
+    const result = await client.query<Inventory & { product_name: string; is_orderable: boolean }>(
+      `SELECT i.*, p.name AS product_name, p.is_orderable
        FROM inventory i
        JOIN products p ON p.id = i.product_id
        WHERE i.shop_id = $1 AND i.product_id = ANY($2)

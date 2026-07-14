@@ -27,6 +27,7 @@ export class ProductsRepository {
     if (query.shop_name)    { conditions.push(`s.name ILIKE $${idx++}`);               params.push(`%${query.shop_name}%`); }
     if (query.source)       { conditions.push(`p.source = $${idx++}`);                 params.push(query.source); }
     if (query.category_name){ conditions.push(`c.name ILIKE $${idx++}`);               params.push(query.category_name); }
+    if (query.is_orderable !== undefined) { conditions.push(`p.is_orderable = $${idx++}`); params.push(query.is_orderable); }
 
     if (query.stock_status === StockStatus.OUT_OF_STOCK) {
       conditions.push('COALESCE(i.current_quantity, 0) = 0');
@@ -69,6 +70,7 @@ export class ProductsRepository {
     if (query.search)        { conditions.push(`(p.name ILIKE $${idx} OR p.barcode ILIKE $${idx})`); params.push(`%${query.search}%`); idx++; }
     if (query.source)        { conditions.push(`p.source = $${idx++}`);   params.push(query.source); }
     if (query.category_name) { conditions.push(`c.name ILIKE $${idx++}`); params.push(query.category_name); }
+    if (query.is_orderable !== undefined) { conditions.push(`p.is_orderable = $${idx++}`); params.push(query.is_orderable); }
 
     params.push(query.limit, query.offset);
     const limitIdx = idx++; const offsetIdx = idx++;
@@ -148,15 +150,17 @@ export class ProductsRepository {
     costPrice: number,
     categoryId: number,
     shopId: number,
+    isOrderable = true,
   ): Promise<Product> {
     const rows = await this.db.query<Product>(
-      `INSERT INTO products (name, description, barcode, price, cost_price, category_id, shop_id, source, is_global)
+      `INSERT INTO products (name, description, barcode, price, cost_price, category_id, shop_id, source, is_global, is_orderable)
        SELECT $1, $2, $3, $4, $5, $6, s.id,
          CASE WHEN s.type = 'WAREHOUSE' THEN 'WAREHOUSE' ELSE 'LOCAL' END,
-         CASE WHEN s.type = 'WAREHOUSE' THEN TRUE ELSE FALSE END
+         CASE WHEN s.type = 'WAREHOUSE' THEN TRUE ELSE FALSE END,
+         $8
        FROM shops s WHERE s.id = $7
        RETURNING *`,
-      [name, description ?? null, barcode ?? null, price, costPrice, categoryId, shopId],
+      [name, description ?? null, barcode ?? null, price, costPrice, categoryId, shopId, isOrderable],
     );
     return rows[0];
   }
@@ -172,6 +176,7 @@ export class ProductsRepository {
     if (dto.price !== undefined)       { fields.push(`price = $${idx++}`);       values.push(dto.price); }
     if (dto.cost_price !== undefined)  { fields.push(`cost_price = $${idx++}`);  values.push(dto.cost_price); }
     if (dto.category_id !== undefined) { fields.push(`category_id = $${idx++}`); values.push(dto.category_id); }
+    if (dto.is_orderable !== undefined){ fields.push(`is_orderable = $${idx++}`);values.push(dto.is_orderable); }
 
     fields.push(`updated_at = NOW()`);
     values.push(id);

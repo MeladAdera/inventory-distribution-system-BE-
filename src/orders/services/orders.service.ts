@@ -89,6 +89,9 @@ export class OrdersService {
 
       for (const item of dto.items) {
         const inv = warehouseMap.get(item.productId)!;
+        if (!inv.is_orderable) {
+          throw new BadRequestException({ key: 'orders.PRODUCT_NOT_ORDERABLE', args: { productId: item.productId } });
+        }
         if (inv.current_quantity < item.quantity) {
           if (inv.current_quantity === 0) {
             throw new BadRequestException({ key: 'orders.OUT_OF_STOCK', args: { product: inv.product_name } });

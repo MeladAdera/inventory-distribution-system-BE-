@@ -4,6 +4,7 @@ import {
   IsNumber,
   IsPositive,
   IsInt,
+  IsBoolean,
   Min,
   MinLength,
   MaxLength,
@@ -48,4 +49,9 @@ export class UpdateProductDto {
   @Type(() => Number)
   @IsInt()
   category_id?: number;
+
+  @ApiPropertyOptional({ description: 'Whether a shop can order this from the warehouse.' })
+  @IsOptional()
+  @IsBoolean()
+  is_orderable?: boolean;
 }

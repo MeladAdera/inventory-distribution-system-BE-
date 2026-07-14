@@ -55,4 +55,14 @@ export class ProductQueryDto extends PaginationDto {
   @IsOptional()
   @IsEnum(StockStatus)
   stock_status?: StockStatus;
+
+  @ApiPropertyOptional({ description: 'true → only products a shop can order from the warehouse; false → catalog-only templates' })
+  @IsOptional()
+  @Transform(({ value }: { value: unknown }) => {
+    if (value === 'true') return true;
+    if (value === 'false') return false;
+    return value as boolean;
+  })
+  @IsBoolean()
+  is_orderable?: boolean;
 }

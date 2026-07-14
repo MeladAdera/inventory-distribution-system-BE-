@@ -4,6 +4,7 @@
   "WAREHOUSE_NOT_FOUND": "Warehouse not found",
   "DUPLICATE_PRODUCTS": "Duplicate products in order",
   "PRODUCT_NOT_IN_WAREHOUSE": "Product {productId} does not exist in warehouse inventory",
+  "PRODUCT_NOT_ORDERABLE": "Product {productId} is a catalog listing and cannot be ordered from the warehouse",
   "DEST_SHOP_NOT_FOUND": "Destination shop {shopId} does not exist",
   "DEST_NOT_A_SHOP": "Orders can only be sent to a shop",
   "DEST_SHOP_INACTIVE": "The destination shop is inactive and cannot receive orders",
