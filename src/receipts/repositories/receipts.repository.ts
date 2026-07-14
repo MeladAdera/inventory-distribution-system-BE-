@@ -80,6 +80,9 @@ export class ReceiptsRepository {
                'inventory_id',    ri.inventory_id,
                'product_id',      ri.product_id,
                'product_name',    p.name,
+               'category_id',     p.category_id,
+               'category_name',   c.name,
+               'category_icon',   c.icon,
                'quantity',        ri.quantity,
                'price',           ri.price,
                'quantity_before', ri.quantity_before,
@@ -92,6 +95,7 @@ export class ReceiptsRepository {
        FROM receipts r
        LEFT JOIN receipt_items ri ON ri.receipt_id = r.id
        LEFT JOIN products      p  ON p.id = ri.product_id
+       LEFT JOIN categories    c  ON c.id = p.category_id
        WHERE r.id = $1
        GROUP BY r.id`,
       [id],

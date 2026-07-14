@@ -8,4 +8,10 @@ export class UpdateCategoryDto {
   @MinLength(3)
   @MaxLength(100)
   name?: string;
+
+  @ApiPropertyOptional({ example: 'CupSoda', maxLength: 100, description: 'Lucide icon name' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  icon?: string;
 }

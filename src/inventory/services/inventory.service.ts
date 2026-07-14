@@ -11,6 +11,7 @@ import { AuditLogsService } from '../../audit-logs/services/audit-logs.service';
 import { NotificationsService } from '../../notifications/services/notifications.service';
 import { InventoryQueryDto } from '../dto/inventory-query.dto';
 import { StockInDto } from '../dto/stock-in.dto';
+import { AddInventoryProductDto } from '../dto/add-inventory-product.dto';
 import { AdjustInventoryDto } from '../dto/adjust-inventory.dto';
 import { UpdateSalePriceDto } from '../dto/update-sale-price.dto';
 import { InventoryWithProduct } from '../entities/inventory.entity';
@@ -96,6 +97,53 @@ export class InventoryService {
     }
 
     return result;
+  }
+
+  // "Add from catalog" onboarding action: register a product onto this shop's
+  // inventory without moving stock. Deliberately NOT a stock-in — no cost blend,
+  // no low-stock notification (a fresh row at qty 0 is out-of-stock by design,
+  // and restocking flows through orders). Idempotent: re-adding an already
+  // tracked product returns the existing row untouched.
+  async addProduct(dto: AddInventoryProductDto, user: RequestUser): Promise<InventoryWithProduct> {
+    const shopId = user.shopId!;
+
+    // Same scope guard as stockIn: only the shop's own product or a shared
+    // warehouse product may be tracked — never another shop's private product.
+    const product = await this.inventoryRepo.findProductForStockIn(dto.productId);
+    if (!product) {
+      throw new NotFoundException({ key: 'inventory.PRODUCT_NOT_FOUND', args: { productId: dto.productId } });
+    }
+    if (product.shop_id !== shopId && product.source !== 'WAREHOUSE') {
+      throw new ForbiddenException('inventory.PRODUCT_NOT_IN_SCOPE');
+    }
+
+    const created = await this.db.transaction(async (client) => {
+      const row = await this.inventoryRepo.registerProduct(shopId, dto.productId, dto.quantity ?? 0, client);
+
+      // null → the row already existed (idempotent re-add): no state changed, so
+      // no audit entry. Return the existing record as a success.
+      if (!row) {
+        const existing = await this.inventoryRepo.findByShopAndProduct(shopId, dto.productId, client);
+        return this.inventoryRepo.findById(existing!.id, client).then((r) => r!);
+      }
+
+      await this.auditLogsService.log(
+        {
+          shop_id: shopId,
+          user_id: user.id,
+          type: 'INVENTORY',
+          action: 'PRODUCT_ADDED',
+          entity_type: 'inventory',
+          entity_id: row.id,
+          quantity: dto.quantity ?? 0,
+        },
+        client,
+      );
+
+      return this.inventoryRepo.findById(row.id, client).then((r) => r!);
+    });
+
+    return created;
   }
 
   // Cost-neutral by design: adjust only corrects the count, it never touches

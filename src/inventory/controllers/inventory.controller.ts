@@ -14,6 +14,7 @@ import { InventoryService } from '../services/inventory.service';
 import { RequestUser } from '../../common/interfaces/request-user.interface';
 import { InventoryQueryDto } from '../dto/inventory-query.dto';
 import { StockInDto } from '../dto/stock-in.dto';
+import { AddInventoryProductDto } from '../dto/add-inventory-product.dto';
 import { AdjustInventoryDto } from '../dto/adjust-inventory.dto';
 import { UpdateSalePriceDto } from '../dto/update-sale-price.dto';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
@@ -60,6 +61,16 @@ export class InventoryController {
     @CurrentUser() user: RequestUser,
   ) {
     return this.inventoryService.stockIn(dto, user);
+  }
+
+  @Post()
+  @Roles(UserRole.SHOP_OWNER, UserRole.EMPLOYEE)
+  @ApiOperation({ summary: "Add a catalog product to this shop's inventory at quantity 0 (optional opening balance). Idempotent — re-adding returns the existing record." })
+  addProduct(
+    @Body() dto: AddInventoryProductDto,
+    @CurrentUser() user: RequestUser,
+  ) {
+    return this.inventoryService.addProduct(dto, user);
   }
 
   @Patch(':id')

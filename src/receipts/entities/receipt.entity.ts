@@ -4,6 +4,11 @@ export class ReceiptItem {
   inventory_id!: number;
   product_id!: number;
   product_name!: string;
+  // Category of the sold product, for receipt-detail card UIs.
+  // Null when uncategorized. category_icon is a Lucide icon name.
+  category_id!: number | null;
+  category_name!: string | null;
+  category_icon!: string | null;
   quantity!: number;
   price!: string;
   quantity_before!: number;

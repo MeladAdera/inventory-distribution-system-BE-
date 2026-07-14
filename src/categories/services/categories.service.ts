@@ -42,7 +42,7 @@ export class CategoriesService {
     const duplicate = await this.categoriesRepo.findByNameAndShop(dto.name, targetShopId);
     if (duplicate) throw new ConflictException('categories.NAME_TAKEN');
 
-    return this.categoriesRepo.insert(dto.name, targetShopId);
+    return this.categoriesRepo.insert(dto.name, targetShopId, dto.icon);
   }
 
   async update(id: number, dto: UpdateCategoryDto, user: RequestUser): Promise<Category> {
@@ -51,14 +51,16 @@ export class CategoriesService {
 
     this.assertShopAccess(user, category.shop_id);
 
-    // Nothing to change — the repo UPDATE only sets name, so calling it with an
-    // undefined name would write NULL and violate the NOT NULL constraint.
-    if (dto.name === undefined) {
+    // Nothing to change — avoid a pointless UPDATE when neither field was sent.
+    if (dto.name === undefined && dto.icon === undefined) {
       return category;
     }
 
-    const duplicate = await this.categoriesRepo.findByNameAndShop(dto.name, category.shop_id, id);
-    if (duplicate) throw new ConflictException('categories.NAME_TAKEN');
+    // Only enforce name uniqueness when the name is actually changing.
+    if (dto.name !== undefined) {
+      const duplicate = await this.categoriesRepo.findByNameAndShop(dto.name, category.shop_id, id);
+      if (duplicate) throw new ConflictException('categories.NAME_TAKEN');
+    }
 
     return this.categoriesRepo.update(id, dto);
   }

@@ -17,5 +17,10 @@ export class Inventory {
 
 export class InventoryWithProduct extends Inventory {
   product_name!: string;
+  // Category of the underlying product, joined in for card/list UIs.
+  // Null when the product is uncategorized. category_icon is a Lucide icon name.
+  category_id!: number | null;
+  category_name!: string | null;
+  category_icon!: string | null;
   is_low_stock!: boolean;
 }

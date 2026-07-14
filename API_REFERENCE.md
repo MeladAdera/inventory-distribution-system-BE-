@@ -557,6 +557,11 @@ Base path: `/products` — **Auth required on all routes**
 }
 ```
 
+> For non-admin (shop) callers, each product also carries `in_inventory`
+> (boolean — whether this shop already tracks it) and `current_quantity` (this
+> shop's stock, 0 if not tracked). Use these to render the "Browse Products"
+> catalog cards as **Add** vs **Added ✓**. Pair with `POST /inventory` to add.
+
 ---
 
 ### `GET /products/:id`
@@ -890,6 +895,38 @@ Adds stock to a product's inventory record. Creates the record if it doesn't exi
   "statusCode": 201
 }
 ```
+
+---
+
+### `POST /inventory`
+**Roles:** `SHOP_OWNER`, `EMPLOYEE`
+
+Registers a catalog product onto the shop's inventory **without moving stock** —
+the "Browse Products" / onboarding action. Creates the inventory record at
+quantity 0 (or an optional opening balance), seeding `sale_price`/`avg_cost` from
+the product so it's ready to sell once real stock arrives via an order. Restocking
+itself goes through the orders flow, not this endpoint.
+
+**Idempotent:** re-adding a product already tracked by the shop returns the
+existing record unchanged (no duplicate, no extra audit entry).
+
+**Request Body**
+```json
+{
+  "productId": 4,
+  "quantity": 0
+}
+```
+
+| Field | Type | Rules |
+|-------|------|-------|
+| `productId` | number | > 0, required. Must be the shop's own product or a `WAREHOUSE` product. |
+| `quantity` | number | optional, ≥ 0, default 0. Opening balance; ignored on a re-add. |
+
+**Response `201`** — the `Inventory` record (existing one on a re-add)
+
+**Error `404`** — `inventory.PRODUCT_NOT_FOUND` (no such active product)
+**Error `403`** — `inventory.PRODUCT_NOT_IN_SCOPE` (another shop's private product)
 
 ---
 

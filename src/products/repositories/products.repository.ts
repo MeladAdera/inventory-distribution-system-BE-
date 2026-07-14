@@ -40,7 +40,7 @@ export class ProductsRepository {
     const limitIdx = idx++; const offsetIdx = idx++;
 
     const rows = await this.db.query<Product & { total_count: string }>(
-      `SELECT p.*, c.name AS category_name, COUNT(*) OVER() AS total_count
+      `SELECT p.*, c.name AS category_name, c.icon AS category_icon, COUNT(*) OVER() AS total_count
        FROM products p
        LEFT JOIN categories c ON c.id = p.category_id
        LEFT JOIN inventory i ON i.product_id = p.id AND i.shop_id = p.shop_id
@@ -74,9 +74,13 @@ export class ProductsRepository {
     const limitIdx = idx++; const offsetIdx = idx++;
 
     const rows = await this.db.query<Product & { total_count: string }>(
-      `SELECT p.*, c.name AS category_name, COUNT(*) OVER() AS total_count
+      `SELECT p.*, c.name AS category_name, c.icon AS category_icon,
+              (i.id IS NOT NULL) AS in_inventory,
+              COALESCE(i.current_quantity, 0) AS current_quantity,
+              COUNT(*) OVER() AS total_count
        FROM products p
        LEFT JOIN categories c ON c.id = p.category_id
+       LEFT JOIN inventory i ON i.product_id = p.id AND i.shop_id = $1
        WHERE ${conditions.join(' AND ')}
        ORDER BY p.source DESC, p.created_at DESC
        LIMIT $${limitIdx} OFFSET $${offsetIdx}`,
@@ -91,7 +95,7 @@ export class ProductsRepository {
 
   findById(id: number): Promise<Product | null> {
     return this.db.queryOne<Product>(
-      `SELECT p.*, c.name AS category_name, COALESCE(i.current_quantity, 0) AS current_quantity
+      `SELECT p.*, c.name AS category_name, c.icon AS category_icon, COALESCE(i.current_quantity, 0) AS current_quantity
        FROM products p
        LEFT JOIN categories c ON c.id = p.category_id
        LEFT JOIN inventory i ON i.product_id = p.id AND i.shop_id = p.shop_id

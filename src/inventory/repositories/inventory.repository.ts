@@ -33,10 +33,12 @@ export class InventoryRepository {
 
     const rows = await this.db.query<InventoryWithProduct & { total_count: string }>(
       `SELECT i.*, p.name AS product_name,
+              p.category_id, c.name AS category_name, c.icon AS category_icon,
               (i.current_quantity <= i.low_stock_threshold) AS is_low_stock,
               COUNT(*) OVER() AS total_count
        FROM inventory i
        JOIN products p ON p.id = i.product_id
+       LEFT JOIN categories c ON c.id = p.category_id
        WHERE ${conditions.join(' AND ')}
        ORDER BY i.id ASC
        LIMIT $${limitIdx} OFFSET $${offsetIdx}`,
@@ -76,10 +78,12 @@ export class InventoryRepository {
 
     const rows = await this.db.query<InventoryWithProduct & { total_count: string }>(
       `SELECT i.*, p.name AS product_name,
+              p.category_id, c.name AS category_name, c.icon AS category_icon,
               (i.current_quantity <= i.low_stock_threshold) AS is_low_stock,
               COUNT(*) OVER() AS total_count
        FROM inventory i
        JOIN products p ON p.id = i.product_id
+       LEFT JOIN categories c ON c.id = p.category_id
        ${whereClause}
        ORDER BY i.shop_id ASC, i.id ASC
        LIMIT $${limitIdx} OFFSET $${offsetIdx}`,
@@ -94,9 +98,11 @@ export class InventoryRepository {
 
   async findById(id: number, client?: pg.PoolClient): Promise<InventoryWithProduct | null> {
     const sql = `SELECT i.*, p.name AS product_name,
+              p.category_id, c.name AS category_name, c.icon AS category_icon,
               (i.current_quantity <= i.low_stock_threshold) AS is_low_stock
        FROM inventory i
        JOIN products p ON p.id = i.product_id
+       LEFT JOIN categories c ON c.id = p.category_id
        WHERE i.id = $1`;
 
     if (client) {
@@ -110,9 +116,11 @@ export class InventoryRepository {
   async findLowStock(shopId: number): Promise<InventoryWithProduct[]> {
     return this.db.query<InventoryWithProduct>(
       `SELECT i.*, p.name AS product_name,
+              p.category_id, c.name AS category_name, c.icon AS category_icon,
               TRUE AS is_low_stock
        FROM inventory i
        JOIN products p ON p.id = i.product_id
+       LEFT JOIN categories c ON c.id = p.category_id
        WHERE i.shop_id = $1
          AND i.current_quantity <= i.low_stock_threshold
        ORDER BY i.current_quantity ASC`,
@@ -123,9 +131,11 @@ export class InventoryRepository {
   async findAllLowStockForAdmin(): Promise<InventoryWithProduct[]> {
     return this.db.query<InventoryWithProduct>(
       `SELECT i.*, p.name AS product_name,
+              p.category_id, c.name AS category_name, c.icon AS category_icon,
               TRUE AS is_low_stock
        FROM inventory i
        JOIN products p ON p.id = i.product_id
+       LEFT JOIN categories c ON c.id = p.category_id
        WHERE i.current_quantity <= i.low_stock_threshold
        ORDER BY i.shop_id ASC, i.current_quantity ASC`,
     );
@@ -232,6 +242,34 @@ export class InventoryRepository {
       [shopId, productId, quantity, addCost],
     );
     return result.rows[0];
+  }
+
+  /**
+   * Registers a catalog product onto a shop's inventory without a cost-bearing
+   * stock-in — the "add from catalog" onboarding action. Seeds a new row at
+   * `quantity` (default 0), inheriting avg_cost/sale_price from the product just
+   * like the INSERT half of upsertStockIn. Restocking is left to the orders flow.
+   *
+   * ON CONFLICT DO NOTHING makes it idempotent: if the (shop, product) row
+   * already exists it is left untouched and this returns `null`, so the caller
+   * can treat a re-add as a no-op rather than double-counting stock.
+   */
+  async registerProduct(
+    shopId: number,
+    productId: number,
+    quantity: number,
+    client: pg.PoolClient,
+  ): Promise<Inventory | null> {
+    const result = await client.query<Inventory>(
+      `INSERT INTO inventory (shop_id, product_id, current_quantity, avg_cost, sale_price)
+       VALUES ($1, $2, $3,
+               COALESCE((SELECT cost_price FROM products WHERE id = $2), 0),
+               COALESCE((SELECT price FROM products WHERE id = $2), 0))
+       ON CONFLICT (shop_id, product_id) DO NOTHING
+       RETURNING *`,
+      [shopId, productId, quantity],
+    );
+    return result.rows[0] ?? null;
   }
 
   async updateSalePrice(id: number, salePrice: number, client: pg.PoolClient): Promise<Inventory | null> {

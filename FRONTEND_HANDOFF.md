@@ -399,9 +399,19 @@ No body required. Sets `image_url` back to `null`.
   "image_url": "/uploads/products/uuid.jpg",
   "is_active": true,
   "created_at": "2025-01-01T00:00:00Z",
-  "updated_at": "2025-01-01T00:00:00Z"
+  "updated_at": "2025-01-01T00:00:00Z",
+  "in_inventory": false,
+  "current_quantity": 0
 }
 ```
+
+> **Browse Products / catalog cards:** for shop (non-admin) callers, each list
+> item includes `in_inventory` (does this shop already track it?) and
+> `current_quantity` (this shop's stock). Build the catalog from
+> `GET /products?source=WAREHOUSE`, group by `category_name`, render each card as
+> **Add** or **Added ✓** based on `in_inventory`, and call `POST /inventory` on
+> tap. The product then appears on the inventory page as out-of-stock, ready to
+> restock via an order.
 
 **Product Object (single — `GET /products/:id`):**
 
@@ -500,6 +510,7 @@ No body required. Sets `image_url` back to `null`.
 | GET | `/inventory/low-stock` | JWT | All | Items at or below low-stock threshold |
 | GET | `/inventory/:id` | JWT | All | Get single inventory record |
 | POST | `/inventory/stock-in` | JWT | `WAREHOUSE_ADMIN`, `SHOP_OWNER` | Add incoming stock |
+| POST | `/inventory` | JWT | `SHOP_OWNER`, `EMPLOYEE` | Add a catalog product to inventory at qty 0 (idempotent) |
 | PATCH | `/inventory/:id` | JWT | `WAREHOUSE_ADMIN`, `SHOP_OWNER` | Manually adjust quantity |
 
 **Stock In** `POST /inventory/stock-in`
@@ -510,6 +521,19 @@ No body required. Sets `image_url` back to `null`.
   "notes": "Received from supplier"
 }
 ```
+
+**Add product from catalog** `POST /inventory`
+```json
+{
+  "productId": 4,
+  "quantity": 0
+}
+```
+> The "Browse Products" catalog action. Registers the product on this shop's
+> inventory **without moving stock** (defaults to qty 0); it then shows as
+> out-of-stock and is restocked via the orders flow. `quantity` is an optional
+> opening balance. Idempotent — re-adding returns the existing record.
+> `productId` must be the shop's own product or a `WAREHOUSE` one, else `403`.
 
 **Adjust Inventory** `PATCH /inventory/:id`
 ```json

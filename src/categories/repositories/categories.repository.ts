@@ -54,18 +54,25 @@ export class CategoriesRepository {
     );
   }
 
-  async insert(name: string, shopId: number): Promise<Category> {
+  async insert(name: string, shopId: number, icon?: string): Promise<Category> {
     const rows = await this.db.query<Category>(
-      'INSERT INTO categories (name, shop_id) VALUES ($1, $2) RETURNING *',
-      [name, shopId],
+      'INSERT INTO categories (name, shop_id, icon) VALUES ($1, $2, $3) RETURNING *',
+      [name, shopId, icon ?? null],
     );
     return rows[0];
   }
 
+  // Only overwrites the fields present in the DTO; unspecified fields keep their
+  // current value via COALESCE, so an icon-only or name-only update is safe.
   async update(id: number, dto: UpdateCategoryDto): Promise<Category> {
     const rows = await this.db.query<Category>(
-      'UPDATE categories SET name = $1, updated_at = NOW() WHERE id = $2 RETURNING *',
-      [dto.name, id],
+      `UPDATE categories
+       SET name = COALESCE($1, name),
+           icon = COALESCE($2, icon),
+           updated_at = NOW()
+       WHERE id = $3
+       RETURNING *`,
+      [dto.name ?? null, dto.icon ?? null, id],
     );
     return rows[0];
   }
