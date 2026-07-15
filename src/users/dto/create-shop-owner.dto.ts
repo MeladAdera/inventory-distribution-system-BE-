@@ -1,26 +1,27 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { IsEmail, IsOptional, IsString, MinLength } from 'class-validator';
+import { i18nValidationMessage } from 'nestjs-i18n';
 
 export class CreateShopOwnerDto {
   @ApiProperty({ example: 'MD Market' })
-  @IsString()
+  @IsString({ message: i18nValidationMessage('validation.IS_STRING') })
   shopName!: string;
 
   @ApiPropertyOptional({ example: '123 Main St' })
   @IsOptional()
-  @IsString()
+  @IsString({ message: i18nValidationMessage('validation.IS_STRING') })
   shopAddress?: string;
 
   @ApiProperty({ example: 'Ahmed' })
-  @IsString()
+  @IsString({ message: i18nValidationMessage('validation.IS_STRING') })
   ownerName!: string;
 
   @ApiProperty({ example: 'owner@mdmarket.com' })
-  @IsEmail({}, { message: 'Must be a valid email address' })
+  @IsEmail({}, { message: i18nValidationMessage('validation.IS_EMAIL') })
   email!: string;
 
   @ApiProperty({ example: 'Password123' })
-  @IsString()
-  @MinLength(6, { message: 'Password must be at least 6 characters' })
+  @IsString({ message: i18nValidationMessage('validation.IS_STRING') })
+  @MinLength(6, { message: i18nValidationMessage('validation.MIN_LENGTH') })
   password!: string;
 }

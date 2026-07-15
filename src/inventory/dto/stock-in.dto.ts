@@ -1,15 +1,16 @@
 import { IsInt, IsPositive, IsOptional, IsString, MaxLength, IsNumber, Min, Max } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { i18nValidationMessage } from 'nestjs-i18n';
 
 export class StockInDto {
   @ApiProperty({ example: 15 })
-  @IsInt()
-  @IsPositive()
+  @IsInt({ message: i18nValidationMessage('validation.IS_INT') })
+  @IsPositive({ message: i18nValidationMessage('validation.IS_POSITIVE') })
   productId!: number;
 
   @ApiProperty({ example: 100 })
-  @IsInt()
-  @IsPositive()
+  @IsInt({ message: i18nValidationMessage('validation.IS_INT') })
+  @IsPositive({ message: i18nValidationMessage('validation.IS_POSITIVE') })
   quantity!: number;
 
   // Unit cost of THIS incoming batch. Deliberately tri-state:
@@ -25,14 +26,14 @@ export class StockInDto {
       'Unit cost of this batch. Omit to inherit current avg cost; send 0 only for genuinely free stock.',
   })
   @IsOptional()
-  @IsNumber({ maxDecimalPlaces: 4 })
-  @Min(0)
-  @Max(999999.9999)
+  @IsNumber({ maxDecimalPlaces: 4 }, { message: i18nValidationMessage('validation.IS_NUMBER') })
+  @Min(0, { message: i18nValidationMessage('validation.MIN') })
+  @Max(999999.9999, { message: i18nValidationMessage('validation.MAX') })
   unitCost?: number;
 
   @ApiProperty({ example: 'Supplier delivery', required: false })
   @IsOptional()
-  @IsString()
-  @MaxLength(500)
+  @IsString({ message: i18nValidationMessage('validation.IS_STRING') })
+  @MaxLength(500, { message: i18nValidationMessage('validation.MAX_LENGTH') })
   notes?: string;
 }

@@ -1,0 +1,19 @@
+{
+  "IS_STRING": "{property} must be a string",
+  "IS_NOT_EMPTY": "{property} should not be empty",
+  "IS_NUMBER": "{property} must be a number",
+  "IS_INT": "{property} must be an integer",
+  "IS_POSITIVE": "{property} must be a positive number",
+  "IS_BOOLEAN": "{property} must be a boolean value (true or false)",
+  "IS_ENUM": "{property} must be a valid value",
+  "IS_EMAIL": "{property} must be a valid email address",
+  "IS_ARRAY": "{property} must be an array",
+  "IS_PHONE_NUMBER": "{property} must be a valid phone number",
+  "MIN": "{property} must not be less than {constraints.0}",
+  "MAX": "{property} must not be greater than {constraints.0}",
+  "MIN_LENGTH": "{property} must be at least {constraints.0} characters long",
+  "MAX_LENGTH": "{property} must be at most {constraints.0} characters long",
+  "ARRAY_MIN_SIZE": "{property} must contain at least {constraints.0} items",
+  "ARRAY_NOT_EMPTY": "{property} should not be empty",
+  "NOT_EQUALS": "{property} must not equal {constraints.0}"
+}

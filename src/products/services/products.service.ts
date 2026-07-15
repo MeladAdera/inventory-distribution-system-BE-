@@ -47,6 +47,9 @@ export class ProductsService {
       throw new BadRequestException('products.CATEGORY_NOT_FOUND');
     }
 
+    const nameTaken = await this.productsRepo.findByNameAndShop(dto.name, shopId);
+    if (nameTaken) throw new ConflictException('products.NAME_TAKEN');
+
     if (dto.barcode) {
       const duplicate = await this.productsRepo.findByBarcodeAndShop(dto.barcode, shopId);
       if (duplicate) throw new ConflictException('products.BARCODE_TAKEN');
@@ -67,6 +70,9 @@ export class ProductsService {
       throw new BadRequestException('products.CATEGORY_NOT_FOUND');
     }
 
+    const nameTaken = await this.productsRepo.findByNameAndShop(dto.name, shopId);
+    if (nameTaken) throw new ConflictException('products.NAME_TAKEN');
+
     if (dto.barcode) {
       const duplicate = await this.productsRepo.findByBarcodeAndShop(dto.barcode, shopId);
       if (duplicate) throw new ConflictException('products.BARCODE_TAKEN');
@@ -80,6 +86,11 @@ export class ProductsService {
     if (!product) throw new NotFoundException('products.NOT_FOUND');
 
     this.assertOwnership(user, product);
+
+    if (dto.name && dto.name !== product.name) {
+      const nameTaken = await this.productsRepo.findByNameAndShop(dto.name, product.shop_id, id);
+      if (nameTaken) throw new ConflictException('products.NAME_TAKEN');
+    }
 
     if (dto.barcode && dto.barcode !== product.barcode) {
       const duplicate = await this.productsRepo.findByBarcodeAndShop(dto.barcode, product.shop_id, id);

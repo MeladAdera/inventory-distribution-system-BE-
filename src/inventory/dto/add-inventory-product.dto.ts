@@ -1,10 +1,11 @@
 import { IsInt, IsPositive, IsOptional, Min } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { i18nValidationMessage } from 'nestjs-i18n';
 
 export class AddInventoryProductDto {
   @ApiProperty({ example: 4, description: 'Catalog product to register in this shop\'s inventory' })
-  @IsInt()
-  @IsPositive()
+  @IsInt({ message: i18nValidationMessage('validation.IS_INT') })
+  @IsPositive({ message: i18nValidationMessage('validation.IS_POSITIVE') })
   productId!: number;
 
   // Optional opening balance. Defaults to 0 (register-only): the product just
@@ -14,7 +15,7 @@ export class AddInventoryProductDto {
   // exists (the add is idempotent).
   @ApiPropertyOptional({ example: 0, default: 0, description: 'Optional opening quantity; defaults to 0' })
   @IsOptional()
-  @IsInt()
-  @Min(0)
+  @IsInt({ message: i18nValidationMessage('validation.IS_INT') })
+  @Min(0, { message: i18nValidationMessage('validation.MIN') })
   quantity?: number;
 }

@@ -1,0 +1,19 @@
+{
+  "IS_STRING": "{property} يجب أن يكون نصًا",
+  "IS_NOT_EMPTY": "{property} يجب ألا يكون فارغًا",
+  "IS_NUMBER": "{property} يجب أن يكون رقمًا",
+  "IS_INT": "{property} يجب أن يكون رقمًا صحيحًا",
+  "IS_POSITIVE": "{property} يجب أن يكون رقمًا موجبًا",
+  "IS_BOOLEAN": "{property} يجب أن يكون قيمة منطقية (true أو false)",
+  "IS_ENUM": "{property} يجب أن يكون قيمة صحيحة",
+  "IS_EMAIL": "{property} يجب أن يكون بريدًا إلكترونيًا صحيحًا",
+  "IS_ARRAY": "{property} يجب أن يكون مصفوفة",
+  "IS_PHONE_NUMBER": "{property} يجب أن يكون رقم هاتف صحيحًا",
+  "MIN": "{property} يجب ألا يقل عن {constraints.0}",
+  "MAX": "{property} يجب ألا يزيد عن {constraints.0}",
+  "MIN_LENGTH": "{property} يجب أن يتكون من {constraints.0} أحرف على الأقل",
+  "MAX_LENGTH": "{property} يجب ألا يتجاوز {constraints.0} حرفًا",
+  "ARRAY_MIN_SIZE": "{property} يجب أن يحتوي على {constraints.0} عناصر على الأقل",
+  "ARRAY_NOT_EMPTY": "{property} يجب ألا يكون فارغًا",
+  "NOT_EQUALS": "{property} يجب ألا يساوي {constraints.0}"
+}

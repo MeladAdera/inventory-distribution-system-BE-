@@ -119,6 +119,20 @@ export class ProductsRepository {
     );
   }
 
+  // Case-insensitive, matching the ILIKE search convention used elsewhere in this repo.
+  findByNameAndShop(name: string, shopId: number, excludeId?: number): Promise<Product | null> {
+    if (excludeId !== undefined) {
+      return this.db.queryOne<Product>(
+        'SELECT * FROM products WHERE LOWER(name) = LOWER($1) AND shop_id = $2 AND id != $3 AND is_active = TRUE',
+        [name, shopId, excludeId],
+      );
+    }
+    return this.db.queryOne<Product>(
+      'SELECT * FROM products WHERE LOWER(name) = LOWER($1) AND shop_id = $2 AND is_active = TRUE',
+      [name, shopId],
+    );
+  }
+
   async shopExists(shopId: number): Promise<boolean> {
     const row = await this.db.queryOne<{ exists: boolean }>(
       `SELECT EXISTS (SELECT 1 FROM shops WHERE id = $1) AS exists`,

@@ -31,11 +31,15 @@ CREATE INDEX idx_users_shop_id ON users(shop_id);
 CREATE INDEX idx_users_email   ON users(email);
 
 -- CATEGORIES
+-- icon is a Lucide icon name (e.g. 'Cigarette', 'CupSoda', 'Coffee') the
+-- catalog UI renders per category — a short identifier, not a URL, hence
+-- separate from image_url.
 CREATE TABLE categories (
   id         SERIAL PRIMARY KEY,
   shop_id    INTEGER      NOT NULL REFERENCES shops(id) ON DELETE CASCADE,
   name       VARCHAR(255) NOT NULL,
   image_url  VARCHAR(500),
+  icon       VARCHAR(100),
   created_at TIMESTAMPTZ  DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMPTZ  DEFAULT CURRENT_TIMESTAMP
 );
@@ -46,36 +50,63 @@ CREATE INDEX idx_categories_shop_id ON categories(shop_id);
 -- cost_price is the current buying price, used alongside the selling price
 -- for profit tracking; order_items/receipt_items snapshot it at transaction
 -- time so profit on historical transactions isn't distorted by later changes.
+--
+-- is_orderable: a WAREHOUSE product row is item-master data — it doesn't
+-- imply the warehouse actually stocks it. Catalog-only entries (seeded so
+-- shops can self-register a product name/category into their own inventory)
+-- need to stay distinguishable from real, orderable warehouse stock so the
+-- order picker doesn't offer products the warehouse never carries. Defaults
+-- to TRUE; catalog-only rows are seeded with FALSE.
 CREATE TABLE products (
-  id          SERIAL PRIMARY KEY,
-  category_id INTEGER         REFERENCES categories(id) ON DELETE SET NULL,
-  shop_id     INTEGER         REFERENCES shops(id) ON DELETE CASCADE,
-  name        VARCHAR(255)    NOT NULL,
-  description TEXT,
-  barcode     VARCHAR(100),
-  price       DECIMAL(10, 2)  NOT NULL DEFAULT 0,
-  cost_price  DECIMAL(10, 2)  NOT NULL DEFAULT 0,
-  is_global   BOOLEAN         DEFAULT FALSE,
-  source      VARCHAR(50)     CHECK (source IN ('WAREHOUSE', 'LOCAL')),
-  image_url   VARCHAR(500),
-  is_active   BOOLEAN         NOT NULL DEFAULT TRUE,
-  created_at  TIMESTAMPTZ     DEFAULT CURRENT_TIMESTAMP,
-  updated_at  TIMESTAMPTZ     DEFAULT CURRENT_TIMESTAMP
+  id           SERIAL PRIMARY KEY,
+  category_id  INTEGER         REFERENCES categories(id) ON DELETE SET NULL,
+  shop_id      INTEGER         REFERENCES shops(id) ON DELETE CASCADE,
+  name         VARCHAR(255)    NOT NULL,
+  description  TEXT,
+  barcode      VARCHAR(100),
+  price        DECIMAL(10, 2)  NOT NULL DEFAULT 0,
+  cost_price   DECIMAL(10, 2)  NOT NULL DEFAULT 0,
+  is_global    BOOLEAN         DEFAULT FALSE,
+  source       VARCHAR(50)     CHECK (source IN ('WAREHOUSE', 'LOCAL')),
+  image_url    VARCHAR(500),
+  is_active    BOOLEAN         NOT NULL DEFAULT TRUE,
+  is_orderable BOOLEAN         NOT NULL DEFAULT TRUE,
+  created_at   TIMESTAMPTZ     DEFAULT CURRENT_TIMESTAMP,
+  updated_at   TIMESTAMPTZ     DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE INDEX idx_products_category_id ON products(category_id);
 CREATE INDEX idx_products_shop_id     ON products(shop_id);
 CREATE INDEX idx_products_barcode     ON products(barcode);
 CREATE INDEX idx_products_source      ON products(source);
-CREATE UNIQUE INDEX idx_products_barcode_shop_unique ON products(shop_id, barcode) WHERE barcode IS NOT NULL;
+
+-- Scoped to is_active = TRUE so soft-deleting a product frees its
+-- barcode/name for reuse instead of leaving a dead row occupying the slot.
+-- name is compared case-insensitively (LOWER) so "Coke" and "coke" collide.
+CREATE UNIQUE INDEX idx_products_barcode_shop_unique ON products(shop_id, barcode) WHERE barcode IS NOT NULL AND is_active = TRUE;
+CREATE UNIQUE INDEX idx_products_name_shop_unique ON products(shop_id, LOWER(name)) WHERE is_active = TRUE;
 
 -- INVENTORY
+-- avg_cost is the moving-average unit cost of stock currently held in a given
+-- (shop, product) row, recomputed on every cost-bearing stock-in:
+--   new_avg = (old_qty * old_avg + add_qty * add_cost) / (old_qty + add_qty)
+-- Removing stock (sales, negative adjustments) never changes it. Stored at 4
+-- decimals since it's a cost *rate* that feeds back into itself — rounding
+-- error at 2dp would compound across blends and bias reported profit.
+--
+-- sale_price is the per-shop selling price: products.price is the warehouse
+-- list/default price shared globally, but each shop needs its own retail
+-- price without changing it for every other shop. Seeded from products.price
+-- the first time a row is created and never overwritten by later stock-ins,
+-- so a shop owner's chosen price sticks. 2dp — a settled selling amount.
 CREATE TABLE inventory (
   id                  SERIAL PRIMARY KEY,
   shop_id             INTEGER NOT NULL REFERENCES shops(id)    ON DELETE CASCADE,
   product_id          INTEGER NOT NULL REFERENCES products(id) ON DELETE CASCADE,
   current_quantity    INTEGER NOT NULL DEFAULT 0,
   low_stock_threshold INTEGER NOT NULL DEFAULT 10,
+  avg_cost            DECIMAL(10, 4) NOT NULL DEFAULT 0,
+  sale_price          DECIMAL(10, 2) NOT NULL DEFAULT 0,
   updated_at          TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -100,14 +131,17 @@ CREATE INDEX idx_orders_to_shop_id   ON orders(to_shop_id);
 CREATE INDEX idx_orders_status       ON orders(status);
 
 -- ORDER ITEMS
--- price/cost_price are snapshots taken at order time (not live product lookups).
+-- price/cost_price are snapshots taken at order time (not live product
+-- lookups). cost_price is 4dp to carry the inventory avg_cost moving-average
+-- forward into the snapshot without re-rounding; price stays 2dp — a settled
+-- selling amount.
 CREATE TABLE order_items (
   id         SERIAL PRIMARY KEY,
   order_id   INTEGER        NOT NULL REFERENCES orders(id)   ON DELETE CASCADE,
   product_id INTEGER        NOT NULL REFERENCES products(id) ON DELETE CASCADE,
   quantity   INTEGER        NOT NULL,
   price      DECIMAL(15, 2) NOT NULL,
-  cost_price DECIMAL(15, 2) NOT NULL DEFAULT 0
+  cost_price DECIMAL(15, 4) NOT NULL DEFAULT 0
 );
 
 CREATE INDEX idx_order_items_order_id   ON order_items(order_id);
@@ -131,7 +165,7 @@ CREATE INDEX idx_receipts_shop_created ON receipts(shop_id, created_at DESC);
 CREATE INDEX idx_receipts_created_by  ON receipts(created_by);
 
 -- RECEIPT ITEMS
--- price/cost_price mirror the order_items snapshot pattern.
+-- price/cost_price mirror the order_items snapshot pattern (see above).
 CREATE TABLE receipt_items (
   id              SERIAL PRIMARY KEY,
   receipt_id      INTEGER NOT NULL REFERENCES receipts(id)   ON DELETE CASCADE,
@@ -141,7 +175,7 @@ CREATE TABLE receipt_items (
   quantity_before INTEGER NOT NULL,
   quantity_after  INTEGER NOT NULL CHECK (quantity_after >= 0),
   price           DECIMAL(15, 2) NOT NULL,
-  cost_price      DECIMAL(15, 2) NOT NULL DEFAULT 0
+  cost_price      DECIMAL(15, 4) NOT NULL DEFAULT 0
 );
 
 CREATE INDEX idx_receipt_items_receipt_id   ON receipt_items(receipt_id);

@@ -1,6 +1,6 @@
 import { ExceptionFilter, Catch, ArgumentsHost, HttpException, Injectable } from '@nestjs/common';
 import type { Response } from 'express';
-import { I18nService, I18nContext } from 'nestjs-i18n';
+import { I18nService, I18nContext, I18nValidationException, I18nValidationError } from 'nestjs-i18n';
 
 @Injectable()
 @Catch(HttpException)
@@ -11,9 +11,25 @@ export class HttpExceptionFilter implements ExceptionFilter {
     const ctx = host.switchToHttp();
     const response = ctx.getResponse<Response>();
     const status = exception.getStatus();
-    const exceptionResponse = exception.getResponse();
     const req = ctx.getRequest<{ i18nLang?: string }>();
     const lang = I18nContext.current()?.lang ?? req.i18nLang ?? 'en';
+
+    // I18nValidationException stores per-field messages on `.errors`, not on
+    // getResponse()/message (those are just the generic "Bad Request"), so it
+    // needs its own path instead of the generic exceptionResponse handling below.
+    if (exception instanceof I18nValidationException) {
+      const fieldMessages = this.flattenValidationErrors(exception.errors ?? [], lang);
+      response.status(status).json({
+        success: false,
+        statusCode: status,
+        message: fieldMessages.join('; ') || exception.message,
+        error: 'Bad Request',
+        timestamp: new Date().toISOString(),
+      });
+      return;
+    }
+
+    const exceptionResponse = exception.getResponse();
 
     let rawKey: string;
     let args: Record<string, unknown> = {};
@@ -71,5 +87,26 @@ export class HttpExceptionFilter implements ExceptionFilter {
       return this.i18n.translate(key, { lang, args });
     }
     return key;
+  }
+
+  // class-validator nests per-field errors under `children` for object/array
+  // properties, so this walks the whole tree to collect every leaf message.
+  private flattenValidationErrors(errors: I18nValidationError[], lang: string): string[] {
+    return errors.flatMap((error) => [
+      ...Object.values(error.constraints ?? {}).map((message) =>
+        this.localizePropertyName(message, error.property, lang),
+      ),
+      ...this.flattenValidationErrors((error.children as I18nValidationError[]) ?? [], lang),
+    ]);
+  }
+
+  // The constraint message already has the raw DTO field name (e.g. "quantity")
+  // baked in via {property} at pipe-time, before this filter ever sees it — so
+  // localizing it means translating the name separately and substituting it in.
+  private localizePropertyName(message: string, property: string, lang: string): string {
+    const label = this.i18n.translate(`fields.${property}`, { lang, defaultValue: property });
+    if (label === property) return message;
+    const escaped = property.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return message.replace(new RegExp(`\\b${escaped}\\b`), label);
   }
 }
