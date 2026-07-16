@@ -19,7 +19,7 @@ export class DatabaseService implements OnModuleDestroy {
       max: 20,
       idleTimeoutMillis: 30_000,
       connectionTimeoutMillis: 5_000,
-      ssl: isProd ? { rejectUnauthorized: true } : false,
+      ssl: isProd ? { rejectUnauthorized: false } : false, 
     });
   }
 
