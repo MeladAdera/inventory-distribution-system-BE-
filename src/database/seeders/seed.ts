@@ -108,75 +108,75 @@ const CATALOG: CatalogCategory[] = [
   },
 ];
 
-async function clearData(): Promise<void> {
-  // Order matters: children before parents
-  await client.query('DELETE FROM refresh_tokens');
-  await client.query('DELETE FROM audit_logs');
-  await client.query('DELETE FROM receipt_items');
-  await client.query('DELETE FROM receipts');
-  await client.query('DELETE FROM notifications');
-  await client.query('DELETE FROM order_items');
-  await client.query('DELETE FROM orders');
-  await client.query('DELETE FROM inventory');
-  await client.query('DELETE FROM products');
-  await client.query('DELETE FROM categories');
-  await client.query('DELETE FROM users');
-  await client.query('DELETE FROM shops');
-
-  // Reset sequences so IDs start from 1
-  for (const seq of [
-    'shops_id_seq', 'users_id_seq', 'categories_id_seq', 'products_id_seq',
-    'inventory_id_seq', 'orders_id_seq', 'order_items_id_seq',
-    'notifications_id_seq', 'audit_logs_id_seq', 'refresh_tokens_id_seq',
-    'receipts_id_seq', 'receipt_items_id_seq',
-  ]) {
-    await client.query(`ALTER SEQUENCE ${seq} RESTART WITH 1`);
+// Finds the warehouse shop, creating it (with its admin account) only if one
+// doesn't exist yet. Never touches other shops/users — safe to run against a
+// database that already has real, user-created data.
+async function ensureWarehouseAdmin(): Promise<number> {
+  const { rows: existing } = await client.query<{ id: number }>(
+    `SELECT id FROM shops WHERE type = 'WAREHOUSE' LIMIT 1`,
+  );
+  if (existing.length > 0) {
+    console.log('Warehouse shop already exists — skipping.');
+    return existing[0].id;
   }
-}
 
-async function seedWarehouse(): Promise<void> {
-  // Single warehouse shop + its admin account.
-  await client.query(`
-    INSERT INTO shops (id, name, address, phone, type) VALUES
-      (1, 'Main Warehouse', 'Industrial Zone, Block 1', '+1-555-0100', 'WAREHOUSE')
-  `);
-  await client.query(`SELECT setval('shops_id_seq', 1)`);
+  const { rows: inserted } = await client.query<{ id: number }>(
+    `INSERT INTO shops (name, address, phone, type)
+     VALUES ('Main Warehouse', 'Industrial Zone, Block 1', '+1-555-0100', 'WAREHOUSE')
+     RETURNING id`,
+  );
+  const shopId = inserted[0].id;
 
   await client.query(
-    `INSERT INTO users (id, shop_id, name, email, password_hash, role, is_active)
-     VALUES (1, 1, 'Warehouse Admin', 'admin@warehouse.com', $1, 'WAREHOUSE_ADMIN', TRUE)`,
-    [HASH_ADMIN],
+    `INSERT INTO users (shop_id, name, email, password_hash, role, is_active)
+     VALUES ($1, 'Warehouse Admin', 'admin@warehouse.com', $2, 'WAREHOUSE_ADMIN', TRUE)`,
+    [shopId, HASH_ADMIN],
   );
-  await client.query(`SELECT setval('users_id_seq', 1)`);
+
+  console.log('Seeded warehouse + admin.');
+  return shopId;
 }
 
-async function seedCatalog(): Promise<void> {
-  let categoryId = 1;
-  let productId = 1;
+// Inserts only the categories/products that don't already exist for this shop.
+// Relies on IDs assigned by Postgres (not hardcoded), so it can't collide with
+// rows created through the running app, and reruns are pure no-ops once caught up.
+async function seedCatalog(shopId: number): Promise<{ categories: number; products: number }> {
+  let categoriesAdded = 0;
+  let productsAdded = 0;
 
   for (const category of CATALOG) {
-    await client.query(
-      `INSERT INTO categories (id, shop_id, name, icon) VALUES ($1, 1, $2, $3)`,
-      [categoryId, category.name, category.icon],
+    const { rows: existingCategory } = await client.query<{ id: number }>(
+      `SELECT id FROM categories WHERE shop_id = $1 AND LOWER(name) = LOWER($2)`,
+      [shopId, category.name],
     );
+
+    let categoryId: number;
+    if (existingCategory.length > 0) {
+      categoryId = existingCategory[0].id;
+    } else {
+      const { rows: insertedCategory } = await client.query<{ id: number }>(
+        `INSERT INTO categories (shop_id, name, icon) VALUES ($1, $2, $3) RETURNING id`,
+        [shopId, category.name, category.icon],
+      );
+      categoryId = insertedCategory[0].id;
+      categoriesAdded++;
+    }
 
     for (const productName of category.products) {
       // is_orderable = FALSE: these are catalog-only templates (name/category so
       // a shop can self-register the product), not real warehouse stock. Flip to
       // TRUE once the warehouse actually stocks and can fulfill orders for one.
-      await client.query(
-        `INSERT INTO products (id, shop_id, category_id, name, is_global, source, is_active, is_orderable)
-         VALUES ($1, 1, $2, $3, TRUE, 'WAREHOUSE', TRUE, FALSE)`,
-        [productId, categoryId, productName],
+      const result = await client.query(
+        `INSERT INTO products (shop_id, category_id, name, is_global, source, is_active, is_orderable)
+         VALUES ($1, $2, $3, TRUE, 'WAREHOUSE', TRUE, FALSE)
+         ON CONFLICT (shop_id, (LOWER(name))) WHERE is_active = TRUE DO NOTHING`,
+        [shopId, categoryId, productName],
       );
-      productId++;
+      if (result.rowCount) productsAdded++;
     }
-
-    categoryId++;
   }
 
-  await client.query(`SELECT setval('categories_id_seq', $1)`, [categoryId - 1]);
-  await client.query(`SELECT setval('products_id_seq', $1)`, [productId - 1]);
+  return { categories: categoriesAdded, products: productsAdded };
 }
 
 async function run(): Promise<void> {
@@ -184,24 +184,15 @@ async function run(): Promise<void> {
     await client.connect();
     console.log('Connected to database');
 
-    const { rows } = await client.query<{ count: string }>(
-      'SELECT COUNT(*)::int AS count FROM shops',
-    );
-    if (Number(rows[0].count) > 0 && process.env.FORCE_SEED !== 'true') {
-      console.log('Database already seeded — skipping (set FORCE_SEED=true to override).');
-      return;
-    }
-
     await client.query('BEGIN');
+    let shopId: number;
+    let categoriesAdded: number;
+    let productsAdded: number;
     try {
-      console.log('Clearing existing data…');
-      await clearData();
+      shopId = await ensureWarehouseAdmin();
 
-      console.log('Seeding warehouse + admin…');
-      await seedWarehouse();
-
-      console.log('Seeding catalog…');
-      await seedCatalog();
+      console.log('Checking catalog…');
+      ({ categories: categoriesAdded, products: productsAdded } = await seedCatalog(shopId));
 
       await client.query('COMMIT');
     } catch (err) {
@@ -209,10 +200,7 @@ async function run(): Promise<void> {
       throw err;
     }
 
-    const categoryCount = CATALOG.length;
-    const productCount = CATALOG.reduce((sum, c) => sum + c.products.length, 0);
-
-    console.log(`\n✓ Seed complete. ${categoryCount} categories, ${productCount} products.`);
+    console.log(`\n✓ Seed check complete. ${categoriesAdded} new categories, ${productsAdded} new products added.`);
     console.log('  Login: admin@warehouse.com / Admin@123 (WAREHOUSE_ADMIN)');
   } catch (error) {
     console.error('Seed failed:', error);
