@@ -192,14 +192,22 @@ async function run(): Promise<void> {
       return;
     }
 
-    console.log('Clearing existing data…');
-    await clearData();
+    await client.query('BEGIN');
+    try {
+      console.log('Clearing existing data…');
+      await clearData();
 
-    console.log('Seeding warehouse + admin…');
-    await seedWarehouse();
+      console.log('Seeding warehouse + admin…');
+      await seedWarehouse();
 
-    console.log('Seeding catalog…');
-    await seedCatalog();
+      console.log('Seeding catalog…');
+      await seedCatalog();
+
+      await client.query('COMMIT');
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    }
 
     const categoryCount = CATALOG.length;
     const productCount = CATALOG.reduce((sum, c) => sum + c.products.length, 0);
