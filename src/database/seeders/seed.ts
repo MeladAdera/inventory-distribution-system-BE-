@@ -9,6 +9,7 @@ const client = new pg.Client({
   user: process.env.DATABASE_USERNAME || 'postgres',
   password: process.env.DATABASE_PASSWORD || 'postgres',
   database: process.env.DATABASE_NAME || 'inventory_db_dev',
+  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
 });
 
 // Pre-hashed password (bcrypt, cost 10): Admin@123 → WAREHOUSE_ADMIN
@@ -182,6 +183,14 @@ async function run(): Promise<void> {
   try {
     await client.connect();
     console.log('Connected to database');
+
+    const { rows } = await client.query<{ count: string }>(
+      'SELECT COUNT(*)::int AS count FROM shops',
+    );
+    if (Number(rows[0].count) > 0 && process.env.FORCE_SEED !== 'true') {
+      console.log('Database already seeded — skipping (set FORCE_SEED=true to override).');
+      return;
+    }
 
     console.log('Clearing existing data…');
     await clearData();

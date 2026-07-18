@@ -4,5 +4,9 @@
   "monorepo": false,
   "sourceRoot": "src",
   "entryFile": "main",
-  "language": "ts"
+  "language": "ts",
+  "compilerOptions": {
+    "assets": ["database/migrations/*.sql"],
+    "watchAssets": true
+  }
 }

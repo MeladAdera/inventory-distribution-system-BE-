@@ -4,8 +4,16 @@ import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { I18nValidationPipe } from 'nestjs-i18n';
 import { AppModule } from './app.module';
 import { TransformInterceptor } from './common/interceptors/transform.interceptor';
+import { runPendingMigrations } from './database/migrations/runner';
+import { run as runSeed } from './database/seeders/seed';
 
 async function bootstrap(): Promise<void> {
+  await runPendingMigrations();
+
+  if (process.env.RUN_SEED === 'true') {
+    await runSeed();
+  }
+
   const app = await NestFactory.create(AppModule);
   const httpLogger = new Logger('HTTP');
 
