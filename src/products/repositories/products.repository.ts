@@ -35,6 +35,8 @@ export class ProductsRepository {
       conditions.push('COALESCE(i.current_quantity, 0) > 0 AND i.current_quantity <= i.low_stock_threshold');
     } else if (query.stock_status === StockStatus.HIGH_STOCK) {
       conditions.push('COALESCE(i.current_quantity, 0) > COALESCE(i.low_stock_threshold, 10)');
+    } else if (query.stock_status === StockStatus.IN_STOCK) {
+      conditions.push('COALESCE(i.current_quantity, 0) > 0');
     }
 
     params.push(query.limit, query.offset);
@@ -72,6 +74,16 @@ export class ProductsRepository {
     if (query.category_name) { conditions.push(`c.name ILIKE $${idx++}`); params.push(query.category_name); }
     if (query.is_orderable !== undefined) { conditions.push(`p.is_orderable = $${idx++}`); params.push(query.is_orderable); }
 
+    if (query.stock_status === StockStatus.OUT_OF_STOCK) {
+      conditions.push('COALESCE(wi.current_quantity, 0) = 0');
+    } else if (query.stock_status === StockStatus.LOW_STOCK) {
+      conditions.push('COALESCE(wi.current_quantity, 0) > 0 AND wi.current_quantity <= wi.low_stock_threshold');
+    } else if (query.stock_status === StockStatus.HIGH_STOCK) {
+      conditions.push('COALESCE(wi.current_quantity, 0) > COALESCE(wi.low_stock_threshold, 10)');
+    } else if (query.stock_status === StockStatus.IN_STOCK) {
+      conditions.push('COALESCE(wi.current_quantity, 0) > 0');
+    }
+
     params.push(query.limit, query.offset);
     const limitIdx = idx++; const offsetIdx = idx++;
 
@@ -83,6 +95,7 @@ export class ProductsRepository {
        FROM products p
        LEFT JOIN categories c ON c.id = p.category_id
        LEFT JOIN inventory i ON i.product_id = p.id AND i.shop_id = $1
+       LEFT JOIN inventory wi ON wi.product_id = p.id AND wi.shop_id = p.shop_id
        WHERE ${conditions.join(' AND ')}
        ORDER BY p.source DESC, p.created_at DESC
        LIMIT $${limitIdx} OFFSET $${offsetIdx}`,

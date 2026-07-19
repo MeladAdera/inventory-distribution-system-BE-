@@ -13,6 +13,7 @@ export enum StockStatus {
   OUT_OF_STOCK = 'OUT_OF_STOCK',
   LOW_STOCK = 'LOW_STOCK',
   HIGH_STOCK = 'HIGH_STOCK',
+  IN_STOCK = 'IN_STOCK',
 }
 
 export class ProductQueryDto extends PaginationDto {
