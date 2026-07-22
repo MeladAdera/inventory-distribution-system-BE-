@@ -11,6 +11,8 @@ import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
+import { ForgotPasswordDto } from './dto/forgot-password.dto';
+import { ResetPasswordDto } from './dto/reset-password.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { CurrentUser } from './decorators/current-user.decorator';
 import type { RequestUser } from '../common/interfaces/request-user.interface';
@@ -49,6 +51,26 @@ export class AuthController {
   @ApiUnauthorizedResponse({ description: 'Current password is incorrect' })
   changePassword(@CurrentUser() user: RequestUser, @Body() dto: ChangePasswordDto) {
     return this.authService.changePassword(user.id, dto);
+  }
+
+  @Post('forgot-password')
+  @Throttle({ global: { ttl: 15 * 60_000, limit: 3 } })
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Request a password reset code by email' })
+  @ApiOkResponse({ description: 'Always returns a generic message, whether or not the email exists' })
+  async forgotPassword(@Body() dto: ForgotPasswordDto) {
+    await this.authService.forgotPassword(dto);
+    return { message: 'If that email exists, a reset code has been sent.' };
+  }
+
+  @Post('reset-password')
+  @Throttle({ global: { ttl: 60_000, limit: 5 } })
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Reset password using the code sent by email' })
+  @ApiOkResponse({ description: 'Password was reset and all sessions were revoked' })
+  async resetPassword(@Body() dto: ResetPasswordDto) {
+    await this.authService.resetPassword(dto);
+    return { message: 'Password has been reset successfully.' };
   }
 
   @Post('logout')

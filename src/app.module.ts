@@ -26,7 +26,10 @@ import { ReceiptsModule } from './receipts/receipts.module';
 @Module({
   imports: [
     ConfigModule.forRoot({
-      envFilePath: `.env.${process.env.NODE_ENV || 'development'}`,
+      envFilePath: [
+        `.env.${process.env.NODE_ENV || 'development'}.local`,
+        `.env.${process.env.NODE_ENV || 'development'}`,
+      ],
       isGlobal: true,
       validate,
     }),

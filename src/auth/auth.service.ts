@@ -1,5 +1,6 @@
 import {
   Injectable,
+  BadRequestException,
   UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -9,23 +10,34 @@ import * as crypto from 'crypto';
 import { randomUUID } from 'crypto';
 import { UsersService } from '../users/services/users.service';
 import { RefreshTokensRepository } from './repositories/refresh-tokens.repository';
+import { PasswordResetCodesRepository } from './repositories/password-reset-codes.repository';
+import { MailService } from '../mail/mail.service';
 import { LoginDto } from './dto/login.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
+import { ForgotPasswordDto } from './dto/forgot-password.dto';
+import { ResetPasswordDto } from './dto/reset-password.dto';
 import type { RequestUser } from '../common/interfaces/request-user.interface';
 
 @Injectable()
 export class AuthService {
   private readonly refreshExpirationDays: number;
+  private readonly resetCodeExpirationMinutes: number;
 
   constructor(
     private readonly usersService: UsersService,
     private readonly jwtService: JwtService,
     private readonly config: ConfigService,
     private readonly refreshTokensRepo: RefreshTokensRepository,
+    private readonly passwordResetCodesRepo: PasswordResetCodesRepository,
+    private readonly mailService: MailService,
   ) {
     this.refreshExpirationDays = parseInt(
       this.config.getOrThrow<string>('REFRESH_TOKEN_EXPIRATION_DAYS'),
+      10,
+    );
+    this.resetCodeExpirationMinutes = this.config.get<number>(
+      'RESET_CODE_EXPIRATION_MINUTES',
       10,
     );
   }
@@ -123,6 +135,40 @@ export class AuthService {
     // A password change signs the user out everywhere — revoke every refresh
     // token (this session's access token remains valid until it expires).
     await this.refreshTokensRepo.revokeAllForUser(userId);
+  }
+
+  async forgotPassword(dto: ForgotPasswordDto): Promise<void> {
+    const user = await this.usersService.findByEmail(dto.email);
+
+    // Always behave the same whether or not the email exists, so a caller
+    // can't use this endpoint to discover which emails are registered.
+    if (!user || !user.is_active) return;
+
+    const code = crypto.randomInt(100_000, 1_000_000).toString();
+    const expiresAt = new Date();
+    expiresAt.setMinutes(expiresAt.getMinutes() + this.resetCodeExpirationMinutes);
+
+    await this.passwordResetCodesRepo.invalidateAllForUser(user.id);
+    await this.passwordResetCodesRepo.create(user.id, this.hashToken(code), expiresAt);
+
+    await this.mailService.sendPasswordResetCode(user.email, code, this.resetCodeExpirationMinutes);
+  }
+
+  async resetPassword(dto: ResetPasswordDto): Promise<void> {
+    const user = await this.usersService.findByEmail(dto.email);
+    if (!user) throw new BadRequestException('auth.RESET_CODE_INVALID');
+
+    const codeHash = this.hashToken(dto.code);
+    const resetCode = await this.passwordResetCodesRepo.findValid(user.id, codeHash);
+    if (!resetCode) throw new BadRequestException('auth.RESET_CODE_INVALID');
+
+    await this.passwordResetCodesRepo.markUsed(resetCode.id);
+
+    const passwordHash = await bcrypt.hash(dto.newPassword, 10);
+    await this.usersService.setPasswordHash(user.id, passwordHash);
+
+    // A password reset signs the user out everywhere, same as changePassword.
+    await this.refreshTokensRepo.revokeAllForUser(user.id);
   }
 
   // ── private helpers ──────────────────────────────────────────────────────

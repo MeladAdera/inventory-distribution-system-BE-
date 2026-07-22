@@ -6,7 +6,9 @@ import { AuthService } from './auth.service';
 import { AuthController } from './auth.controller';
 import { JwtStrategy } from './strategies/jwt.strategy';
 import { RefreshTokensRepository } from './repositories/refresh-tokens.repository';
+import { PasswordResetCodesRepository } from './repositories/password-reset-codes.repository';
 import { UsersModule } from '../users/users.module';
+import { MailModule } from '../mail/mail.module';
 
 @Module({
   imports: [
@@ -19,8 +21,9 @@ import { UsersModule } from '../users/users.module';
       inject: [ConfigService],
     }),
     UsersModule,
+    MailModule,
   ],
-  providers: [AuthService, JwtStrategy, RefreshTokensRepository],
+  providers: [AuthService, JwtStrategy, RefreshTokensRepository, PasswordResetCodesRepository],
   controllers: [AuthController],
 })
 export class AuthModule {}

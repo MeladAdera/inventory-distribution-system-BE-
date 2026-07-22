@@ -48,7 +48,9 @@ export class EnvironmentVariables {
   @IsOptional()
   ALLOWED_ORIGINS?: string;
 
-  // Email (stub) — all optional until implemented
+  // Email — used by MailService to send password reset codes.
+  // Optional so dev/test can boot without real SMTP creds; when unset,
+  // MailService logs the code to the console instead of sending an email.
   @IsString()
   @IsOptional()
   SMTP_HOST?: string;
@@ -64,6 +66,14 @@ export class EnvironmentVariables {
   @IsString()
   @IsOptional()
   SMTP_PASSWORD?: string;
+
+  @IsString()
+  @IsOptional()
+  SMTP_FROM?: string;
+
+  @IsNumber()
+  @IsOptional()
+  RESET_CODE_EXPIRATION_MINUTES: number = 10;
 }
 
 export function validate(config: Record<string, unknown>) {
