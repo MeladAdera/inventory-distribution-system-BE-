@@ -3,6 +3,7 @@ import {
   NotFoundException,
   ForbiddenException,
   BadRequestException,
+  ConflictException,
   Logger,
 } from '@nestjs/common';
 import { DatabaseService } from '../../database/database.service';
@@ -176,6 +177,55 @@ export class ReceiptsService {
             receipt_id: id,
             amount: item.quantity * parseFloat(item.price),
             notes: receipt.notes ?? undefined,
+          },
+          client,
+        );
+      }
+    });
+
+    return this.receiptsRepo.findById(id).then((r) => r!);
+  }
+
+  async cancel(id: number, reason: string | undefined, user: RequestUser): Promise<ReceiptWithItems> {
+    const receipt = await this.receiptsRepo.findById(id);
+    if (!receipt) throw new NotFoundException('receipt.NOT_FOUND');
+
+    if (user.role !== UserRole.WAREHOUSE_ADMIN && receipt.shop_id !== user.shopId) {
+      throw new ForbiddenException('receipt.ACCESS_DENIED');
+    }
+    if (receipt.is_cancelled) {
+      throw new BadRequestException('receipt.ALREADY_CANCELLED');
+    }
+
+    await this.db.transaction(async (client) => {
+      // Conditional UPDATE (is_cancelled = FALSE) is the real guard against a
+      // race with a concurrent cancel — only the request that flips the flag
+      // proceeds to restore stock, so stock can never be double-restored.
+      const cancelled = await this.receiptsRepo.cancel(id, user.id, reason, client);
+      if (!cancelled) {
+        throw new ConflictException('receipt.ALREADY_CANCELLED');
+      }
+
+      for (const item of receipt.items) {
+        const restored = await this.inventoryRepo.adjust(item.inventory_id, item.quantity, client);
+        if (!restored) {
+          // Guard: should be unreachable — a positive delta can't fail the
+          // current_quantity + delta >= 0 check, and the FK cascade means the
+          // inventory row can't be gone while this receipt_item still exists.
+          throw new BadRequestException('receipt.RESTORE_FAILED');
+        }
+        await this.auditLogsService.log(
+          {
+            shop_id: receipt.shop_id,
+            user_id: user.id,
+            type: 'INVENTORY',
+            action: 'CANCELLED',
+            entity_type: 'inventory',
+            entity_id: item.inventory_id,
+            receipt_id: id,
+            quantity: item.quantity,
+            amount: item.quantity * parseFloat(item.price),
+            notes: reason,
           },
           client,
         );

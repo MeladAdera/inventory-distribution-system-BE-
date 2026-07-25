@@ -115,6 +115,7 @@ export class AnalyticsRepository {
        FROM receipt_items ri
        JOIN receipts r ON r.id = ri.receipt_id
        WHERE r.shop_id = $1
+         AND r.is_cancelled = FALSE
          AND r.created_at >= ${intervalExpr}`,
       [shopId],
     );
@@ -148,6 +149,7 @@ export class AnalyticsRepository {
        FROM receipt_items ri
        JOIN receipts r ON r.id = ri.receipt_id
        WHERE r.shop_id = $1
+         AND r.is_cancelled = FALSE
          AND r.created_at >= ${intervalExpr}
        GROUP BY label
        ORDER BY label ASC`,
@@ -222,8 +224,9 @@ export class AnalyticsRepository {
        FROM receipt_items ri
        JOIN receipts r ON r.id = ri.receipt_id
        JOIN products p ON p.id = ri.product_id
-       WHERE r.shop_id    = $1
-         AND r.created_at >= ${intervalExpr}
+       WHERE r.shop_id      = $1
+         AND r.is_cancelled = FALSE
+         AND r.created_at  >= ${intervalExpr}
        GROUP BY ri.product_id, p.name
        ORDER BY quantity DESC
        LIMIT $2 OFFSET $3`,

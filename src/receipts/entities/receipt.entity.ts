@@ -21,6 +21,10 @@ export class Receipt {
   created_by!: number;
   notes!: string | null;
   is_free!: boolean;
+  is_cancelled!: boolean;
+  cancelled_at!: Date | null;
+  cancelled_by!: number | null;
+  cancel_reason!: string | null;
   created_at!: Date;
 }
 
@@ -38,5 +42,6 @@ export class ReceiptListItem {
   total_items!: number;
   notes!: string | null;
   is_free!: boolean;
+  is_cancelled!: boolean;
   created_at!: Date;
 }
