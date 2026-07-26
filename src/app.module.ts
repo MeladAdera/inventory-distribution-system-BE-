@@ -23,6 +23,7 @@ import { NotificationsModule } from './notifications/notifications.module';
 import { AnalyticsModule } from './analytics/analytics.module';
 import { ReceiptsModule } from './receipts/receipts.module';
 import { DebtsModule } from './debts/debts.module';
+import { CustomersModule } from './customers/customers.module';
 
 @Module({
   imports: [
@@ -69,6 +70,7 @@ import { DebtsModule } from './debts/debts.module';
     AnalyticsModule,
     ReceiptsModule,
     DebtsModule,
+    CustomersModule,
   ],
   controllers: [AppController],
   providers: [

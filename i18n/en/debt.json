@@ -8,5 +8,6 @@
   "HAS_PAYMENTS": "This debt already has collected payments and cannot be changed",
   "ALREADY_REVERSED": "This payment was already reversed",
   "NOT_REVERSIBLE": "A reversal cannot itself be reversed. Record a new payment instead",
-  "PAYMENT_NOT_FOUND": "Payment not found on this debt"
+  "PAYMENT_NOT_FOUND": "Payment not found on this debt",
+  "NO_OPEN_DEBTS": "This customer does not owe anything"
 }

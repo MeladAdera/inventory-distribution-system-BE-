@@ -25,12 +25,28 @@ export class Receipt {
   cancelled_at!: Date | null;
   cancelled_by!: number | null;
   cancel_reason!: string | null;
+  // Set only on credit sales (or when the shop wants the buyer on record); an
+  // ordinary cash sale stays anonymous.
+  customer_id!: number | null;
   created_at!: Date;
 }
 
 export class ReceiptWithItems extends Receipt {
   total_price!: number;
   items!: ReceiptItem[];
+  customer_name!: string | null;
+  // Present when the sale was not paid in full, so the cashier sees what is
+  // still owed without a second request. Null on a normal paid sale.
+  debt!: DebtOnReceipt | null;
+}
+
+/** The receivable side of a credit sale, flattened for the receipt response. */
+export class DebtOnReceipt {
+  id!: number;
+  total_amount!: string;
+  paid_amount!: string;
+  remaining!: string;
+  status!: string;
 }
 
 export class ReceiptListItem {

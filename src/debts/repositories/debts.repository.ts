@@ -107,6 +107,22 @@ export class DebtsRepository {
   }
 
   /**
+   * Includes cancelled rows, so a caller that found no live debt can tell
+   * "this sale was voided" apart from "this sale was never on credit" and
+   * report the accurate reason. Newest first — a source may be re-billed after
+   * a cancellation.
+   */
+  findAnyBySource(source: DebtSource): Promise<Debt | null> {
+    return this.db.queryOne<Debt>(
+      `SELECT * FROM debts
+       WHERE ${SOURCE_COLUMN[source.type]} = $1
+       ORDER BY id DESC
+       LIMIT 1`,
+      [source.id],
+    );
+  }
+
+  /**
    * Applies a signed delta to `paid_amount` and re-derives `status` from the
    * result, so status can never disagree with the amount.
    *
@@ -225,6 +241,29 @@ export class DebtsRepository {
       data: rows.map(({ total_count: _, ...row }) => row as DebtListItem),
       total: rows.length > 0 ? parseInt(rows[0].total_count, 10) : 0,
     };
+  }
+
+  /**
+   * The customer's unsettled debts, oldest first, locked for the transaction.
+   *
+   * `ORDER BY created_at, id` is a total order, and every caller acquires the
+   * locks in it — that is what stops two cashiers collecting from the same
+   * customer at once from deadlocking against each other. It is also the FIFO
+   * order the allocation walks, so one query serves both purposes.
+   */
+  async findOpenByCustomerForUpdate(customerId: number, client: pg.PoolClient): Promise<Debt[]> {
+    const result = await client.query<Debt>(
+      `SELECT * FROM debts
+       WHERE customer_id = $1 AND status IN ('OPEN', 'PARTIAL')
+       ORDER BY created_at ASC, id ASC
+       FOR UPDATE`,
+      [customerId],
+    );
+    return result.rows;
+  }
+
+  getSummaryForCustomer(customerId: number): Promise<DebtsSummary> {
+    return this.runSummary('WHERE d.customer_id = $1', [customerId]);
   }
 
   getSummary(query: DebtQueryDto, visibility: DebtVisibility): Promise<DebtsSummary> {

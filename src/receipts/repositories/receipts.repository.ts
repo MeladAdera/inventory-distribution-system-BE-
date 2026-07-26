@@ -27,13 +27,14 @@ export class ReceiptsRepository {
     shopId: number,
     createdBy: number,
     notes: string | undefined,
+    customerId: number | undefined,
     client: pg.PoolClient,
   ): Promise<Receipt> {
     const result = await client.query<Receipt>(
-      `INSERT INTO receipts (shop_id, created_by, notes)
-       VALUES ($1, $2, $3)
+      `INSERT INTO receipts (shop_id, created_by, notes, customer_id)
+       VALUES ($1, $2, $3, $4)
        RETURNING *`,
-      [shopId, createdBy, notes ?? null],
+      [shopId, createdBy, notes ?? null, customerId ?? null],
     );
     return result.rows[0];
   }
@@ -86,6 +87,7 @@ export class ReceiptsRepository {
       `SELECT
          r.id, r.shop_id, r.created_by, r.notes, r.is_free,
          r.is_cancelled, r.cancelled_at, r.cancelled_by, r.cancel_reason, r.created_at,
+         r.customer_id, cu.name AS customer_name,
          COALESCE(SUM(ri.quantity * ri.price), 0)::float8 AS total_price,
          COALESCE(
            JSON_AGG(
@@ -110,8 +112,9 @@ export class ReceiptsRepository {
        LEFT JOIN receipt_items ri ON ri.receipt_id = r.id
        LEFT JOIN products      p  ON p.id = ri.product_id
        LEFT JOIN categories    c  ON c.id = p.category_id
+       LEFT JOIN customers     cu ON cu.id = r.customer_id
        WHERE r.id = $1
-       GROUP BY r.id`,
+       GROUP BY r.id, cu.name`,
       [id],
     );
   }

@@ -6,9 +6,11 @@ import { DatabaseModule } from '../database/database.module';
 import { AuditLogsModule } from '../audit-logs/audit-logs.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { InventoryModule } from '../inventory/inventory.module';
+import { DebtsModule } from '../debts/debts.module';
+import { CustomersModule } from '../customers/customers.module';
 
 @Module({
-  imports: [DatabaseModule, AuditLogsModule, NotificationsModule, InventoryModule],
+  imports: [DatabaseModule, AuditLogsModule, NotificationsModule, InventoryModule, DebtsModule, CustomersModule],
   controllers: [ReceiptsController],
   providers: [ReceiptsService, ReceiptsRepository],
 })

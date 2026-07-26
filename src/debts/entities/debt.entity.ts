@@ -56,6 +56,20 @@ export class DebtListItem extends Debt {
   remaining!: string;
 }
 
+/**
+ * One slice of a customer payment. A FIFO collection can settle several debts
+ * at once, so the response lists what landed where instead of a single total —
+ * the cashier needs to tell the customer which sales are now clear.
+ */
+export class DebtPaymentAllocation {
+  debt_id!: number;
+  receipt_id!: number | null;
+  /** How much of the payment went to this debt. */
+  amount!: string;
+  status!: DebtStatus;
+  remaining!: string;
+}
+
 export class DebtsSummary {
   total_billed!: string;
   total_collected!: string;

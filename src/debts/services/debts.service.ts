@@ -10,10 +10,12 @@ import {
   DebtListItem,
   DebtsSummary,
   ShopDebtsSummary,
+  DebtPaymentAllocation,
 } from '../entities/debt.entity';
 import { DebtPayment, PaymentMethod } from '../entities/debt-payment.entity';
 import { DebtQueryDto } from '../dto/debt-query.dto';
 import { CreateDebtPaymentDto } from '../dto/create-debt-payment.dto';
+import { CreateCustomerPaymentDto } from '../dto/create-customer-payment.dto';
 import { ReverseDebtPaymentDto } from '../dto/reverse-debt-payment.dto';
 import { UserRole } from '../../common/enums/user-role.enum';
 import { RequestUser } from '../../common/interfaces/request-user.interface';
@@ -310,8 +312,9 @@ export class DebtsService {
    * cannot mark itself as paid.
    */
   async addOrderPayment(orderId: number, dto: CreateDebtPaymentDto, user: RequestUser): Promise<Debt> {
-    const debt = await this.debtsRepo.findBySource({ type: 'ORDER', id: orderId });
-    if (!debt) throw new NotFoundException('debt.NOT_FOUND');
+    const source: DebtSource = { type: 'ORDER', id: orderId };
+    const debt = await this.debtsRepo.findBySource(source);
+    if (!debt) throw await this.explainMissingDebt(source);
 
     return this.addPayment(debt.id, {
       amount: dto.amount,
@@ -319,6 +322,98 @@ export class DebtsService {
       note: dto.note,
       createdBy: user.id,
     });
+  }
+
+  /**
+   * Collects from a customer across however many debts it takes.
+   *
+   * With `debtId` it settles that one sale. Without it the money is applied
+   * oldest debt first, writing one ledger row per debt it touches — which is
+   * how a shop actually works: the customer pays down "what I owe", not one
+   * particular receipt.
+   *
+   * The whole allocation is one transaction. If the amount is more than the
+   * customer's total outstanding, nothing is written at all — no partial
+   * application, and no credit balance, matching the rule for single debts.
+   */
+  addCustomerPayment(
+    customerId: number,
+    creditorShopId: number,
+    dto: CreateCustomerPaymentDto,
+    userId: number,
+  ): Promise<DebtPaymentAllocation[]> {
+    const amountMinor = this.parseAmount(dto.amount);
+
+    return this.db.transaction(async (c) => {
+      // Locks every candidate row up front, in a fixed order, before any
+      // decision is made — see findOpenByCustomerForUpdate.
+      const openDebts = await this.debtsRepo.findOpenByCustomerForUpdate(customerId, c);
+
+      const targets = dto.debtId !== undefined
+        ? openDebts.filter((debt) => debt.id === dto.debtId)
+        : openDebts;
+
+      if (targets.length === 0) {
+        // Either the customer owes nothing, or the named debt is settled,
+        // cancelled, or belongs to somebody else.
+        throw new NotFoundException(dto.debtId !== undefined ? 'debt.NOT_FOUND' : 'debt.NO_OPEN_DEBTS');
+      }
+
+      // Ownership is checked after the filter so a debt from another shop is
+      // indistinguishable from one that does not exist.
+      for (const debt of targets) {
+        if (debt.creditor_shop_id !== creditorShopId) {
+          throw new NotFoundException('debt.NOT_FOUND');
+        }
+      }
+
+      const totalRemaining = targets.reduce(
+        (sum, debt) => sum + toMinor(debt.total_amount) - toMinor(debt.paid_amount),
+        0n,
+      );
+
+      if (amountMinor > totalRemaining) {
+        throw new BadRequestException({
+          key: 'debt.AMOUNT_EXCEEDS_REMAINING',
+          args: { remaining: fromMinor(totalRemaining) },
+        });
+      }
+
+      const allocations: DebtPaymentAllocation[] = [];
+      let left = amountMinor;
+
+      for (const debt of targets) {
+        if (left === 0n) break;
+
+        const debtRemaining = toMinor(debt.total_amount) - toMinor(debt.paid_amount);
+        const share = left < debtRemaining ? left : debtRemaining;
+
+        // Reuses the single-debt path so each slice gets the same validation,
+        // status derivation and audit row. Re-locking inside the same
+        // transaction is a no-op.
+        const updated = await this.addPayment(
+          debt.id,
+          { amount: fromMinor(share), method: dto.method, note: dto.note, createdBy: userId },
+          c,
+        );
+
+        allocations.push({
+          debt_id: debt.id,
+          receipt_id: updated.receipt_id,
+          amount: fromMinor(share),
+          status: updated.status,
+          remaining: this.toBalance(updated).remaining,
+        });
+
+        left -= share;
+      }
+
+      return allocations;
+    });
+  }
+
+  getCustomerSummary(customerId: number): Promise<DebtsSummary> {
+    return this.debtsRepo.getSummaryForCustomer(customerId);
   }
 
   async reversePaymentForUser(
@@ -333,6 +428,20 @@ export class DebtsService {
     this.assertCanReverse(debt, user);
 
     return this.reversePayment(debtId, paymentId, { reason: dto.reason, createdBy: user.id });
+  }
+
+  /**
+   * Why there is no live debt for a source. "The sale was voided" and "the sale
+   * was never on credit" are different answers, and the cashier staring at the
+   * screen needs the right one — a bare 404 would send them looking for a
+   * payment that was never due.
+   */
+  private async explainMissingDebt(source: DebtSource): Promise<Error> {
+    const previous = await this.debtsRepo.findAnyBySource(source);
+
+    return previous
+      ? new BadRequestException('debt.CANCELLED')
+      : new NotFoundException('debt.NOT_FOUND');
   }
 
   private async requireVisibleDebt(id: number, user: RequestUser): Promise<Debt> {

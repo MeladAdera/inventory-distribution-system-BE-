@@ -482,15 +482,20 @@ This is the report that makes the feature actually useful day to day.
 | `debt.ALREADY_REVERSED` | 400 | Reversing the same payment twice |
 | `debt.NOT_REVERSIBLE` | 400 | Reversing a reversal row — record a new payment instead |
 | `debt.PAYMENT_NOT_FOUND` | 404 | Payment id does not belong to this debt |
-| `customer.NOT_FOUND` | 404 | Customer id does not exist |
-| `customer.ACCESS_DENIED` | 403 | Customer belongs to another shop |
-| `customer.PHONE_TAKEN` | 409 | Phone already used in this shop |
-| `customer.HAS_OPEN_DEBT` | 400 | Deactivating a customer who still owes money |
+| `debt.NO_OPEN_DEBTS` | 404 | Collecting from a customer who owes nothing |
+| `customer.NOT_FOUND` | 404 | Customer id does not exist, or belongs to another shop |
+| `customer.PHONE_TAKEN` | 409 | Phone already used by an active customer in this shop |
+| `customer.HAS_OPEN_DEBT` | 400 | Deactivating a customer who still owes money, or is owed a refund |
 | `receipt.CUSTOMER_REQUIRED` | 400 | `paidAmount < total` without a `customerId` |
-| `receipt.FREE_CANNOT_HAVE_DEBT` | 400 | `is_free` + partial payment |
+| `receipt.PAID_EXCEEDS_TOTAL` | 400 | `paidAmount > total` |
 
-`debt.*` keys are wired up in `i18n/en/debt.json` and `i18n/ar/debt.json`.
-`customer.*` and the two new `receipt.*` keys arrive with steps 3–4. See
+`customer.ACCESS_DENIED` was planned but is unused: another shop's customer is
+looked up already scoped to the caller's shop, so it returns `404` rather than
+confirming the id exists. `receipt.FREE_CANNOT_HAVE_DEBT` was also dropped —
+see the `is_free` note under Step 4.
+
+All of the above are wired up in both languages: `i18n/{en,ar}/debt.json`,
+`customer.json` and `receipt.json`. See
 `docs/features/10-i18n-localization.md`.
 
 ---
@@ -631,13 +636,108 @@ must render identically either way, so the summary casts
 `::numeric(15,2)::text`. A shop with no debts would otherwise have returned a
 differently-shaped amount than a shop with debts.
 
-### Step 4 — Shop ↔ Customer
+### Step 4 — Shop ↔ Customer ✅ done
 
-- New `customers` module (full CRUD + search).
-- Add `customerId` / `paidAmount` to `CreateReceiptDto`, wire the debt into the
-  receipt transaction.
-- Hook `cancelDebt` into receipt cancel; guard `setFree`.
-- `POST /customers/:id/payments` with FIFO allocation.
+```
+src/customers/                            NEW module
+├── customers.module.ts
+├── controllers/customers.controller.ts    CRUD + /debts, /summary, /payments
+├── services/customers.service.ts
+├── repositories/customers.repository.ts
+├── entities/customer.entity.ts
+└── dto/  create-customer, update-customer, customer-query
+
+src/debts/
+├── dto/create-customer-payment.dto.ts     + optional debtId
+├── repositories/debts.repository.ts       + findOpenByCustomerForUpdate,
+│                                            getSummaryForCustomer, findAnyBySource
+└── services/debts.service.ts              + addCustomerPayment (FIFO),
+                                             getCustomerSummary, explainMissingDebt
+
+src/receipts/
+├── dto/create-receipt.dto.ts              + customerId, paidAmount
+├── entities/receipt.entity.ts             + customer_id, customer_name, debt
+├── repositories/receipts.repository.ts    insertReceipt takes customerId;
+│                                            findById joins customers
+├── services/receipts.service.ts           + credit sale, cancel hook,
+│                                            setFree guard, attachDebt
+└── receipts.module.ts                     imports DebtsModule, CustomersModule
+
+i18n/{en,ar}/customer.json                 NEW
+i18n/{en,ar}/receipt.json                  NEW
+```
+
+**The sale total is summed in bigint minor units** from the same price
+snapshots the items are written with:
+
+```ts
+itemInserts.reduce((sum, i) => sum + toMinor(i.price) * BigInt(i.quantity), 0n)
+```
+
+The figure the debt is based on is exactly the figure the receipt charges, with
+no float in between and no extra query — the totals are already in hand when
+the items are built.
+
+**The debt stores the whole sale, not the unpaid part.** A 30.00 sale with
+10.00 down becomes `total_amount 30.00 / paid_amount 10.00`, not a 20.00 debt.
+Storing only the balance would lose what the sale was actually worth.
+
+**FIFO reuses the single-debt path.** `addCustomerPayment` locks the candidate
+rows, works out the split, then calls `addPayment` per slice — so every slice
+gets the same validation, status derivation and audit row. Re-locking inside
+the same transaction is a no-op.
+
+**Lock ordering is the deadlock guard.** `findOpenByCustomerForUpdate` orders by
+`created_at, id` and every caller acquires locks in that order, so two cashiers
+collecting from one customer serialise instead of deadlocking. That same order
+*is* the FIFO order, so one query serves both purposes.
+
+**`is_free` never reaches a debt at creation.** `CreateReceiptDto` has no
+`is_free` field — it is set later via `PATCH /receipts/:id/free` — so the
+planned `receipt.FREE_CANNOT_HAVE_DEBT` check was unnecessary at create time.
+The guard lives only in `setFree`, where it can actually be violated.
+
+#### Verified end to end over HTTP
+
+64 checks against a running app on a throwaway database, rebuilt from the
+migrations, with real JWTs for admin, shop owner, employee, and an unrelated
+shop owner. Covers steps 3 and 4 together:
+
+| Area | Covered |
+|---|---|
+| Debt timing | 404 while `PENDING`; opens at `SHIPPED` with a `40.00` snapshot |
+| Permissions | owner reads but cannot pay; employee 403 on shop debts; other shop 403 everywhere |
+| Scope forging | `?shopId=2` as an unrelated shop still returns nothing |
+| Reversal | admin-only for order debts, owner-only for customer debts, double reverse blocked |
+| Order cancel | debt cancelled, payment kept, surfaces as `refund_due 4.00` |
+| Customers | admin 403 on every route; duplicate phone 409; same phone in another shop fine; other shop's customer 404 |
+| Credit sale | `30.00` sale, `10.00` down → receipt returns `remaining 20.00` and the customer name |
+| Sale guards | partial without a customer, paid > total, another shop's customer |
+| FIFO | `25.00` split oldest-first → `20.00` **PAID**, `5.00` **PARTIAL**; overpay across all debts rejected whole |
+| Free / cancel | freeing a paid sale rejected; freeing an unpaid one voids the debt; cancelling keeps the payment |
+| Deactivation | blocked by refund due; employee 403; phone freed after soft delete |
+| i18n | Arabic error text via `Accept-Language: ar` |
+
+Database audit after the run — 6 debts, 9 payments, 12 `DEBT` audit rows:
+`SUM(debt_payments.amount) = debts.paid_amount` for every debt, 0 impossible
+balances, 0 status mismatches, 0 debts with two debtors, 0 negative stock.
+The 2 orders and 5 receipts also confirm the pre-existing flows still move
+stock correctly (11 `INVENTORY` audit rows).
+
+#### Bug found and fixed during this step
+
+Recording a payment against a **cancelled** order returned
+`404 "Debt not found"`. Technically true — `findBySource` excludes cancelled
+rows — but it sends a cashier looking for a payment that was never due.
+`explainMissingDebt` now checks for a cancelled row and answers
+`400 debt.CANCELLED` instead, so "this sale was voided" and "this sale was
+never on credit" are distinguishable.
+
+#### Out of scope, fixed anyway
+
+`i18n/{en,ar}/receipt.json` did not exist, so every `receipt.*` error resolved
+to a raw key. Two new keys were needed here, so all nine were wired up in both
+languages rather than leaving a half-populated file.
 
 ### Step 5 — Reports
 
