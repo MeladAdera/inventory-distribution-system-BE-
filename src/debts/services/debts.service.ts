@@ -11,6 +11,8 @@ import {
   DebtsSummary,
   ShopDebtsSummary,
   DebtPaymentAllocation,
+  DebtsAgingRow,
+  AGING_BUCKETS,
 } from '../entities/debt.entity';
 import { DebtPayment, PaymentMethod } from '../entities/debt-payment.entity';
 import { DebtQueryDto } from '../dto/debt-query.dto';
@@ -282,6 +284,22 @@ export class DebtsService {
 
   getSummary(query: DebtQueryDto, user: RequestUser): Promise<DebtsSummary> {
     return this.debtsRepo.getSummary(query, this.visibilityFor(user));
+  }
+
+  /**
+   * Aging report: what is owed, grouped by how long it has been owed.
+   *
+   * Every bucket is always returned, even at zero. A chart that gains and loses
+   * bars as the data changes is hard to read, and "nothing is 60+ days old" is
+   * itself the answer somebody is looking for.
+   */
+  async getAging(query: DebtQueryDto, user: RequestUser): Promise<DebtsAgingRow[]> {
+    const rows = await this.debtsRepo.getAging(query, this.visibilityFor(user));
+    const byBucket = new Map(rows.map((row) => [row.bucket, row]));
+
+    return AGING_BUCKETS.map(
+      (bucket) => byBucket.get(bucket) ?? { bucket, count: 0, amount: '0.00' },
+    );
   }
 
   async getShopSummary(shopId: number, user: RequestUser): Promise<ShopDebtsSummary> {

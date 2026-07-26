@@ -1,7 +1,16 @@
 import { Injectable } from '@nestjs/common';
 import * as pg from 'pg';
 import { DatabaseService } from '../../database/database.service';
-import { Debt, DebtSource, DebtorType, DebtListItem, DebtsSummary } from '../entities/debt.entity';
+import {
+  Debt,
+  DebtSource,
+  DebtorType,
+  DebtListItem,
+  DebtsSummary,
+  DebtsAgingRow,
+  AgingBucket,
+  AGING_BUCKETS,
+} from '../entities/debt.entity';
 import { DebtPayment, PaymentMethod } from '../entities/debt-payment.entity';
 import { DebtQueryDto } from '../dto/debt-query.dto';
 
@@ -48,6 +57,28 @@ const SOURCE_COLUMN: Record<DebtSource['type'], string> = {
   ORDER: 'order_id',
   RECEIPT: 'receipt_id',
 };
+
+/**
+ * The age test per bucket, written once. The aging report's CASE and the
+ * `?agingBucket=` list filter are both built from this map, so the total in a
+ * bucket always matches the rows you get when you click into it.
+ *
+ * The conditions are mutually exclusive and cover all ages, and they are static
+ * SQL selected by a validated enum — no user input reaches the fragment.
+ */
+const AGING_CONDITION: Record<AgingBucket, string> = {
+  '0-30': `NOW() - d.created_at < INTERVAL '30 days'`,
+  '31-60': `NOW() - d.created_at >= INTERVAL '30 days' AND NOW() - d.created_at < INTERVAL '60 days'`,
+  '60+': `NOW() - d.created_at >= INTERVAL '60 days'`,
+};
+
+const AGING_CASE = `CASE ${AGING_BUCKETS.map(
+  (bucket) => `WHEN ${AGING_CONDITION[bucket]} THEN '${bucket}'`,
+).join(' ')} ELSE '60+' END`;
+
+// Aging only counts money still collectable. PAID debts are settled and
+// CANCELLED ones are not receivable — neither belongs in a "who owes me" report.
+const UNSETTLED = `d.status IN ('OPEN', 'PARTIAL')`;
 
 @Injectable()
 export class DebtsRepository {
@@ -266,6 +297,30 @@ export class DebtsRepository {
     return this.runSummary('WHERE d.customer_id = $1', [customerId]);
   }
 
+  /**
+   * How much is owed, grouped by how long it has been owed.
+   *
+   * Sums the *remaining* balance, not the original sale value — a 100.00 sale
+   * with 90.00 collected is 10.00 of exposure, not 100.00.
+   *
+   * Buckets with nothing in them are absent from the result; the service fills
+   * them back in so the response shape is stable for a chart.
+   */
+  async getAging(query: DebtQueryDto, visibility: DebtVisibility): Promise<DebtsAgingRow[]> {
+    const { conditions, params } = this.buildFilters(query, visibility);
+    const where = [UNSETTLED, ...conditions].join(' AND ');
+
+    return this.db.query<DebtsAgingRow>(
+      `SELECT ${AGING_CASE}                                    AS bucket,
+              COUNT(*)::int                                    AS count,
+              SUM(d.total_amount - d.paid_amount)::numeric(15,2)::text AS amount
+       FROM debts d
+       WHERE ${where}
+       GROUP BY bucket`,
+      params,
+    );
+  }
+
   getSummary(query: DebtQueryDto, visibility: DebtVisibility): Promise<DebtsSummary> {
     const { conditions, params } = this.buildFilters(query, visibility);
     const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
@@ -348,6 +403,15 @@ export class DebtsRepository {
     if (query.customerId !== undefined) {
       conditions.push(`d.customer_id = $${idx++}`);
       params.push(query.customerId);
+    }
+
+    // Static fragment chosen by a validated enum — the same condition the aging
+    // report groups by. UNSETTLED comes with it: a bucket means "unsettled money
+    // of this age", so without it the drill-down would list settled and
+    // cancelled debts the bucket never counted, and the rows would not add up to
+    // the bar the user clicked.
+    if (query.agingBucket !== undefined) {
+      conditions.push(AGING_CONDITION[query.agingBucket], UNSETTLED);
     }
 
     if (query.fromDate) {

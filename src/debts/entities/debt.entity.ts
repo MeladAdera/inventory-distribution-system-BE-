@@ -83,6 +83,27 @@ export class DebtsSummary {
 }
 
 /**
+ * How long money has been owed. Buckets are measured from `created_at`, not
+ * `due_date` — due dates are a v2 feature and nothing sets them yet.
+ *
+ * These are the standard accounting bands. They are the one place the boundaries
+ * are defined: the aging report and the `?agingBucket=` drill-down on
+ * `GET /debts` both derive from them, so a bucket can never mean one thing in
+ * the summary and something else in the list behind it.
+ */
+export type AgingBucket = '0-30' | '31-60' | '60+';
+
+export const AGING_BUCKETS: AgingBucket[] = ['0-30', '31-60', '60+'];
+
+export class DebtsAgingRow {
+  bucket!: AgingBucket;
+  /** Debts still owed in this band. */
+  count!: number;
+  /** Sum of what is still owed, not the original sale value. */
+  amount!: string;
+}
+
+/**
  * A shop sits on both sides of the ledger: it owes the warehouse for orders,
  * and its own customers owe it for credit sales. Reporting them separately
  * avoids a single net figure that hides both.

@@ -397,6 +397,7 @@ Rules:
 |---|---|
 | `status` | `OPEN` \| `PARTIAL` \| `PAID` \| `CANCELLED` |
 | `debtorType` | `SHOP` \| `CUSTOMER` |
+| `agingBucket` | `0-30` \| `31-60` \| `60+` — implies "still owed" (see Step 5) |
 | `shopId` | admin only |
 | `customerId` | — |
 | `from` / `to` | date range on `created_at` |
@@ -456,13 +457,24 @@ refund_due       = SUM(paid_amount)   WHERE status = 'CANCELLED' AND paid_amount
 
 ### `GET /analytics/receivables/aging`
 
-Buckets by **`created_at`** (not `due_date`, which is unused in v1):
+Buckets by **`created_at`** (not `due_date`, which is unused in v1). Sums the
+*remaining* balance, and counts only debts still owed:
 
 | Bucket | Meaning |
 |---|---|
 | `0–30` | recent, normal |
 | `31–60` | getting late |
 | `60+` | needs chasing |
+
+```json
+[ { "bucket": "0-30",  "count": 2, "amount": "20.00" },
+  { "bucket": "31-60", "count": 1, "amount": "20.00" },
+  { "bucket": "60+",   "count": 2, "amount": "50.00" } ]
+```
+
+Drill into a band with `GET /debts?agingBucket=60%2B` — note the `+` must be
+URL-encoded. The rows returned always reconcile with the bar's count and
+amount.
 
 This is the report that makes the feature actually useful day to day.
 
@@ -739,10 +751,73 @@ never on credit" are distinguishable.
 to a raw key. Two new keys were needed here, so all nine were wired up in both
 languages rather than leaving a half-populated file.
 
-### Step 5 — Reports
+### Step 5 — Reports ✅ done
 
-- `getReceivablesSummary`, `getReceivablesAging` in `AnalyticsRepository`.
-- Two new controller routes.
+```
+src/debts/
+├── entities/debt.entity.ts               + AgingBucket, AGING_BUCKETS, DebtsAgingRow
+├── dto/debt-query.dto.ts                 + agingBucket
+├── repositories/debts.repository.ts      + AGING_CONDITION, AGING_CASE, UNSETTLED,
+│                                           getAging; agingBucket in buildFilters
+└── services/debts.service.ts             + getAging (fills empty buckets)
+
+src/analytics/
+├── controllers/analytics.controller.ts   + GET receivables, receivables/aging
+└── analytics.module.ts                   imports DebtsModule
+```
+
+**The queries live in the debts module, not `AnalyticsRepository`.** The debts
+repository already owns the role-based visibility rules; a second copy of that
+scoping in another module is how a data leak eventually gets introduced. The
+analytics controller injects `DebtsService` and delegates, the same way
+`ShopsController` already does.
+
+**No `?period=`, unlike the profit endpoints.** Receivables are a *balance* as
+of now, not a flow over a window — a `period` bucket would imply a time series
+that does not exist for a balance. The time dimension for receivables *is* the
+aging report. Filtering uses the existing `DebtQueryDto`
+(`fromDate`/`toDate`/`status`/`debtorType`/`shopId`/`customerId`), so the report
+and the list behind it take exactly the same parameters.
+
+**EMPLOYEE is included here but excluded from profit.** Margin is owner-level
+information; who still owes money is the job of whoever collects it. Their view
+is scoped to customer debts regardless.
+
+**Aging sums the remaining balance, not the sale value.** A 100.00 sale with
+90.00 collected is 10.00 of exposure.
+
+**Every bucket is always returned, even at zero** — a chart that gains and loses
+bars is hard to read, and "nothing is 60+ days old" is itself an answer.
+
+**Bucket boundaries are defined once**, in `AGING_CONDITION`. Both the report's
+`CASE` and the `?agingBucket=` drill-down are built from that map, so a band
+cannot mean one thing in the summary and another in the list behind it.
+
+#### Verified end to end over HTTP
+
+25 checks, plus the 64 from steps 3–4 re-run as a regression check on the same
+build. Debts were created through the API, then backdated in SQL so only
+`created_at` moved:
+
+| Area | Covered |
+|---|---|
+| Summary | billed/collected/remaining/open_count across mixed order and customer debts |
+| Aging | three buckets always present and ordered; counts and amounts correct; total reconciles with `total_remaining` |
+| Exclusions | fully-paid sales raise no debt; cancelled debts appear in no bucket |
+| Drill-down | **every** bucket's rows reconcile with its own count and amount; `agingBucket` + `status=CANCELLED` returns nothing; unknown bucket 400 |
+| Scoping | employee excludes the shop's order debt; owner sees both sides; unrelated shop gets zeros; `?shopId=` cannot widen scope |
+| Filters | `customerId` and `debtorType` combine with both endpoints |
+| Regression | profit endpoints unchanged; employee still 403 on profit |
+
+#### Bug found and fixed during this step
+
+The drill-down did not reconcile with its bucket. The *age* condition was
+shared between the report and the filter, but the "still owed" condition was
+not — so `?agingBucket=0-30` also listed a cancelled debt created that day,
+which the `0-30` bar had never counted. `agingBucket` now implies `UNSETTLED`
+alongside the age test, making the two agree by construction rather than by
+coincidence. It surfaced only because the test reconciles every bucket; the
+two buckets checked first had both happened to contain no settled debts.
 
 ### Step 6 — Later (not v1)
 
