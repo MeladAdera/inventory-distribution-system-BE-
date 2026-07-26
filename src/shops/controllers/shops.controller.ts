@@ -9,6 +9,7 @@ import {
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { ShopsService } from '../services/shops.service';
+import { DebtsService } from '../../debts/services/debts.service';
 import { UpdateShopDto } from '../dto/update-shop.dto';
 import { UpdateShopStatusDto } from '../dto/update-shop-status.dto';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
@@ -23,7 +24,10 @@ import { RequestUser } from '../../common/interfaces/request-user.interface';
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('shops')
 export class ShopsController {
-  constructor(private readonly shopsService: ShopsService) {}
+  constructor(
+    private readonly shopsService: ShopsService,
+    private readonly debtsService: DebtsService,
+  ) {}
 
   @Get()
   @ApiOperation({ summary: 'List shops — all for WAREHOUSE_ADMIN, own shop for others' })
@@ -38,6 +42,19 @@ export class ShopsController {
     @CurrentUser() user: RequestUser,
   ) {
     return this.shopsService.findById(id, user);
+  }
+
+  @Get(':id/debts/summary')
+  @Roles(UserRole.WAREHOUSE_ADMIN, UserRole.SHOP_OWNER)
+  @ApiOperation({
+    summary:
+      'Both sides of a shop\'s ledger: what it owes the warehouse (owed_by_shop) and what its customers owe it (owed_to_shop). SHOP_OWNER: own shop only.',
+  })
+  getDebtsSummary(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentUser() user: RequestUser,
+  ) {
+    return this.debtsService.getShopSummary(id, user);
   }
 
   @Patch(':id')

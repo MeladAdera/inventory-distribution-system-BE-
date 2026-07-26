@@ -8,9 +8,13 @@ import {
   Query,
   ParseIntPipe,
   UseGuards,
+  HttpCode,
+  HttpStatus,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { OrdersService } from '../services/orders.service';
+import { DebtsService } from '../../debts/services/debts.service';
+import { CreateDebtPaymentDto } from '../../debts/dto/create-debt-payment.dto';
 import { RequestUser } from '../../common/interfaces/request-user.interface';
 import { CreateOrderDto } from '../dto/create-order.dto';
 import { UpdateOrderStatusDto } from '../dto/update-order-status.dto';
@@ -26,7 +30,10 @@ import { UserRole } from '../../common/enums/user-role.enum';
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('orders')
 export class OrdersController {
-  constructor(private readonly ordersService: OrdersService) {}
+  constructor(
+    private readonly ordersService: OrdersService,
+    private readonly debtsService: DebtsService,
+  ) {}
 
   @Post()
   @Roles(UserRole.SHOP_OWNER, UserRole.WAREHOUSE_ADMIN)
@@ -56,6 +63,28 @@ export class OrdersController {
     @CurrentUser() user: RequestUser,
   ) {
     return this.ordersService.findById(id, user);
+  }
+
+  @Get(':id/debt')
+  @Roles(UserRole.WAREHOUSE_ADMIN, UserRole.SHOP_OWNER)
+  @ApiOperation({ summary: "The order's outstanding debt. 404 when the order was paid in full or has not shipped yet." })
+  findDebt(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentUser() user: RequestUser,
+  ) {
+    return this.debtsService.findByOrderForUser(id, user);
+  }
+
+  @Post(':id/payments')
+  @HttpCode(HttpStatus.CREATED)
+  @Roles(UserRole.WAREHOUSE_ADMIN)
+  @ApiOperation({ summary: 'Record money received from the shop for this order. Admin only — the admin is who receives and verifies the cash.' })
+  addPayment(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: CreateDebtPaymentDto,
+    @CurrentUser() user: RequestUser,
+  ) {
+    return this.debtsService.addOrderPayment(id, dto, user);
   }
 
   @Patch(':id/status')

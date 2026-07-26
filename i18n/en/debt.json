@@ -1,0 +1,12 @@
+{
+  "NOT_FOUND": "Debt not found",
+  "ACCESS_DENIED": "You do not have access to this debt",
+  "ALREADY_PAID": "This debt is already fully paid",
+  "CANCELLED": "This debt was cancelled and cannot receive payments",
+  "AMOUNT_EXCEEDS_REMAINING": "Amount is more than what is still owed (remaining: {remaining})",
+  "AMOUNT_INVALID": "Invalid amount. It must be a positive number with at most 2 decimal places",
+  "HAS_PAYMENTS": "This debt already has collected payments and cannot be changed",
+  "ALREADY_REVERSED": "This payment was already reversed",
+  "NOT_REVERSIBLE": "A reversal cannot itself be reversed. Record a new payment instead",
+  "PAYMENT_NOT_FOUND": "Payment not found on this debt"
+}

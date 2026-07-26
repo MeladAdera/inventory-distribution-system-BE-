@@ -186,6 +186,21 @@ export class OrdersRepository {
     return result.rows[0] ?? null;
   }
 
+  /**
+   * The order's money total, as a DECIMAL string rather than the `::float8`
+   * the list/detail queries use for display — this value is snapshotted into
+   * `debts.total_amount`, so it must not go through a float.
+   */
+  async sumTotalPrice(orderId: number, client: pg.PoolClient): Promise<string> {
+    const result = await client.query<{ total: string }>(
+      `SELECT COALESCE(SUM(quantity * price), 0)::text AS total
+       FROM order_items
+       WHERE order_id = $1`,
+      [orderId],
+    );
+    return result.rows[0].total;
+  }
+
   async findItemsByOrderId(orderId: number, client: pg.PoolClient): Promise<(OrderItem & { product_name: string })[]> {
     const result = await client.query<OrderItem & { product_name: string }>(
       `SELECT oi.*, p.name AS product_name
