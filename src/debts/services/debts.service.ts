@@ -316,12 +316,12 @@ export class DebtsService {
   }
 
   /** The live debt raised by an order, for the order-detail screen. */
-  async findByOrderForUser(orderId: number, user: RequestUser): Promise<Debt> {
+  async findByOrderForUser(orderId: number, user: RequestUser): Promise<Debt & { remaining: string }> {
     const debt = await this.debtsRepo.findBySource({ type: 'ORDER', id: orderId });
     if (!debt) throw new NotFoundException('debt.NOT_FOUND');
 
     this.assertReadAccess(debt, user);
-    return debt;
+    return { ...debt, remaining: this.toBalance(debt).remaining };
   }
 
   /**
@@ -329,17 +329,23 @@ export class DebtsService {
    * level: the admin is the one who physically receives the money, so a shop
    * cannot mark itself as paid.
    */
-  async addOrderPayment(orderId: number, dto: CreateDebtPaymentDto, user: RequestUser): Promise<Debt> {
+  async addOrderPayment(
+    orderId: number,
+    dto: CreateDebtPaymentDto,
+    user: RequestUser,
+  ): Promise<Debt & { remaining: string }> {
     const source: DebtSource = { type: 'ORDER', id: orderId };
     const debt = await this.debtsRepo.findBySource(source);
     if (!debt) throw await this.explainMissingDebt(source);
 
-    return this.addPayment(debt.id, {
+    const updated = await this.addPayment(debt.id, {
       amount: dto.amount,
       method: dto.method,
       note: dto.note,
       createdBy: user.id,
     });
+
+    return { ...updated, remaining: this.toBalance(updated).remaining };
   }
 
   /**
