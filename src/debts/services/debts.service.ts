@@ -19,6 +19,7 @@ import { DebtPayment, PaymentMethod } from '../entities/debt-payment.entity';
 import { DebtQueryDto } from '../dto/debt-query.dto';
 import { CreateDebtPaymentDto } from '../dto/create-debt-payment.dto';
 import { CreateCustomerPaymentDto } from '../dto/create-customer-payment.dto';
+import { CreateSupplierPaymentDto } from '../dto/create-supplier-payment.dto';
 import { ReverseDebtPaymentDto } from '../dto/reverse-debt-payment.dto';
 import { UserRole } from '../../common/enums/user-role.enum';
 import { RequestUser } from '../../common/interfaces/request-user.interface';
@@ -396,10 +397,6 @@ export class DebtsService {
    * oldest debt first, writing one ledger row per debt it touches — which is
    * how a shop actually works: the customer pays down "what I owe", not one
    * particular receipt.
-   *
-   * The whole allocation is one transaction. If the amount is more than the
-   * customer's total outstanding, nothing is written at all — no partial
-   * application, and no credit balance, matching the rule for single debts.
    */
   addCustomerPayment(
     customerId: number,
@@ -407,27 +404,69 @@ export class DebtsService {
     dto: CreateCustomerPaymentDto,
     userId: number,
   ): Promise<DebtPaymentAllocation[]> {
+    return this.addPartyPayment({ kind: 'CUSTOMER', id: customerId }, creditorShopId, dto, userId);
+  }
+
+  /**
+   * Pays a supplier across however many bills it takes. Same FIFO shape as
+   * `addCustomerPayment` — a supplier hands you money back down "what we
+   * owe", not one particular invoice, unless `debtId` names one.
+   */
+  addSupplierPayment(
+    supplierId: number,
+    debtorShopId: number,
+    dto: CreateSupplierPaymentDto,
+    userId: number,
+  ): Promise<DebtPaymentAllocation[]> {
+    return this.addPartyPayment({ kind: 'SUPPLIER', id: supplierId }, debtorShopId, dto, userId);
+  }
+
+  /**
+   * The shared FIFO engine behind both `addCustomerPayment` and
+   * `addSupplierPayment`. `owningShopId` is whichever side of the debt is
+   * *not* the party being paid — `creditor_shop_id` for a receivable (the
+   * shop collecting), `debtor_shop_id` for a payable (the shop paying) —
+   * resolved per debt below since the two flows disagree on which column
+   * that is.
+   *
+   * The whole allocation is one transaction. If the amount is more than the
+   * party's total outstanding, nothing is written at all — no partial
+   * application, and no credit balance, matching the rule for single debts.
+   */
+  private addPartyPayment(
+    party: { kind: 'CUSTOMER'; id: number } | { kind: 'SUPPLIER'; id: number },
+    owningShopId: number,
+    dto: CreateCustomerPaymentDto | CreateSupplierPaymentDto,
+    userId: number,
+  ): Promise<DebtPaymentAllocation[]> {
     const amountMinor = this.parseAmount(dto.amount);
 
     return this.db.transaction(async (c) => {
       // Locks every candidate row up front, in a fixed order, before any
-      // decision is made — see findOpenByCustomerForUpdate.
-      const openDebts = await this.debtsRepo.findOpenByCustomerForUpdate(customerId, c);
+      // decision is made — see findOpenByPartyForUpdate.
+      const openDebts = await this.debtsRepo.findOpenByPartyForUpdate(party, c);
 
       const targets = dto.debtId !== undefined
         ? openDebts.filter((debt) => debt.id === dto.debtId)
         : openDebts;
 
       if (targets.length === 0) {
-        // Either the customer owes nothing, or the named debt is settled,
-        // cancelled, or belongs to somebody else.
-        throw new NotFoundException(dto.debtId !== undefined ? 'debt.NOT_FOUND' : 'debt.NO_OPEN_DEBTS');
+        // Either the party is owed/owes nothing, or the named debt is
+        // settled, cancelled, or belongs to somebody else. Distinct messages
+        // per side — "this customer does not owe anything" would be
+        // backwards read out to someone paying a supplier.
+        if (dto.debtId !== undefined) throw new NotFoundException('debt.NOT_FOUND');
+        throw new NotFoundException(
+          party.kind === 'SUPPLIER' ? 'debt.NO_OPEN_SUPPLIER_DEBTS' : 'debt.NO_OPEN_DEBTS',
+        );
       }
 
       // Ownership is checked after the filter so a debt from another shop is
-      // indistinguishable from one that does not exist.
+      // indistinguishable from one that does not exist. The owning shop is
+      // creditor_shop_id for a receivable, debtor_shop_id for a payable.
       for (const debt of targets) {
-        if (debt.creditor_shop_id !== creditorShopId) {
+        const owner = debt.creditor_type === 'SUPPLIER' ? debt.debtor_shop_id : debt.creditor_shop_id;
+        if (owner !== owningShopId) {
           throw new NotFoundException('debt.NOT_FOUND');
         }
       }

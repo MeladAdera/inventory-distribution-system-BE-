@@ -19,6 +19,7 @@ import { UpdateSupplierDto } from '../dto/update-supplier.dto';
 import { SupplierQueryDto } from '../dto/supplier-query.dto';
 import { CreateSupplierDebtDto } from '../dto/create-supplier-debt.dto';
 import { DebtQueryDto } from '../../debts/dto/debt-query.dto';
+import { CreateSupplierPaymentDto } from '../../debts/dto/create-supplier-payment.dto';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../auth/guards/roles.guard';
 import { Roles } from '../../auth/decorators/roles.decorator';
@@ -113,5 +114,20 @@ export class SuppliersController {
   @ApiOperation({ summary: 'Totals for this supplier — billed, collected, still owed' })
   getSummary(@Param('id', ParseIntPipe) id: number, @CurrentUser() user: RequestUser) {
     return this.suppliersService.getSummary(id, user);
+  }
+
+  @Post(':id/payments')
+  @HttpCode(HttpStatus.CREATED)
+  @Roles(UserRole.WAREHOUSE_ADMIN, UserRole.SHOP_OWNER)
+  @ApiOperation({
+    summary:
+      'Pay this supplier. Without debtId, settles the oldest bills first and may span several.',
+  })
+  addPayment(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: CreateSupplierPaymentDto,
+    @CurrentUser() user: RequestUser,
+  ) {
+    return this.suppliersService.addPayment(id, dto, user);
   }
 }

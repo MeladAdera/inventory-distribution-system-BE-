@@ -8,8 +8,9 @@ import { CreateSupplierDebtDto } from '../dto/create-supplier-debt.dto';
 import { paginate, PaginatedResponse } from '../../common/utils/pagination.util';
 import { RequestUser } from '../../common/interfaces/request-user.interface';
 import { DebtsService } from '../../debts/services/debts.service';
-import { Debt, DebtListItem, DebtsSummary } from '../../debts/entities/debt.entity';
+import { Debt, DebtListItem, DebtsSummary, DebtPaymentAllocation } from '../../debts/entities/debt.entity';
 import { DebtQueryDto } from '../../debts/dto/debt-query.dto';
+import { CreateSupplierPaymentDto } from '../../debts/dto/create-supplier-payment.dto';
 import { DatabaseService } from '../../database/database.service';
 import { toMinor, fromMinor } from '../../common/utils/money.util';
 
@@ -161,6 +162,15 @@ export class SuppliersService {
   async getSummary(id: number, user: RequestUser): Promise<DebtsSummary> {
     await this.requireOwnSupplier(id, user);
     return this.debtsService.getSupplierSummary(id);
+  }
+
+  async addPayment(
+    id: number,
+    dto: CreateSupplierPaymentDto,
+    user: RequestUser,
+  ): Promise<DebtPaymentAllocation[]> {
+    const supplier = await this.requireOwnSupplier(id, user);
+    return this.debtsService.addSupplierPayment(id, supplier.shop_id, dto, user.id);
   }
 
   /**

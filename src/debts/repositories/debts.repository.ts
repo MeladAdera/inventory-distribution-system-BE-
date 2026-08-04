@@ -315,20 +315,34 @@ export class DebtsRepository {
   }
 
   /**
-   * The customer's unsettled debts, oldest first, locked for the transaction.
+   * A party's unsettled debts, oldest first, locked for the transaction.
+   * Works for both a customer (receivable) and a supplier (payable) — the
+   * two row sets can never overlap, since `chk_debts_party_shape` forces
+   * `supplier_id` to NULL on a receivable and `customer_id` to NULL on a
+   * payable. So a customer collection and a supplier payment can never
+   * contend for the same row.
    *
    * `ORDER BY created_at, id` is a total order, and every caller acquires the
-   * locks in it — that is what stops two cashiers collecting from the same
-   * customer at once from deadlocking against each other. It is also the FIFO
-   * order the allocation walks, so one query serves both purposes.
+   * locks in it — that is what stops two concurrent payments to the same
+   * party from deadlocking against each other. It is also the FIFO order the
+   * allocation walks, so one query serves both purposes.
+   *
+   * If a future caller ever needs to lock across both sides at once (e.g.
+   * "settle everything for this shop"), it must lock one ordered union, not
+   * call this twice — two separately-ordered lock acquisitions in the same
+   * transaction can deadlock against each other.
    */
-  async findOpenByCustomerForUpdate(customerId: number, client: pg.PoolClient): Promise<Debt[]> {
+  async findOpenByPartyForUpdate(
+    party: { kind: 'CUSTOMER'; id: number } | { kind: 'SUPPLIER'; id: number },
+    client: pg.PoolClient,
+  ): Promise<Debt[]> {
+    const column = party.kind === 'CUSTOMER' ? 'customer_id' : 'supplier_id';
     const result = await client.query<Debt>(
       `SELECT * FROM debts
-       WHERE customer_id = $1 AND status IN ('OPEN', 'PARTIAL')
+       WHERE ${column} = $1 AND status IN ('OPEN', 'PARTIAL')
        ORDER BY created_at ASC, id ASC
        FOR UPDATE`,
-      [customerId],
+      [party.id],
     );
     return result.rows;
   }
