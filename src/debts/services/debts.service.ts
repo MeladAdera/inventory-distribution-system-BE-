@@ -349,12 +349,18 @@ export class DebtsService {
       throw new ForbiddenException('debt.ACCESS_DENIED');
     }
 
-    const [owedByShop, owedToShop] = await Promise.all([
+    const [owedByShop, owedToShop, owedToSuppliers] = await Promise.all([
       this.debtsRepo.getSummaryForShopAs('DEBTOR', shopId),
       this.debtsRepo.getSummaryForShopAs('CREDITOR', shopId),
+      this.debtsRepo.getSummaryForShopPayables(shopId),
     ]);
 
-    return { shop_id: shopId, owed_by_shop: owedByShop, owed_to_shop: owedToShop };
+    return {
+      shop_id: shopId,
+      owed_by_shop: owedByShop,
+      owed_to_shop: owedToShop,
+      owed_to_suppliers: owedToSuppliers,
+    };
   }
 
   /** The live debt raised by an order, for the order-detail screen. */

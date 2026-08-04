@@ -123,9 +123,10 @@ export class DebtsAgingRow {
 }
 
 /**
- * A shop sits on both sides of the ledger: it owes the warehouse for orders,
- * and its own customers owe it for credit sales. Reporting them separately
- * avoids a single net figure that hides both.
+ * A shop sits on three sides of the ledger: it owes the warehouse for
+ * orders, its own customers owe it for credit sales, and it owes its own
+ * suppliers for bills bought on credit. Reporting them separately avoids a
+ * single net figure that hides all three.
  */
 export class ShopDebtsSummary {
   shop_id!: number;
@@ -133,4 +134,6 @@ export class ShopDebtsSummary {
   owed_by_shop!: DebtsSummary;
   /** What this shop is owed (customer debts). Zeroes until customers exist. */
   owed_to_shop!: DebtsSummary;
+  /** What this shop owes its own suppliers. Zeroes until suppliers exist. */
+  owed_to_suppliers!: DebtsSummary;
 }

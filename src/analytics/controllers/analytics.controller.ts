@@ -121,6 +121,36 @@ export class AnalyticsController {
     return this.debtsService.getAging(query, user, 'SHOP');
   }
 
+  // The payable mirror of receivables above — same delegation to DebtsService,
+  // same generic getSummary/getAging, just creditorType 'SUPPLIER' instead of
+  // 'SHOP'. EMPLOYEE is excluded here, unlike receivables: owing suppliers
+  // money is owner-level, same reasoning as the /suppliers routes themselves.
+  @Get('payables')
+  @Roles(UserRole.WAREHOUSE_ADMIN, UserRole.SHOP_OWNER)
+  @ApiOperation({
+    summary:
+      'Money owed to suppliers: total_billed, total_collected, total_remaining, open_count, refund_due. Same filters as GET /debts.',
+  })
+  getPayables(
+    @Query() query: DebtQueryDto,
+    @CurrentUser() user: RequestUser,
+  ) {
+    return this.debtsService.getSummary(query, user, 'SUPPLIER');
+  }
+
+  @Get('payables/aging')
+  @Roles(UserRole.WAREHOUSE_ADMIN, UserRole.SHOP_OWNER)
+  @ApiOperation({
+    summary:
+      'Money owed to suppliers grouped by age (0-30 / 31-60 / 60+ days). Drill into a band with GET /debts?agingBucket=.',
+  })
+  getPayablesAging(
+    @Query() query: DebtQueryDto,
+    @CurrentUser() user: RequestUser,
+  ) {
+    return this.debtsService.getAging(query, user, 'SUPPLIER');
+  }
+
   @Get('products-by-shop')
   @Roles(UserRole.WAREHOUSE_ADMIN)
   @ApiOperation({

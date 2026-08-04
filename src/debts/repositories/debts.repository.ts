@@ -410,6 +410,17 @@ export class DebtsRepository {
   }
 
   /**
+   * What this shop owes its own suppliers — the payable mirror of
+   * `getSummaryForShopAs('DEBTOR', ...)`, which is pinned to
+   * `creditor_type = 'SHOP'` and so structurally cannot report this. Kept as
+   * a separate method rather than a third `side` value, since the two now
+   * differ in which creditor_type they filter on, not just which column.
+   */
+  getSummaryForShopPayables(shopId: number): Promise<DebtsSummary> {
+    return this.runSummary(`WHERE d.debtor_shop_id = $1 AND d.creditor_type = 'SUPPLIER'`, [shopId]);
+  }
+
+  /**
    * Cancelled debts are excluded from billed/collected/remaining — they are not
    * receivable any more — but their collected money is reported separately as
    * `refund_due`, so it stays visible instead of vanishing from every total.
