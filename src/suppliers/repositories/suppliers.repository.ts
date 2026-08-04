@@ -109,6 +109,22 @@ export class SuppliersRepository {
     return rows.length > 0;
   }
 
+  /**
+   * Whether this supplier already has a live bill under this invoice number.
+   * Mirrors `idx_debts_supplier_invoice_unique` — the index is the real guard
+   * against a concurrent insert, this pre-check just turns the common case
+   * into a clean, translatable 409 instead of a raw constraint violation.
+   */
+  async hasInvoice(supplierId: number, invoiceNo: string): Promise<boolean> {
+    const rows = await this.db.query(
+      `SELECT 1 FROM debts
+       WHERE supplier_id = $1 AND invoice_no = $2 AND status <> 'CANCELLED'
+       LIMIT 1`,
+      [supplierId, invoiceNo],
+    );
+    return rows.length > 0;
+  }
+
   async findPaginated(
     shopId: number,
     query: SupplierQueryDto,

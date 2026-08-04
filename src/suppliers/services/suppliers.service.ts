@@ -4,8 +4,14 @@ import { Supplier, SupplierListItem } from '../entities/supplier.entity';
 import { CreateSupplierDto } from '../dto/create-supplier.dto';
 import { UpdateSupplierDto } from '../dto/update-supplier.dto';
 import { SupplierQueryDto } from '../dto/supplier-query.dto';
+import { CreateSupplierDebtDto } from '../dto/create-supplier-debt.dto';
 import { paginate, PaginatedResponse } from '../../common/utils/pagination.util';
 import { RequestUser } from '../../common/interfaces/request-user.interface';
+import { DebtsService } from '../../debts/services/debts.service';
+import { Debt, DebtListItem, DebtsSummary } from '../../debts/entities/debt.entity';
+import { DebtQueryDto } from '../../debts/dto/debt-query.dto';
+import { DatabaseService } from '../../database/database.service';
+import { toMinor, fromMinor } from '../../common/utils/money.util';
 
 /**
  * Suppliers belong to a shop, not the whole warehouse network — every method
@@ -18,7 +24,11 @@ import { RequestUser } from '../../common/interfaces/request-user.interface';
  */
 @Injectable()
 export class SuppliersService {
-  constructor(private readonly suppliersRepo: SuppliersRepository) {}
+  constructor(
+    private readonly suppliersRepo: SuppliersRepository,
+    private readonly debtsService: DebtsService,
+    private readonly db: DatabaseService,
+  ) {}
 
   async create(dto: CreateSupplierDto, user: RequestUser): Promise<Supplier> {
     const shopId = user.shopId!;
@@ -73,6 +83,84 @@ export class SuppliersService {
     if (!deactivated) throw new NotFoundException('supplier.NOT_FOUND');
 
     return deactivated;
+  }
+
+  /**
+   * Records a bill from this supplier. Mirrors how a credit sale works in
+   * `ReceiptsService.create`: the debt's total is the *whole* bill, and
+   * whatever was already paid becomes the first collection, not a smaller
+   * starting total — so the history always shows the real bill size next to
+   * the real payment.
+   */
+  async createDebt(
+    id: number,
+    dto: CreateSupplierDebtDto,
+    user: RequestUser,
+  ): Promise<Debt & { remaining: string }> {
+    const supplier = await this.requireOwnSupplier(id, user);
+
+    // Pre-check for a clean, translatable error; the partial unique index
+    // (idx_debts_supplier_invoice_unique) is still the real guard against a
+    // concurrent insert.
+    if (dto.invoiceNo) {
+      const exists = await this.suppliersRepo.hasInvoice(id, dto.invoiceNo);
+      if (exists) throw new ConflictException('supplier.INVOICE_TAKEN');
+    }
+
+    const totalMinor = toMinor(dto.totalAmount);
+    const paidMinor = dto.paidAmount !== undefined ? toMinor(dto.paidAmount) : 0n;
+
+    if (paidMinor > totalMinor) {
+      throw new BadRequestException({
+        key: 'supplier.PAID_EXCEEDS_TOTAL',
+        args: { total: fromMinor(totalMinor) },
+      });
+    }
+
+    const created = await this.db.transaction(async (client) => {
+      const debt = await this.debtsService.createDebt(
+        {
+          kind: 'SUPPLIER_INVOICE',
+          supplierId: id,
+          debtorShopId: supplier.shop_id,
+          totalAmount: dto.totalAmount,
+          invoiceNo: dto.invoiceNo,
+          note: dto.note,
+          createdBy: user.id,
+        },
+        client,
+      );
+
+      if (paidMinor > 0n) {
+        await this.debtsService.addPayment(
+          debt.id,
+          { amount: fromMinor(paidMinor), note: dto.note, createdBy: user.id },
+          client,
+        );
+      }
+
+      return debt;
+    });
+
+    // Re-fetch after the transaction: `created` still shows paid_amount from
+    // before the payment above was applied.
+    return this.debtsService.findByIdForUser(created.id, user);
+  }
+
+  async findDebts(
+    id: number,
+    query: DebtQueryDto,
+    user: RequestUser,
+  ): Promise<PaginatedResponse<DebtListItem>> {
+    await this.requireOwnSupplier(id, user);
+    // findAll re-applies role visibility on top, so the supplier filter can
+    // only narrow what this user was already allowed to see.
+    return this.debtsService.findAll({ ...query, supplierId: id } as DebtQueryDto, user, 'SUPPLIER');
+  }
+
+  async getSummary(id: number, user: RequestUser): Promise<DebtsSummary> {
+    await this.requireOwnSupplier(id, user);
+    return this.debtsService.getSupplierSummary(id);
   }
 
   /**

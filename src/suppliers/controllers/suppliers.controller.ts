@@ -17,6 +17,8 @@ import { SuppliersService } from '../services/suppliers.service';
 import { CreateSupplierDto } from '../dto/create-supplier.dto';
 import { UpdateSupplierDto } from '../dto/update-supplier.dto';
 import { SupplierQueryDto } from '../dto/supplier-query.dto';
+import { CreateSupplierDebtDto } from '../dto/create-supplier-debt.dto';
+import { DebtQueryDto } from '../../debts/dto/debt-query.dto';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../auth/guards/roles.guard';
 import { Roles } from '../../auth/decorators/roles.decorator';
@@ -78,5 +80,38 @@ export class SuppliersController {
   })
   deactivate(@Param('id', ParseIntPipe) id: number, @CurrentUser() user: RequestUser) {
     return this.suppliersService.deactivate(id, user);
+  }
+
+  @Post(':id/debts')
+  @HttpCode(HttpStatus.CREATED)
+  @Roles(UserRole.WAREHOUSE_ADMIN, UserRole.SHOP_OWNER)
+  @ApiOperation({
+    summary:
+      'Record a bill from this supplier. paidAmount defaults to 0 (fully on credit) and must not exceed totalAmount.',
+  })
+  createDebt(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: CreateSupplierDebtDto,
+    @CurrentUser() user: RequestUser,
+  ) {
+    return this.suppliersService.createDebt(id, dto, user);
+  }
+
+  @Get(':id/debts')
+  @Roles(UserRole.WAREHOUSE_ADMIN, UserRole.SHOP_OWNER)
+  @ApiOperation({ summary: "This supplier's bills, one per invoice" })
+  findDebts(
+    @Param('id', ParseIntPipe) id: number,
+    @Query() query: DebtQueryDto,
+    @CurrentUser() user: RequestUser,
+  ) {
+    return this.suppliersService.findDebts(id, query, user);
+  }
+
+  @Get(':id/summary')
+  @Roles(UserRole.WAREHOUSE_ADMIN, UserRole.SHOP_OWNER)
+  @ApiOperation({ summary: 'Totals for this supplier — billed, collected, still owed' })
+  getSummary(@Param('id', ParseIntPipe) id: number, @CurrentUser() user: RequestUser) {
+    return this.suppliersService.getSummary(id, user);
   }
 }

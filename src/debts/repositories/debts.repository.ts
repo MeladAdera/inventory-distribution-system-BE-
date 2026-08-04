@@ -340,6 +340,13 @@ export class DebtsRepository {
     return this.runSummary("WHERE d.customer_id = $1 AND d.creditor_type = 'SHOP'", [customerId]);
   }
 
+  getSummaryForSupplier(supplierId: number): Promise<DebtsSummary> {
+    // Mirrors getSummaryForCustomer: creditor_type = 'SUPPLIER' is redundant
+    // with chk_debts_party_shape (a receivable can never have supplier_id
+    // set), kept for the same reason — the invariant stays visible here.
+    return this.runSummary("WHERE d.supplier_id = $1 AND d.creditor_type = 'SUPPLIER'", [supplierId]);
+  }
+
   /**
    * How much is owed, grouped by how long it has been owed.
    *
@@ -460,6 +467,11 @@ export class DebtsRepository {
     if (query.customerId !== undefined) {
       conditions.push(`d.customer_id = $${idx++}`);
       params.push(query.customerId);
+    }
+
+    if (query.supplierId !== undefined) {
+      conditions.push(`d.supplier_id = $${idx++}`);
+      params.push(query.supplierId);
     }
 
     // Static fragment chosen by a validated enum — the same condition the aging

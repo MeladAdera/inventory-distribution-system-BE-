@@ -35,6 +35,13 @@ export class DebtQueryDto extends PaginationDto {
   @Min(1, { message: i18nValidationMessage('validation.MIN') })
   customerId?: number;
 
+  @ApiPropertyOptional({ example: 3, description: 'Filter by the supplier who is owed' })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt({ message: i18nValidationMessage('validation.IS_INT') })
+  @Min(1, { message: i18nValidationMessage('validation.MIN') })
+  supplierId?: number;
+
   /**
    * The drill-down behind the aging report: which customers are actually in the
    * `60+` band. Uses the same age test the report groups by, and implies the

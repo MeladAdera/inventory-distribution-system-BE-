@@ -481,6 +481,10 @@ export class DebtsService {
     return this.debtsRepo.getSummaryForCustomer(customerId);
   }
 
+  getSupplierSummary(supplierId: number): Promise<DebtsSummary> {
+    return this.debtsRepo.getSummaryForSupplier(supplierId);
+  }
+
   async reversePaymentForUser(
     debtId: number,
     paymentId: number,

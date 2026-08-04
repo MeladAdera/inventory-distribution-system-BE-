@@ -52,5 +52,12 @@
   "entityType": "Entity type",
   "entityId": "Entity",
   "receiptId": "Receipt",
-  "isRead": "Read"
+  "isRead": "Read",
+  "amount": "Amount",
+  "totalAmount": "Total amount",
+  "paidAmount": "Amount paid",
+  "invoiceNo": "Invoice number",
+  "supplierId": "Supplier",
+  "customerId": "Customer",
+  "debtId": "Debt"
 }
