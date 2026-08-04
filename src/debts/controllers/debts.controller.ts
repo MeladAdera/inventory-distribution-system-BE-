@@ -75,4 +75,18 @@ export class DebtsController {
   ) {
     return this.debtsService.reversePaymentForUser(id, paymentId, dto, user);
   }
+
+  @Post(':id/cancel')
+  @Roles(UserRole.WAREHOUSE_ADMIN, UserRole.SHOP_OWNER)
+  @ApiOperation({
+    summary:
+      'Cancel a supplier bill entered by mistake. Payables only — a receivable must be cancelled through its order/receipt.',
+  })
+  cancel(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: ReverseDebtPaymentDto,
+    @CurrentUser() user: RequestUser,
+  ) {
+    return this.debtsService.cancelSupplierDebtForUser(id, dto, user);
+  }
 }

@@ -248,6 +248,29 @@ export class DebtsService {
     });
   }
 
+  /**
+   * Cancels a payable directly by id. Mirrors `cancelDebt`'s shape (locate,
+   * cancel conditionally, audit), but a supplier invoice has no source
+   * document to look it up through — it was entered directly, so it is
+   * cancelled directly. Ownership/permission is the HTTP-facing caller's job,
+   * same division as everywhere else in this engine.
+   */
+  cancelDebtById(
+    id: number,
+    cancelledBy: number,
+    reason?: string,
+    client?: pg.PoolClient,
+  ): Promise<Debt | null> {
+    return this.run(client, async (c) => {
+      const cancelled = await this.debtsRepo.cancelById(id, c);
+      if (!cancelled) return null;
+
+      await this.logDebtEvent(cancelled, 'CANCELLED', cancelled.paid_amount, cancelledBy, reason, c);
+
+      return cancelled;
+    });
+  }
+
   async getBalance(debtId: number): Promise<DebtBalance> {
     const debt = await this.debtsRepo.findById(debtId);
     if (!debt) throw new NotFoundException('debt.NOT_FOUND');
@@ -470,6 +493,34 @@ export class DebtsService {
     this.assertCanReverse(debt, user);
 
     return this.reversePayment(debtId, paymentId, { reason: dto.reason, createdBy: user.id });
+  }
+
+  /**
+   * Cancels a supplier bill entered by mistake. Payables only — a receivable
+   * must be cancelled through its order/receipt (`cancelDebt`), or that
+   * source document would keep believing it has a live debt.
+   */
+  async cancelSupplierDebtForUser(
+    id: number,
+    dto: ReverseDebtPaymentDto,
+    user: RequestUser,
+  ): Promise<Debt> {
+    const debt = await this.debtsRepo.findById(id);
+    if (!debt) throw new NotFoundException('debt.NOT_FOUND');
+
+    if (debt.creditor_type !== 'SUPPLIER') {
+      throw new BadRequestException('debt.NOT_CANCELLABLE_BY_ID');
+    }
+
+    // Cancelling a part-paid bill is a strictly bigger action than undoing
+    // one payment on it, so it reuses the same authority check rather than a
+    // weaker one.
+    this.assertCanReverse(debt, user);
+
+    const cancelled = await this.cancelDebtById(id, user.id, dto.reason);
+    if (!cancelled) throw new BadRequestException('debt.ALREADY_CANCELLED');
+
+    return cancelled;
   }
 
   /**

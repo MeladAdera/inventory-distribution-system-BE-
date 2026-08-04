@@ -213,6 +213,23 @@ export class DebtsRepository {
     return result.rows[0] ?? null;
   }
 
+  /**
+   * Same idea as `cancelBySource`, for a debt with no source document to look
+   * it up by — a supplier invoice is entered directly, not raised by an
+   * order/receipt. Conditional on the same "not already cancelled" guard, so
+   * a double cancel produces exactly one cancellation.
+   */
+  async cancelById(id: number, client: pg.PoolClient): Promise<Debt | null> {
+    const result = await client.query<Debt>(
+      `UPDATE debts
+       SET status = 'CANCELLED', updated_at = NOW()
+       WHERE id = $1 AND status <> 'CANCELLED'
+       RETURNING *`,
+      [id],
+    );
+    return result.rows[0] ?? null;
+  }
+
   async insertPayment(row: InsertPaymentRow, client: pg.PoolClient): Promise<DebtPayment> {
     const result = await client.query<DebtPayment>(
       `INSERT INTO debt_payments (

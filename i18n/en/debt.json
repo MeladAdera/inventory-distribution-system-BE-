@@ -9,5 +9,7 @@
   "ALREADY_REVERSED": "This payment was already reversed",
   "NOT_REVERSIBLE": "A reversal cannot itself be reversed. Record a new payment instead",
   "PAYMENT_NOT_FOUND": "Payment not found on this debt",
-  "NO_OPEN_DEBTS": "This customer does not owe anything"
+  "NO_OPEN_DEBTS": "This customer does not owe anything",
+  "NOT_CANCELLABLE_BY_ID": "This debt must be cancelled through its order or receipt, not directly",
+  "ALREADY_CANCELLED": "This debt is already cancelled"
 }
