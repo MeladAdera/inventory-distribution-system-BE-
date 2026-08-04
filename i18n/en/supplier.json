@@ -1,0 +1,5 @@
+{
+  "NOT_FOUND": "Supplier not found",
+  "PHONE_TAKEN": "Another supplier in this shop already uses this phone number",
+  "HAS_OPEN_DEBT": "This supplier still has money owed or a refund due, so they cannot be deactivated"
+}

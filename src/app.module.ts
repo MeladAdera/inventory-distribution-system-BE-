@@ -24,6 +24,7 @@ import { AnalyticsModule } from './analytics/analytics.module';
 import { ReceiptsModule } from './receipts/receipts.module';
 import { DebtsModule } from './debts/debts.module';
 import { CustomersModule } from './customers/customers.module';
+import { SuppliersModule } from './suppliers/suppliers.module';
 
 @Module({
   imports: [
@@ -71,6 +72,7 @@ import { CustomersModule } from './customers/customers.module';
     ReceiptsModule,
     DebtsModule,
     CustomersModule,
+    SuppliersModule,
   ],
   controllers: [AppController],
   providers: [

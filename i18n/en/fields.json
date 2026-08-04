@@ -41,6 +41,7 @@
   "isFree": "Free",
   "address": "Address",
   "phone": "Phone",
+  "note": "Note",
   "isActive": "Active",
   "page": "Page",
   "limit": "Limit",
