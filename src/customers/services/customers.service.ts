@@ -85,7 +85,7 @@ export class CustomersService {
     await this.requireOwnCustomer(id, user);
     // findAll re-applies role visibility on top, so the customer filter can
     // only narrow what this user was already allowed to see.
-    return this.debtsService.findAll({ ...query, customerId: id } as DebtQueryDto, user);
+    return this.debtsService.findAll({ ...query, customerId: id } as DebtQueryDto, user, 'SHOP');
   }
 
   async getSummary(id: number, user: RequestUser): Promise<DebtsSummary> {

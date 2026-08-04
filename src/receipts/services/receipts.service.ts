@@ -156,8 +156,8 @@ export class ReceiptsService {
       if (paidMinor < totalMinor) {
         const debt = await this.debtsService.createDebt(
           {
+            kind: 'RECEIPT',
             creditorShopId: shopId,
-            debtorType: 'CUSTOMER',
             customerId: dto.customerId!,
             receiptId: receipt.id,
             totalAmount: fromMinor(totalMinor),

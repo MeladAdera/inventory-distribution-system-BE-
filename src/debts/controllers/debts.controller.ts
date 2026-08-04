@@ -35,7 +35,7 @@ export class DebtsController {
       'List debts. Admin sees all; a shop sees debts it is a party to; an employee sees only customer debts. Filters: ?status=&debtorType=&shopId=&customerId=&fromDate=&toDate=',
   })
   findAll(@Query() query: DebtQueryDto, @CurrentUser() user: RequestUser) {
-    return this.debtsService.findAll(query, user);
+    return this.debtsService.findAll(query, user, 'SHOP');
   }
 
   // Declared before ':id' so the literal path is not swallowed by the param route.
@@ -43,7 +43,7 @@ export class DebtsController {
   @Roles(UserRole.WAREHOUSE_ADMIN, UserRole.SHOP_OWNER, UserRole.EMPLOYEE)
   @ApiOperation({ summary: 'Totals across the debts the caller can see — accepts the same filters as GET /debts' })
   getSummary(@Query() query: DebtQueryDto, @CurrentUser() user: RequestUser) {
-    return this.debtsService.getSummary(query, user);
+    return this.debtsService.getSummary(query, user, 'SHOP');
   }
 
   @Get(':id')

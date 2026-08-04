@@ -276,8 +276,8 @@ export class OrdersService {
 
     await this.debtsService.createDebt(
       {
+        kind: 'ORDER',
         creditorShopId: order.from_shop_id,
-        debtorType: 'SHOP',
         debtorShopId: order.to_shop_id,
         orderId: order.id,
         totalAmount: total,

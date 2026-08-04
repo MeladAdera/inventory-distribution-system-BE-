@@ -5,6 +5,7 @@ import {
   Debt,
   DebtSource,
   DebtorType,
+  CreditorType,
   DebtListItem,
   DebtsSummary,
   DebtsAgingRow,
@@ -20,6 +21,13 @@ import { DebtQueryDto } from '../dto/debt-query.dto';
  * widen the scope — visibility is ANDed on top of the filters.
  */
 export interface DebtVisibility {
+  /**
+   * Which side of the ledger this query may see. Required, not optional — an
+   * omitted filter is exactly how a supplier payable would silently join a
+   * receivables report. `'ANY'` is the explicit opt-out for a call site that
+   * genuinely wants both sides; nothing uses it yet.
+   */
+  creditorType: CreditorType | 'ANY';
   /** Non-admins only see debts their shop is a party to (either side). */
   shopId?: number;
   /** Employees are limited to customer debts (see the role matrix). */
@@ -27,10 +35,15 @@ export interface DebtVisibility {
 }
 
 export interface InsertDebtRow {
-  creditorShopId: number;
+  /** Null on a supplier invoice — the creditor is a supplier, not a shop. */
+  creditorShopId: number | null;
+  creditorType: CreditorType;
   debtorType: DebtorType;
   debtorShopId: number | null;
   customerId: number | null;
+  /** Set only on a supplier invoice. */
+  supplierId: number | null;
+  invoiceNo: string | null;
   orderId: number | null;
   receiptId: number | null;
   /** DECIMAL(15,2) string — see money.util.ts. */
@@ -87,16 +100,19 @@ export class DebtsRepository {
   async insert(row: InsertDebtRow, client: pg.PoolClient): Promise<Debt> {
     const result = await client.query<Debt>(
       `INSERT INTO debts (
-         creditor_shop_id, debtor_type, debtor_shop_id, customer_id,
-         order_id, receipt_id, total_amount, created_by, note, due_date
+         creditor_shop_id, creditor_type, debtor_type, debtor_shop_id, customer_id,
+         supplier_id, invoice_no, order_id, receipt_id, total_amount, created_by, note, due_date
        )
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
        RETURNING *`,
       [
         row.creditorShopId,
+        row.creditorType,
         row.debtorType,
         row.debtorShopId,
         row.customerId,
+        row.supplierId,
+        row.invoiceNo,
         row.orderId,
         row.receiptId,
         row.totalAmount,
@@ -256,12 +272,19 @@ export class DebtsRepository {
               -- One name column regardless of which side of the union is set,
               -- so the list UI does not have to branch on debtor_type.
               COALESCE(ds.name, c.name) AS debtor_name,
-              cs.name                   AS creditor_shop_name,
-              COUNT(*) OVER()           AS total_count
+              -- Same idea for the creditor side. cs is NULL on a payable (no
+              -- creditor shop), sup is NULL on a receivable (no supplier) — the
+              -- two are mutually exclusive by chk_debts_party_shape, so exactly
+              -- one of them resolves.
+              COALESCE(cs.name, sup.name) AS creditor_shop_name,
+              COUNT(*) OVER()             AS total_count
        FROM debts d
-       JOIN shops          cs ON cs.id = d.creditor_shop_id
-       LEFT JOIN shops     ds ON ds.id = d.debtor_shop_id
-       LEFT JOIN customers c  ON c.id  = d.customer_id
+       -- LEFT, not JOIN: creditor_shop_id is NULL on every payable, and an
+       -- INNER join here would silently drop those rows from every list.
+       LEFT JOIN shops     cs  ON cs.id  = d.creditor_shop_id
+       LEFT JOIN shops     ds  ON ds.id  = d.debtor_shop_id
+       LEFT JOIN customers c   ON c.id   = d.customer_id
+       LEFT JOIN suppliers sup ON sup.id = d.supplier_id
        ${whereClause}
        ORDER BY d.created_at DESC, d.id DESC
        LIMIT $${nextIdx} OFFSET $${nextIdx + 1}`,
@@ -294,7 +317,10 @@ export class DebtsRepository {
   }
 
   getSummaryForCustomer(customerId: number): Promise<DebtsSummary> {
-    return this.runSummary('WHERE d.customer_id = $1', [customerId]);
+    // creditor_type = 'SHOP' is redundant with chk_debts_party_shape (a payable
+    // can never have customer_id set) — kept anyway so the invariant is visible
+    // here instead of only implied by a constraint two files away.
+    return this.runSummary("WHERE d.customer_id = $1 AND d.creditor_type = 'SHOP'", [customerId]);
   }
 
   /**
@@ -334,8 +360,15 @@ export class DebtsRepository {
    * because it owes the warehouse a similar amount.
    */
   getSummaryForShopAs(side: 'DEBTOR' | 'CREDITOR', shopId: number): Promise<DebtsSummary> {
+    // debtor_shop_id is shared between "owes the warehouse" (creditor_type
+    // SHOP) and "owes a supplier" (creditor_type SUPPLIER) rows, so the DEBTOR
+    // side needs the filter to stay receivables-only — without it a supplier
+    // bill would silently join "what this shop owes the warehouse". The
+    // CREDITOR side can never match a payable (creditor_shop_id is NULL on
+    // every one), but the filter is added anyway so both branches state the
+    // same invariant explicitly rather than one relying on an implicit NULL.
     const column = side === 'DEBTOR' ? 'debtor_shop_id' : 'creditor_shop_id';
-    return this.runSummary(`WHERE d.${column} = $1`, [shopId]);
+    return this.runSummary(`WHERE d.${column} = $1 AND d.creditor_type = 'SHOP'`, [shopId]);
   }
 
   /**
@@ -375,6 +408,13 @@ export class DebtsRepository {
     const conditions: string[] = [];
     const params: unknown[] = [];
     let idx = 1;
+
+    // The ledger-side gate. Applied first, alongside shopId, as part of
+    // visibility rather than as a user-choosable filter — see DebtVisibility.
+    if (visibility.creditorType !== 'ANY') {
+      conditions.push(`d.creditor_type = $${idx++}`);
+      params.push(visibility.creditorType);
+    }
 
     if (visibility.shopId !== undefined) {
       conditions.push(`(d.debtor_shop_id = $${idx} OR d.creditor_shop_id = $${idx})`);

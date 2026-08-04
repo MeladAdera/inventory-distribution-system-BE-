@@ -1,12 +1,23 @@
 export type DebtorType = 'SHOP' | 'CUSTOMER';
 
+/**
+ * Which side of the ledger a debt sits on. 'SHOP' means the money is owed to
+ * one of our own shops (the existing receivables flows); 'SUPPLIER' means it
+ * is owed to an outside supplier (accounts payable) — see
+ * `chk_debts_party_shape` in `04-SupplierDebts.sql`, which enforces this same
+ * split at the database level.
+ */
+export type CreditorType = 'SHOP' | 'SUPPLIER';
+
 export type DebtStatus = 'OPEN' | 'PARTIAL' | 'PAID' | 'CANCELLED';
 
 /**
- * A debt is always raised by exactly one source document, and the debtor side
- * follows from it: an order is owed by a shop, a receipt by a customer. The
- * `chk_debts_debtor_shape` constraint enforces the same pairing in the
- * database — this union is its TypeScript mirror.
+ * A receivable is always raised by exactly one source document, and the
+ * debtor side follows from it: an order is owed by a shop, a receipt by a
+ * customer. A payable (accounts payable, `creditor_type = 'SUPPLIER'`) has no
+ * source document at all — it is entered directly — so it is deliberately
+ * absent from this union; see `cancelDebtById` for its cancel path instead of
+ * `cancelDebt`/`DebtSource`.
  */
 export type DebtSource =
   | { type: 'ORDER'; id: number }
@@ -18,10 +29,16 @@ export type DebtSource =
  */
 export class Debt {
   id!: number;
-  creditor_shop_id!: number;
+  /** NULL when `creditor_type = 'SUPPLIER'` — an outside supplier is not a shop. */
+  creditor_shop_id!: number | null;
+  creditor_type!: CreditorType;
   debtor_type!: DebtorType;
   debtor_shop_id!: number | null;
   customer_id!: number | null;
+  /** Set only on a payable (`creditor_type = 'SUPPLIER'`). */
+  supplier_id!: number | null;
+  /** Set only on a payable. Free-text invoice/bill reference from the supplier. */
+  invoice_no!: string | null;
   order_id!: number | null;
   receipt_id!: number | null;
   total_amount!: string;
@@ -48,7 +65,9 @@ export class DebtBalance {
 
 /**
  * List/detail row. `debtor_name` resolves from whichever side is set, so the UI
- * renders one column instead of branching on `debtor_type`.
+ * renders one column instead of branching on `debtor_type`. `creditor_shop_name`
+ * does the same on the creditor side — despite the name, it holds a supplier's
+ * name on a payable row, not a shop's.
  */
 export class DebtListItem extends Debt {
   debtor_name!: string;

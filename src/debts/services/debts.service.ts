@@ -7,6 +7,7 @@ import {
   Debt,
   DebtBalance,
   DebtSource,
+  CreditorType,
   DebtListItem,
   DebtsSummary,
   ShopDebtsSummary,
@@ -25,12 +26,13 @@ import { paginate, PaginatedResponse } from '../../common/utils/pagination.util'
 import { toMinor, fromMinor, InvalidMoneyError } from '../../common/utils/money.util';
 
 /**
- * The debtor side is fixed by the source document, so the two shapes are one
- * union rather than a bag of optional fields — a customer debt raised from an
- * order simply does not typecheck.
+ * Which document raised the debt fixes everything else about its shape, so
+ * `kind` is the one tag `createDebt` switches on — `creditorType`/`debtorType`
+ * cannot serve that role themselves, since a supplier invoice and an order
+ * debt are both `debtorType: 'SHOP'`. Keying on `kind` instead means a
+ * supplier debt built with an `orderId` on it simply does not typecheck.
  */
 export type CreateDebtInput = {
-  creditorShopId: number;
   /** DECIMAL(15,2) string. Must be > 0 — a fully-paid sale gets no debt row. */
   totalAmount: string;
   createdBy: number;
@@ -38,8 +40,9 @@ export type CreateDebtInput = {
   /** Reserved for v2 overdue alerts; nothing reads it yet. */
   dueDate?: string;
 } & (
-  | { debtorType: 'SHOP'; debtorShopId: number; orderId: number }
-  | { debtorType: 'CUSTOMER'; customerId: number; receiptId: number }
+  | { kind: 'ORDER'; creditorShopId: number; debtorShopId: number; orderId: number }
+  | { kind: 'RECEIPT'; creditorShopId: number; customerId: number; receiptId: number }
+  | { kind: 'SUPPLIER_INVOICE'; supplierId: number; debtorShopId: number; invoiceNo?: string }
 );
 
 export interface AddPaymentInput {
@@ -87,12 +90,15 @@ export class DebtsService {
     return this.run(client, (c) =>
       this.debtsRepo.insert(
         {
-          creditorShopId: input.creditorShopId,
-          debtorType: input.debtorType,
-          debtorShopId: input.debtorType === 'SHOP' ? input.debtorShopId : null,
-          customerId: input.debtorType === 'CUSTOMER' ? input.customerId : null,
-          orderId: input.debtorType === 'SHOP' ? input.orderId : null,
-          receiptId: input.debtorType === 'CUSTOMER' ? input.receiptId : null,
+          creditorShopId: input.kind === 'SUPPLIER_INVOICE' ? null : input.creditorShopId,
+          creditorType: input.kind === 'SUPPLIER_INVOICE' ? 'SUPPLIER' : 'SHOP',
+          debtorType: input.kind === 'RECEIPT' ? 'CUSTOMER' : 'SHOP',
+          debtorShopId: input.kind === 'ORDER' || input.kind === 'SUPPLIER_INVOICE' ? input.debtorShopId : null,
+          customerId: input.kind === 'RECEIPT' ? input.customerId : null,
+          supplierId: input.kind === 'SUPPLIER_INVOICE' ? input.supplierId : null,
+          invoiceNo: input.kind === 'SUPPLIER_INVOICE' ? (input.invoiceNo ?? null) : null,
+          orderId: input.kind === 'ORDER' ? input.orderId : null,
+          receiptId: input.kind === 'RECEIPT' ? input.receiptId : null,
           totalAmount: fromMinor(totalMinor),
           createdBy: input.createdBy,
           note: input.note ?? null,
@@ -267,8 +273,16 @@ export class DebtsService {
   // own rules.
   // ---------------------------------------------------------------------------
 
-  async findAll(query: DebtQueryDto, user: RequestUser): Promise<PaginatedResponse<DebtListItem>> {
-    const result = await this.debtsRepo.findPaginated(query, this.visibilityFor(user));
+  /**
+   * `creditorType` is required, not defaulted, so every caller states out loud
+   * which side of the ledger it wants — see `DebtVisibility.creditorType`.
+   */
+  async findAll(
+    query: DebtQueryDto,
+    user: RequestUser,
+    creditorType: CreditorType | 'ANY',
+  ): Promise<PaginatedResponse<DebtListItem>> {
+    const result = await this.debtsRepo.findPaginated(query, this.visibilityFor(user, creditorType));
     return paginate(result.data, query.page, query.limit, result.total);
   }
 
@@ -282,8 +296,8 @@ export class DebtsService {
     return this.debtsRepo.findPaymentsByDebtId(id);
   }
 
-  getSummary(query: DebtQueryDto, user: RequestUser): Promise<DebtsSummary> {
-    return this.debtsRepo.getSummary(query, this.visibilityFor(user));
+  getSummary(query: DebtQueryDto, user: RequestUser, creditorType: CreditorType | 'ANY'): Promise<DebtsSummary> {
+    return this.debtsRepo.getSummary(query, this.visibilityFor(user, creditorType));
   }
 
   /**
@@ -293,8 +307,12 @@ export class DebtsService {
    * bars as the data changes is hard to read, and "nothing is 60+ days old" is
    * itself the answer somebody is looking for.
    */
-  async getAging(query: DebtQueryDto, user: RequestUser): Promise<DebtsAgingRow[]> {
-    const rows = await this.debtsRepo.getAging(query, this.visibilityFor(user));
+  async getAging(
+    query: DebtQueryDto,
+    user: RequestUser,
+    creditorType: CreditorType | 'ANY',
+  ): Promise<DebtsAgingRow[]> {
+    const rows = await this.debtsRepo.getAging(query, this.visibilityFor(user, creditorType));
     const byBucket = new Map(rows.map((row) => [row.bucket, row]));
 
     return AGING_BUCKETS.map(
@@ -476,10 +494,11 @@ export class DebtsService {
     return debt;
   }
 
-  private visibilityFor(user: RequestUser): DebtVisibility {
-    if (user.role === UserRole.WAREHOUSE_ADMIN) return {};
+  private visibilityFor(user: RequestUser, creditorType: CreditorType | 'ANY'): DebtVisibility {
+    if (user.role === UserRole.WAREHOUSE_ADMIN) return { creditorType };
 
     return {
+      creditorType,
       shopId: user.shopId ?? undefined,
       // An employee runs the shop's credit sales but has no business seeing
       // what the shop owes the warehouse.
@@ -490,10 +509,23 @@ export class DebtsService {
   private assertReadAccess(debt: Debt, user: RequestUser): void {
     if (user.role === UserRole.WAREHOUSE_ADMIN) return;
 
-    const isParty = debt.debtor_shop_id === user.shopId || debt.creditor_shop_id === user.shopId;
+    // A user can have no shop yet. Without this guard, `null === null` below
+    // would make such a user "a party" to every payable — creditor_shop_id is
+    // null there too, for an unrelated reason (no creditor shop, a supplier
+    // owns that side). Not possible before creditor_shop_id became nullable.
+    if (user.shopId === null) throw new ForbiddenException('debt.ACCESS_DENIED');
+
+    const isParty = debt.debtor_shop_id === user.shopId
+                 || (debt.creditor_shop_id !== null && debt.creditor_shop_id === user.shopId);
     if (!isParty) throw new ForbiddenException('debt.ACCESS_DENIED');
 
-    if (user.role === UserRole.EMPLOYEE && debt.debtor_type === 'SHOP') {
+    // Employees run the shop's credit sales but have no business seeing what
+    // the shop owes elsewhere — that covers both an order-debt and a supplier
+    // bill. Both already imply debtor_type SHOP; creditor_type is checked too
+    // so the rule reads as a deliberate choice about payables, not something
+    // that happens to fall out of the debtor-side test.
+    if (user.role === UserRole.EMPLOYEE &&
+        (debt.creditor_type === 'SUPPLIER' || debt.debtor_type === 'SHOP')) {
       throw new ForbiddenException('debt.ACCESS_DENIED');
     }
   }
@@ -502,8 +534,27 @@ export class DebtsService {
    * Reversal makes collected money disappear from the balance, so it is limited
    * to whoever actually received it: the admin for order debts, the shop owner
    * for their own customer debts. Employees never reverse.
+   *
+   * A supplier payable is dispatched first and separately: `debt.debtor_type`
+   * is 'SHOP' there too (same as an order debt), so it would otherwise fall
+   * into the order-debt branch below and demand WAREHOUSE_ADMIN — blocking a
+   * shop owner from undoing a mistaken payment to their own supplier.
    */
   private assertCanReverse(debt: Debt, user: RequestUser): void {
+    if (debt.creditor_type === 'SUPPLIER') {
+      // The supplier received the money, and the supplier is outside this
+      // system — so the right authority is whoever paid it: the owner of the
+      // shop that owes. The warehouse is a shops row too, so its admin is
+      // covered by the same test for the warehouse's own payables. No global
+      // override for other shops' payables — same "a shop's business is its
+      // own" rule as customer debts.
+      if (debt.debtor_shop_id === user.shopId &&
+          (user.role === UserRole.SHOP_OWNER || user.role === UserRole.WAREHOUSE_ADMIN)) {
+        return;
+      }
+      throw new ForbiddenException('debt.ACCESS_DENIED');
+    }
+
     if (debt.debtor_type === 'SHOP') {
       if (user.role !== UserRole.WAREHOUSE_ADMIN) {
         throw new ForbiddenException('debt.ACCESS_DENIED');
@@ -561,20 +612,26 @@ export class DebtsService {
   ): Promise<unknown> {
     return this.auditLogsService.log(
       {
-        shop_id: debt.creditor_shop_id,
+        // creditor_shop_id is null on a payable (the creditor is a supplier,
+        // not a shop) — fall back to debtor_shop_id so the shop that made the
+        // payment can still see its own audit row. chk_debts_party_shape
+        // guarantees at least one of the two is always set.
+        shop_id: debt.creditor_shop_id ?? debt.debtor_shop_id,
         user_id: userId,
         type: 'DEBT',
         action,
         entity_type: 'debt',
         entity_id: debt.id,
         // Links the audit row back to the sale for customer debts; order-backed
-        // debts have no receipt, hence the undefined.
+        // and supplier-payable debts have no receipt, hence the undefined.
         receipt_id: debt.receipt_id ?? undefined,
         // audit_logs.amount is a display field on a DECIMAL(15,2) column, so
         // the float round-trip is safe here — unlike the ledger itself, nothing
         // does arithmetic on it.
         amount: Number(amount),
-        notes,
+        // A payable has no receipt to identify it by, so fold its invoice
+        // number into the note instead of losing it from the audit trail.
+        notes: debt.invoice_no ? `${notes ?? ''} (invoice ${debt.invoice_no})`.trim() : notes,
       },
       client,
     );

@@ -105,7 +105,7 @@ export class AnalyticsController {
     @Query() query: DebtQueryDto,
     @CurrentUser() user: RequestUser,
   ) {
-    return this.debtsService.getSummary(query, user);
+    return this.debtsService.getSummary(query, user, 'SHOP');
   }
 
   @Get('receivables/aging')
@@ -118,7 +118,7 @@ export class AnalyticsController {
     @Query() query: DebtQueryDto,
     @CurrentUser() user: RequestUser,
   ) {
-    return this.debtsService.getAging(query, user);
+    return this.debtsService.getAging(query, user, 'SHOP');
   }
 
   @Get('products-by-shop')
