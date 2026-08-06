@@ -219,7 +219,10 @@ export class InventoryService {
           entity_type: 'inventory',
           entity_id: id,
           amount: dto.salePrice,
-          notes: `Selling price: ${item.sale_price} → ${dto.salePrice}`,
+          notes: {
+            key: 'audit-logs.NOTE_PRICE_CHANGE',
+            args: { from: item.sale_price, to: dto.salePrice },
+          },
         },
         client,
       );

@@ -17,6 +17,7 @@ import { RequestUser } from '../../common/interfaces/request-user.interface';
 import { CreateReceiptDto } from '../dto/create-receipt.dto';
 import { ReceiptQueryDto } from '../dto/receipt-query.dto';
 import { SetReceiptFreeDto } from '../dto/set-receipt-free.dto';
+import { CancelReceiptDto } from '../dto/cancel-receipt.dto';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../auth/guards/roles.guard';
 import { Roles } from '../../auth/decorators/roles.decorator';
@@ -70,5 +71,16 @@ export class ReceiptsController {
     @CurrentUser() user: RequestUser,
   ) {
     return this.receiptsService.setFree(id, dto.isFree, user);
+  }
+
+  @Patch(':id/cancel')
+  @Roles(UserRole.WAREHOUSE_ADMIN, UserRole.SHOP_OWNER, UserRole.EMPLOYEE)
+  @ApiOperation({ summary: 'Cancel a receipt — restores all item quantities to inventory and excludes it from revenue' })
+  cancel(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: CancelReceiptDto,
+    @CurrentUser() user: RequestUser,
+  ) {
+    return this.receiptsService.cancel(id, dto.reason, user);
   }
 }

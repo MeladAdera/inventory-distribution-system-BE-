@@ -22,6 +22,9 @@ import { AuditLogsModule } from './audit-logs/audit-logs.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { AnalyticsModule } from './analytics/analytics.module';
 import { ReceiptsModule } from './receipts/receipts.module';
+import { DebtsModule } from './debts/debts.module';
+import { CustomersModule } from './customers/customers.module';
+import { SuppliersModule } from './suppliers/suppliers.module';
 
 @Module({
   imports: [
@@ -67,6 +70,9 @@ import { ReceiptsModule } from './receipts/receipts.module';
     NotificationsModule,
     AnalyticsModule,
     ReceiptsModule,
+    DebtsModule,
+    CustomersModule,
+    SuppliersModule,
   ],
   controllers: [AppController],
   providers: [

@@ -1,0 +1,11 @@
+{
+  "NOT_FOUND": "Receipt not found",
+  "ACCESS_DENIED": "You do not have access to this receipt",
+  "ALREADY_CANCELLED": "This receipt is already cancelled",
+  "DUPLICATE_INVENTORY_IDS": "The same product appears more than once in this receipt",
+  "INVENTORY_NOT_FOUND": "One or more products are not in this shop's inventory",
+  "NEGATIVE_STOCK": "Not enough stock for \"{product}\" (available: {current}, required: {required})",
+  "RESTORE_FAILED": "Could not restore stock for this receipt",
+  "CUSTOMER_REQUIRED": "Select a customer — a partly paid sale must be owed by someone",
+  "PAID_EXCEEDS_TOTAL": "Paid amount is more than the sale total ({total})"
+}

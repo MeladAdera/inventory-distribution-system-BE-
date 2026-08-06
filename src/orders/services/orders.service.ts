@@ -6,11 +6,14 @@ import {
   ConflictException,
   Logger,
 } from '@nestjs/common';
+import * as pg from 'pg';
 import { DatabaseService } from '../../database/database.service';
 import { OrdersRepository } from '../repositories/orders.repository';
 import { InventoryRepository } from '../../inventory/repositories/inventory.repository';
 import { AuditLogsService } from '../../audit-logs/services/audit-logs.service';
 import { NotificationsService } from '../../notifications/services/notifications.service';
+import { DebtsService } from '../../debts/services/debts.service';
+import { toMinor } from '../../common/utils/money.util';
 import { CreateOrderDto } from '../dto/create-order.dto';
 import { UpdateOrderStatusDto } from '../dto/update-order-status.dto';
 import { OrderQueryDto } from '../dto/order-query.dto';
@@ -36,6 +39,7 @@ export class OrdersService {
     private readonly inventoryRepo: InventoryRepository,
     private readonly auditLogsService: AuditLogsService,
     private readonly notificationsService: NotificationsService,
+    private readonly debtsService: DebtsService,
     private readonly db: DatabaseService,
   ) {}
 
@@ -129,7 +133,10 @@ export class OrdersService {
             entity_type: 'inventory',
             entity_id: warehouseInv.id,
             quantity: item.quantity,
-            notes: `Order #${created.id} — reserved for shop ${toShopId}`,
+            notes: {
+              key: 'audit-logs.NOTE_ORDER_RESERVED',
+              args: { orderId: created.id, shopId: toShopId },
+            },
           },
           client,
         );
@@ -219,10 +226,20 @@ export class OrdersService {
           action: 'STATUS_CHANGED',
           entity_type: 'order',
           entity_id: id,
-          notes: `${order.status} → ${dto.status}`,
+          notes: {
+            key: 'audit-logs.NOTE_STATUS_CHANGED',
+            args: {
+              from: { key: `audit-logs.STATUS.${order.status}` },
+              to: { key: `audit-logs.STATUS.${dto.status}` },
+            },
+          },
         },
         client,
       );
+
+      if (dto.status === 'SHIPPED') {
+        await this.raiseOrderDebt(order, user.id, client);
+      }
 
       if (dto.status === 'RECEIVED') {
         await this.transferInventory(id, order.from_shop_id, order.to_shop_id, user.id, client);
@@ -230,6 +247,15 @@ export class OrdersService {
 
       if (dto.status === 'CANCELLED') {
         await this.restoreWarehouseInventory(id, order.from_shop_id, user.id, client);
+        // An order is cancellable up to SHIPPED, which is exactly when the debt
+        // exists — so this runs in the same transaction as the stock restore.
+        // Payments already collected are kept and surface as refund_due.
+        await this.debtsService.cancelDebt(
+          { type: 'ORDER', id },
+          user.id,
+          { key: 'audit-logs.NOTE_ORDER_CANCELLED', args: { orderId: id } },
+          client,
+        );
       }
 
       return { result, order };
@@ -238,6 +264,37 @@ export class OrdersService {
     this.notificationsService.notifyStatusChanged(id, dto.status, updated.order.to_shop_id)
       .catch((err: unknown) => this.logger.error('notifyStatusChanged failed', err));
     return updated.result;
+  }
+
+  /**
+   * Opens the shop's debt for an order at ship time — goods have left the
+   * warehouse, so the shop genuinely owes for them. The total is snapshotted
+   * from `order_items` here and never recalculated, so repricing a product
+   * later cannot change what the shop already owes.
+   *
+   * Note this is earlier than revenue recognition, which counts COMPLETED
+   * orders. Between SHIPPED and COMPLETED a receivable exists for an order not
+   * yet booked as revenue — accepted, and normal accrual behaviour.
+   */
+  private async raiseOrderDebt(order: Order, userId: number, client: pg.PoolClient): Promise<void> {
+    const total = await this.ordersRepo.sumTotalPrice(order.id, client);
+
+    // A zero-priced order (samples, promotional stock) owes nothing — creating
+    // a 0.00 debt would only add a row that is already settled.
+    if (toMinor(total) <= 0n) return;
+
+    await this.debtsService.createDebt(
+      {
+        kind: 'ORDER',
+        creditorShopId: order.from_shop_id,
+        debtorShopId: order.to_shop_id,
+        orderId: order.id,
+        totalAmount: total,
+        createdBy: userId,
+        note: `Order #${order.id}`,
+      },
+      client,
+    );
   }
 
   private async transferInventory(
@@ -268,7 +325,7 @@ export class OrdersService {
           entity_type: 'inventory',
           entity_id: updated.id,
           quantity: item.quantity,
-          notes: `Order #${orderId} — received from warehouse`,
+          notes: { key: 'audit-logs.NOTE_ORDER_RECEIVED', args: { orderId } },
         },
         client,
       );
@@ -303,7 +360,7 @@ export class OrdersService {
           entity_type: 'inventory',
           entity_id: updated.id,
           quantity: item.quantity,
-          notes: `Order #${orderId} — cancelled, stock returned to warehouse`,
+          notes: { key: 'audit-logs.NOTE_ORDER_RESTOCKED', args: { orderId } },
         },
         client,
       );

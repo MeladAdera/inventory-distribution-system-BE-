@@ -41,6 +41,7 @@
   "isFree": "مجاني",
   "address": "العنوان",
   "phone": "الهاتف",
+  "note": "ملاحظة",
   "isActive": "نشط",
   "page": "الصفحة",
   "limit": "الحد",
@@ -51,5 +52,12 @@
   "entityType": "نوع الكيان",
   "entityId": "الكيان",
   "receiptId": "الإيصال",
-  "isRead": "مقروء"
+  "isRead": "مقروء",
+  "amount": "المبلغ",
+  "totalAmount": "الإجمالي",
+  "paidAmount": "المبلغ المدفوع",
+  "invoiceNo": "رقم الفاتورة",
+  "supplierId": "المورّد",
+  "customerId": "الزبون",
+  "debtId": "الدين"
 }

@@ -1,4 +1,50 @@
 {
   "NOT_FOUND": "Audit log not found",
-  "ACCESS_DENIED": "You do not have access to this audit log"
+  "ACCESS_DENIED": "You do not have access to this audit log",
+
+  "TYPE": {
+    "INVENTORY": "Inventory",
+    "ORDER": "Order",
+    "DEBT": "Debt"
+  },
+
+  "ACTION": {
+    "STOCK_IN": "Stock In",
+    "PRODUCT_ADDED": "Product Added",
+    "ADJUSTMENT": "Adjustment",
+    "PRICE_CHANGE": "Price Change",
+    "TRANSFER_IN": "Transfer In",
+    "TRANSFER_OUT": "Transfer Out",
+    "STATUS_CHANGED": "Status Changed",
+    "MARKED_FREE": "Marked Free",
+    "UNMARKED_FREE": "Unmarked Free",
+    "CANCELLED": "Cancelled",
+    "PAYMENT": "Payment",
+    "REVERSAL": "Payment Reversed"
+  },
+
+  "ENTITY": {
+    "inventory": "Inventory Item",
+    "order": "Order",
+    "debt": "Debt"
+  },
+
+  "STATUS": {
+    "PENDING": "Pending",
+    "PROCESSING": "Processing",
+    "SHIPPED": "Shipped",
+    "RECEIVED": "Received",
+    "COMPLETED": "Completed",
+    "CANCELLED": "Cancelled"
+  },
+
+  "NOTE_PRICE_CHANGE": "Selling price: {from} → {to}",
+  "NOTE_STATUS_CHANGED": "{from} → {to}",
+  "NOTE_ORDER_RESERVED": "Order #{orderId} — reserved for shop {shopId}",
+  "NOTE_ORDER_RECEIVED": "Order #{orderId} — received from warehouse",
+  "NOTE_ORDER_RESTOCKED": "Order #{orderId} — cancelled, stock returned to warehouse",
+  "NOTE_ORDER_CANCELLED": "Order #{orderId} cancelled",
+  "NOTE_RECEIPT_CANCELLED": "Receipt #{receiptId} cancelled",
+  "NOTE_RECEIPT_MARKED_FREE": "Receipt #{receiptId} marked free",
+  "NOTE_WITH_INVOICE": "{note} (invoice {invoiceNo})"
 }

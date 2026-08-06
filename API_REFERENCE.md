@@ -1002,7 +1002,10 @@ Base path: `/audit-logs` — **Auth required on all routes**
         "quantity": 100,
         "amount": null,
         "notes": "Initial stock from supplier",
-        "created_at": "2026-06-10T10:00:00.000Z"
+        "created_at": "2026-06-10T10:00:00.000Z",
+        "type_label": "Inventory",
+        "action_label": "Stock In",
+        "entity_type_label": "Inventory Item"
       }
     ],
     "total": 1,
@@ -1013,12 +1016,23 @@ Base path: `/audit-logs` — **Auth required on all routes**
 }
 ```
 
+**Localization** — respects `?lang=ar` / `Accept-Language`, like the rest of the API.
+
+- `type_label`, `action_label` and `entity_type_label` are the display text for
+  `type`, `action` and `entity_type`. Filter on the raw codes, render the labels.
+  An unrecognised code falls back to the code itself.
+- `notes` is translated when the entry was written by the system (a transfer, a
+  status change, a cancellation). Notes a user typed are returned exactly as
+  they were entered, in whatever language they wrote them, and so are entries
+  written before this was added — those stay English.
+
 ---
 
 ### `GET /audit-logs/:id`
 **Roles:** `WAREHOUSE_ADMIN`, `SHOP_OWNER`, `EMPLOYEE`
 
-**Response `200`** — single `AuditLog` record
+**Response `200`** — single `AuditLog` record, plus `product_name`. Same
+localization as the list endpoint.
 
 **Error `404`** — log not found
 

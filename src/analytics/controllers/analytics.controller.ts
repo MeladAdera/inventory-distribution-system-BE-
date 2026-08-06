@@ -1,6 +1,8 @@
 import { Controller, Get, Query, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { AnalyticsService } from '../services/analytics.service';
+import { DebtsService } from '../../debts/services/debts.service';
+import { DebtQueryDto } from '../../debts/dto/debt-query.dto';
 import { TopProductsQueryDto, ConsumptionTrendQueryDto, ProductsByShopQueryDto, ShopConsumptionQueryDto, ProfitQueryDto, TrendPeriod } from '../dto/analytics-query.dto';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../auth/guards/roles.guard';
@@ -14,7 +16,10 @@ import { UserRole } from '../../common/enums/user-role.enum';
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('analytics')
 export class AnalyticsController {
-  constructor(private readonly analyticsService: AnalyticsService) {}
+  constructor(
+    private readonly analyticsService: AnalyticsService,
+    private readonly debtsService: DebtsService,
+  ) {}
 
   @Get('top-products')
   @Roles(UserRole.WAREHOUSE_ADMIN, UserRole.SHOP_OWNER, UserRole.EMPLOYEE)
@@ -81,6 +86,69 @@ export class AnalyticsController {
     @CurrentUser() user: RequestUser,
   ) {
     return this.analyticsService.getProfitTrend(query.period ?? TrendPeriod.DAILY, query.shopId, user);
+  }
+
+  // Receivables are delegated to DebtsService rather than reimplemented here:
+  // it already owns the role-based visibility rules, and a second copy of that
+  // scoping is how a data leak eventually gets introduced.
+  //
+  // EMPLOYEE is included, unlike the profit endpoints above. Profit is
+  // owner-level information; who still owes money is the job of whoever
+  // collects it. Their view is scoped to customer debts either way.
+  @Get('receivables')
+  @Roles(UserRole.WAREHOUSE_ADMIN, UserRole.SHOP_OWNER, UserRole.EMPLOYEE)
+  @ApiOperation({
+    summary:
+      'Money owed and collected: total_billed, total_collected, total_remaining, open_count, refund_due. Same filters and scoping as GET /debts.',
+  })
+  getReceivables(
+    @Query() query: DebtQueryDto,
+    @CurrentUser() user: RequestUser,
+  ) {
+    return this.debtsService.getSummary(query, user, 'SHOP');
+  }
+
+  @Get('receivables/aging')
+  @Roles(UserRole.WAREHOUSE_ADMIN, UserRole.SHOP_OWNER, UserRole.EMPLOYEE)
+  @ApiOperation({
+    summary:
+      'Outstanding balances grouped by age (0-30 / 31-60 / 60+ days). Drill into a band with GET /debts?agingBucket=.',
+  })
+  getReceivablesAging(
+    @Query() query: DebtQueryDto,
+    @CurrentUser() user: RequestUser,
+  ) {
+    return this.debtsService.getAging(query, user, 'SHOP');
+  }
+
+  // The payable mirror of receivables above — same delegation to DebtsService,
+  // same generic getSummary/getAging, just creditorType 'SUPPLIER' instead of
+  // 'SHOP'. EMPLOYEE is excluded here, unlike receivables: owing suppliers
+  // money is owner-level, same reasoning as the /suppliers routes themselves.
+  @Get('payables')
+  @Roles(UserRole.WAREHOUSE_ADMIN, UserRole.SHOP_OWNER)
+  @ApiOperation({
+    summary:
+      'Money owed to suppliers: total_billed, total_collected, total_remaining, open_count, refund_due. Same filters as GET /debts.',
+  })
+  getPayables(
+    @Query() query: DebtQueryDto,
+    @CurrentUser() user: RequestUser,
+  ) {
+    return this.debtsService.getSummary(query, user, 'SUPPLIER');
+  }
+
+  @Get('payables/aging')
+  @Roles(UserRole.WAREHOUSE_ADMIN, UserRole.SHOP_OWNER)
+  @ApiOperation({
+    summary:
+      'Money owed to suppliers grouped by age (0-30 / 31-60 / 60+ days). Drill into a band with GET /debts?agingBucket=.',
+  })
+  getPayablesAging(
+    @Query() query: DebtQueryDto,
+    @CurrentUser() user: RequestUser,
+  ) {
+    return this.debtsService.getAging(query, user, 'SUPPLIER');
   }
 
   @Get('products-by-shop')

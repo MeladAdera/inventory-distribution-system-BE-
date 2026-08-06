@@ -13,6 +13,11 @@ export class AuditLog {
   created_at!: Date;
   user_name!: string | null;
   shop_name!: string | null;
+  // Display text for the codes above, in the caller's language. The raw codes
+  // stay on the response because the list endpoint filters on them.
+  type_label!: string | null;
+  action_label!: string | null;
+  entity_type_label!: string | null;
 }
 
 export class AuditLogDetail extends AuditLog {

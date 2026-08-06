@@ -27,13 +27,14 @@ export class ReceiptsRepository {
     shopId: number,
     createdBy: number,
     notes: string | undefined,
+    customerId: number | undefined,
     client: pg.PoolClient,
   ): Promise<Receipt> {
     const result = await client.query<Receipt>(
-      `INSERT INTO receipts (shop_id, created_by, notes)
-       VALUES ($1, $2, $3)
+      `INSERT INTO receipts (shop_id, created_by, notes, customer_id)
+       VALUES ($1, $2, $3, $4)
        RETURNING *`,
-      [shopId, createdBy, notes ?? null],
+      [shopId, createdBy, notes ?? null, customerId ?? null],
     );
     return result.rows[0];
   }
@@ -68,10 +69,25 @@ export class ReceiptsRepository {
     return result.rows[0] ?? null;
   }
 
+  // Conditional on is_cancelled <> TRUE, same guard style as setIsFree — this
+  // is what stops two concurrent cancel requests from both restoring stock.
+  async cancel(id: number, cancelledBy: number, reason: string | undefined, client: pg.PoolClient): Promise<Receipt | null> {
+    const result = await client.query<Receipt>(
+      `UPDATE receipts
+       SET is_cancelled = TRUE, cancelled_at = NOW(), cancelled_by = $2, cancel_reason = $3
+       WHERE id = $1 AND is_cancelled = FALSE
+       RETURNING *`,
+      [id, cancelledBy, reason ?? null],
+    );
+    return result.rows[0] ?? null;
+  }
+
   findById(id: number): Promise<ReceiptWithItems | null> {
     return this.db.queryOne<ReceiptWithItems>(
       `SELECT
-         r.id, r.shop_id, r.created_by, r.notes, r.is_free, r.created_at,
+         r.id, r.shop_id, r.created_by, r.notes, r.is_free,
+         r.is_cancelled, r.cancelled_at, r.cancelled_by, r.cancel_reason, r.created_at,
+         r.customer_id, cu.name AS customer_name,
          COALESCE(SUM(ri.quantity * ri.price), 0)::float8 AS total_price,
          COALESCE(
            JSON_AGG(
@@ -96,8 +112,9 @@ export class ReceiptsRepository {
        LEFT JOIN receipt_items ri ON ri.receipt_id = r.id
        LEFT JOIN products      p  ON p.id = ri.product_id
        LEFT JOIN categories    c  ON c.id = p.category_id
+       LEFT JOIN customers     cu ON cu.id = r.customer_id
        WHERE r.id = $1
-       GROUP BY r.id`,
+       GROUP BY r.id, cu.name`,
       [id],
     );
   }
@@ -138,7 +155,7 @@ export class ReceiptsRepository {
 
     const rows = await this.db.query<ReceiptListItem & { total_count: string }>(
       `SELECT
-         r.id, r.shop_id, r.created_by, r.notes, r.is_free, r.created_at,
+         r.id, r.shop_id, r.created_by, r.notes, r.is_free, r.is_cancelled, r.created_at,
          s.name           AS shop_name,
          u.name           AS created_by_name,
          COUNT(ri.id)::int AS total_items,
