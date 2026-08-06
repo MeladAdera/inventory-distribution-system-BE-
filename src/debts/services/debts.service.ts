@@ -3,6 +3,7 @@ import * as pg from 'pg';
 import { DatabaseService } from '../../database/database.service';
 import { DebtsRepository, DebtVisibility } from '../repositories/debts.repository';
 import { AuditLogsService } from '../../audit-logs/services/audit-logs.service';
+import { AuditNote } from '../../audit-logs/utils/audit-note.util';
 import {
   Debt,
   DebtBalance,
@@ -236,7 +237,7 @@ export class DebtsService {
   cancelDebt(
     source: DebtSource,
     cancelledBy: number,
-    reason?: string,
+    reason?: AuditNote,
     client?: pg.PoolClient,
   ): Promise<Debt | null> {
     return this.run(client, async (c) => {
@@ -707,7 +708,7 @@ export class DebtsService {
     action: 'PAYMENT' | 'REVERSAL' | 'CANCELLED',
     amount: string,
     userId: number,
-    notes: string | undefined,
+    notes: AuditNote | undefined,
     client: pg.PoolClient,
   ): Promise<unknown> {
     return this.auditLogsService.log(
@@ -730,8 +731,15 @@ export class DebtsService {
         // does arithmetic on it.
         amount: Number(amount),
         // A payable has no receipt to identify it by, so fold its invoice
-        // number into the note instead of losing it from the audit trail.
-        notes: debt.invoice_no ? `${notes ?? ''} (invoice ${debt.invoice_no})`.trim() : notes,
+        // number into the note instead of losing it from the audit trail. The
+        // note is nested rather than concatenated so that a system-generated
+        // one still gets translated inside the suffix.
+        notes: debt.invoice_no
+          ? {
+              key: 'audit-logs.NOTE_WITH_INVOICE',
+              args: { note: notes ?? '', invoiceNo: debt.invoice_no },
+            }
+          : notes,
       },
       client,
     );

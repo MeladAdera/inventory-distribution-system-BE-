@@ -133,7 +133,10 @@ export class OrdersService {
             entity_type: 'inventory',
             entity_id: warehouseInv.id,
             quantity: item.quantity,
-            notes: `Order #${created.id} — reserved for shop ${toShopId}`,
+            notes: {
+              key: 'audit-logs.NOTE_ORDER_RESERVED',
+              args: { orderId: created.id, shopId: toShopId },
+            },
           },
           client,
         );
@@ -223,7 +226,13 @@ export class OrdersService {
           action: 'STATUS_CHANGED',
           entity_type: 'order',
           entity_id: id,
-          notes: `${order.status} → ${dto.status}`,
+          notes: {
+            key: 'audit-logs.NOTE_STATUS_CHANGED',
+            args: {
+              from: { key: `audit-logs.STATUS.${order.status}` },
+              to: { key: `audit-logs.STATUS.${dto.status}` },
+            },
+          },
         },
         client,
       );
@@ -244,7 +253,7 @@ export class OrdersService {
         await this.debtsService.cancelDebt(
           { type: 'ORDER', id },
           user.id,
-          `Order #${id} cancelled`,
+          { key: 'audit-logs.NOTE_ORDER_CANCELLED', args: { orderId: id } },
           client,
         );
       }
@@ -316,7 +325,7 @@ export class OrdersService {
           entity_type: 'inventory',
           entity_id: updated.id,
           quantity: item.quantity,
-          notes: `Order #${orderId} — received from warehouse`,
+          notes: { key: 'audit-logs.NOTE_ORDER_RECEIVED', args: { orderId } },
         },
         client,
       );
@@ -351,7 +360,7 @@ export class OrdersService {
           entity_type: 'inventory',
           entity_id: updated.id,
           quantity: item.quantity,
-          notes: `Order #${orderId} — cancelled, stock returned to warehouse`,
+          notes: { key: 'audit-logs.NOTE_ORDER_RESTOCKED', args: { orderId } },
         },
         client,
       );

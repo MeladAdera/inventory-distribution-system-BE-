@@ -3,6 +3,7 @@ import * as pg from 'pg';
 import { DatabaseService } from '../../database/database.service';
 import { AuditLog, AuditLogDetail } from '../entities/audit-log.entity';
 import { AuditLogQueryDto } from '../dto/audit-log-query.dto';
+import { AuditNote } from '../utils/audit-note.util';
 
 export interface CreateAuditLogData {
   shop_id: number | null;
@@ -14,7 +15,9 @@ export interface CreateAuditLogData {
   receipt_id?: number;
   quantity?: number;
   amount?: number;
-  notes?: string;
+  // Serialized to a plain string by `AuditLogsService.log` before it reaches
+  // the INSERT below — the column is, and stays, TEXT.
+  notes?: AuditNote;
 }
 
 @Injectable()

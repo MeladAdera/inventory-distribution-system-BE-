@@ -236,7 +236,7 @@ export class ReceiptsService {
         await this.debtsService.cancelDebt(
           { type: 'RECEIPT', id },
           user.id,
-          `Receipt #${id} marked free`,
+          { key: 'audit-logs.NOTE_RECEIPT_MARKED_FREE', args: { receiptId: id } },
           client,
         );
       }
@@ -316,7 +316,7 @@ export class ReceiptsService {
       await this.debtsService.cancelDebt(
         { type: 'RECEIPT', id },
         user.id,
-        reason ?? `Receipt #${id} cancelled`,
+        reason ?? { key: 'audit-logs.NOTE_RECEIPT_CANCELLED', args: { receiptId: id } },
         client,
       );
     });
