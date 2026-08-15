@@ -125,11 +125,16 @@ export class AnalyticsController {
   // same generic getSummary/getAging, just creditorType 'SUPPLIER' instead of
   // 'SHOP'. EMPLOYEE is excluded here, unlike receivables: owing suppliers
   // money is owner-level, same reasoning as the /suppliers routes themselves.
+  //
+  // Scoping differs from receivables too, and not by accident: both roles see
+  // their own shop only. The admin's warehouse-wide view on the receivables
+  // routes comes from the warehouse being the creditor there — it is not a
+  // party to what another shop owes its suppliers. See visibilityFor.
   @Get('payables')
   @Roles(UserRole.WAREHOUSE_ADMIN, UserRole.SHOP_OWNER)
   @ApiOperation({
     summary:
-      'Money owed to suppliers: total_billed, total_collected, total_remaining, open_count, refund_due. Same filters as GET /debts.',
+      'Money owed to your own shop\'s suppliers: total_billed, total_collected, total_remaining, open_count, refund_due. Same filters as GET /debts. Own shop only, admin included.',
   })
   getPayables(
     @Query() query: DebtQueryDto,
@@ -142,7 +147,7 @@ export class AnalyticsController {
   @Roles(UserRole.WAREHOUSE_ADMIN, UserRole.SHOP_OWNER)
   @ApiOperation({
     summary:
-      'Money owed to suppliers grouped by age (0-30 / 31-60 / 60+ days). Drill into a band with GET /debts?agingBucket=.',
+      'Money owed to your own shop\'s suppliers grouped by age (0-30 / 31-60 / 60+ days). Own shop only, admin included.',
   })
   getPayablesAging(
     @Query() query: DebtQueryDto,

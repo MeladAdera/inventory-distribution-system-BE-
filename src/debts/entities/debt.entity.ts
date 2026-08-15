@@ -134,6 +134,11 @@ export class ShopDebtsSummary {
   owed_by_shop!: DebtsSummary;
   /** What this shop is owed (customer debts). Zeroes until customers exist. */
   owed_to_shop!: DebtsSummary;
-  /** What this shop owes its own suppliers. Zeroes until suppliers exist. */
-  owed_to_suppliers!: DebtsSummary;
+  /**
+   * What this shop owes its own suppliers. Zeroes until suppliers exist, and
+   * **absent entirely** when an admin reads another shop's summary — a shop's
+   * suppliers are its own business, so the warehouse gets no figure at all
+   * rather than a zero that would read as "owes nothing".
+   */
+  owed_to_suppliers?: DebtsSummary;
 }

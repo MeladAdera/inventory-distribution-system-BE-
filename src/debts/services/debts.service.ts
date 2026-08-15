@@ -345,22 +345,34 @@ export class DebtsService {
     );
   }
 
+  /**
+   * Both sides of a shop's ledger with the warehouse, plus — for that shop
+   * only — what it owes its own suppliers.
+   *
+   * `owed_to_suppliers` is *omitted*, not zeroed, when an admin asks about
+   * another shop: the two mean different things, and a zero would read as
+   * "this shop owes its suppliers nothing" when the truth is that the
+   * warehouse does not get to see. The receivables halves stay visible to the
+   * admin either way — the warehouse is a party to those.
+   */
   async getShopSummary(shopId: number, user: RequestUser): Promise<ShopDebtsSummary> {
     if (user.role !== UserRole.WAREHOUSE_ADMIN && user.shopId !== shopId) {
       throw new ForbiddenException('debt.ACCESS_DENIED');
     }
 
+    const ownShop = user.shopId === shopId;
+
     const [owedByShop, owedToShop, owedToSuppliers] = await Promise.all([
       this.debtsRepo.getSummaryForShopAs('DEBTOR', shopId),
       this.debtsRepo.getSummaryForShopAs('CREDITOR', shopId),
-      this.debtsRepo.getSummaryForShopPayables(shopId),
+      ownShop ? this.debtsRepo.getSummaryForShopPayables(shopId) : undefined,
     ]);
 
     return {
       shop_id: shopId,
       owed_by_shop: owedByShop,
       owed_to_shop: owedToShop,
-      owed_to_suppliers: owedToSuppliers,
+      ...(owedToSuppliers !== undefined && { owed_to_suppliers: owedToSuppliers }),
     };
   }
 
@@ -595,12 +607,29 @@ export class DebtsService {
     return debt;
   }
 
+  /**
+   * The admin's warehouse-wide view is a *receivables* rule: the warehouse is
+   * the creditor on every order debt, so "all shops" there is really "every
+   * debt I am a party to". A payable inverts that — the warehouse is not a
+   * party to what another shop owes its own suppliers — so the admin is scoped
+   * to its own shop on that side, the same rule `assertCanReverse` already
+   * applies to writes. `'ANY'` is scoped too: it spans both sides, so it
+   * carries the payable risk with it.
+   */
   private visibilityFor(user: RequestUser, creditorType: CreditorType | 'ANY'): DebtVisibility {
-    if (user.role === UserRole.WAREHOUSE_ADMIN) return { creditorType };
+    if (user.role === UserRole.WAREHOUSE_ADMIN && creditorType === 'SHOP') {
+      return { creditorType };
+    }
+
+    // Every branch below scopes by shop, so a user with no shop yet has no
+    // scope to apply — and an absent `shopId` means *no filter at all*, which
+    // would hand them everything. Refused outright instead, matching the same
+    // guard in `assertReadAccess`.
+    if (user.shopId === null) throw new ForbiddenException('debt.ACCESS_DENIED');
 
     return {
       creditorType,
-      shopId: user.shopId ?? undefined,
+      shopId: user.shopId,
       // An employee runs the shop's credit sales but has no business seeing
       // what the shop owes the warehouse.
       forceDebtorType: user.role === UserRole.EMPLOYEE ? 'CUSTOMER' : undefined,
@@ -608,12 +637,26 @@ export class DebtsService {
   }
 
   private assertReadAccess(debt: Debt, user: RequestUser): void {
+    // Dispatched before the admin override below, for the reason spelled out
+    // on `visibilityFor`: a supplier bill belongs to the shop that owes it, and
+    // the warehouse is not a party to another shop's. Without this branch the
+    // admin would read by id exactly what the list queries now hide.
+    if (debt.creditor_type === 'SUPPLIER') {
+      // Restated here rather than left to the employee rule further down,
+      // which this early return would otherwise skip past.
+      if (user.role === UserRole.EMPLOYEE) throw new ForbiddenException('debt.ACCESS_DENIED');
+
+      if (user.shopId === null || debt.debtor_shop_id !== user.shopId) {
+        throw new ForbiddenException('debt.ACCESS_DENIED');
+      }
+      return;
+    }
+
     if (user.role === UserRole.WAREHOUSE_ADMIN) return;
 
     // A user can have no shop yet. Without this guard, `null === null` below
-    // would make such a user "a party" to every payable — creditor_shop_id is
-    // null there too, for an unrelated reason (no creditor shop, a supplier
-    // owns that side). Not possible before creditor_shop_id became nullable.
+    // would make such a user "a party" to every customer debt — debtor_shop_id
+    // is null on those, the debtor being a customer rather than a shop.
     if (user.shopId === null) throw new ForbiddenException('debt.ACCESS_DENIED');
 
     const isParty = debt.debtor_shop_id === user.shopId
@@ -621,12 +664,9 @@ export class DebtsService {
     if (!isParty) throw new ForbiddenException('debt.ACCESS_DENIED');
 
     // Employees run the shop's credit sales but have no business seeing what
-    // the shop owes elsewhere — that covers both an order-debt and a supplier
-    // bill. Both already imply debtor_type SHOP; creditor_type is checked too
-    // so the rule reads as a deliberate choice about payables, not something
-    // that happens to fall out of the debtor-side test.
-    if (user.role === UserRole.EMPLOYEE &&
-        (debt.creditor_type === 'SUPPLIER' || debt.debtor_type === 'SHOP')) {
+    // the shop owes the warehouse. The payable half of that rule lives in the
+    // SUPPLIER branch at the top, which returns before reaching here.
+    if (user.role === UserRole.EMPLOYEE && debt.debtor_type === 'SHOP') {
       throw new ForbiddenException('debt.ACCESS_DENIED');
     }
   }
