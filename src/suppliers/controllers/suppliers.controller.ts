@@ -88,7 +88,8 @@ export class SuppliersController {
   @Roles(UserRole.WAREHOUSE_ADMIN, UserRole.SHOP_OWNER)
   @ApiOperation({
     summary:
-      'Record a bill from this supplier. paidAmount defaults to 0 (fully on credit) and must not exceed totalAmount.',
+      'Record a bill from this supplier. paidAmount defaults to 0 (fully on credit) and must not exceed totalAmount. ' +
+      'Any items[] are stocked into this shop\'s inventory at their unitCost, in the same transaction, and must sum to totalAmount.',
   })
   createDebt(
     @Param('id', ParseIntPipe) id: number,
@@ -107,6 +108,17 @@ export class SuppliersController {
     @CurrentUser() user: RequestUser,
   ) {
     return this.suppliersService.findDebts(id, query, user);
+  }
+
+  @Get(':id/debts/:debtId/items')
+  @Roles(UserRole.WAREHOUSE_ADMIN, UserRole.SHOP_OWNER)
+  @ApiOperation({ summary: 'The goods on one bill, with the resulting inventory cost basis' })
+  findDebtItems(
+    @Param('id', ParseIntPipe) id: number,
+    @Param('debtId', ParseIntPipe) debtId: number,
+    @CurrentUser() user: RequestUser,
+  ) {
+    return this.suppliersService.findDebtItems(id, debtId, user);
   }
 
   @Get(':id/summary')

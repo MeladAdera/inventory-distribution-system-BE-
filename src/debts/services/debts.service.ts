@@ -579,6 +579,19 @@ export class DebtsService {
     // weaker one.
     this.assertCanReverse(debt, user);
 
+    // An itemised bill already put units on the shelf at a stated cost.
+    // Cancelling it here would erase the money and leave the goods.
+    //
+    // Note this is a hard stop, not a "clear the stock and retry": the check is
+    // on the existence of line rows, which an inventory adjustment does not
+    // remove. An itemised bill therefore cannot be cancelled at all today. The
+    // real fix is cancel-and-restock — deducting each line inside this
+    // transaction — which has to handle stock already sold, so it was left out
+    // rather than half-built.
+    if (await this.debtsRepo.hasStockedItems(id)) {
+      throw new BadRequestException('debt.HAS_STOCKED_ITEMS');
+    }
+
     const cancelled = await this.cancelDebtById(id, user.id, dto.reason);
     if (!cancelled) throw new BadRequestException('debt.ALREADY_CANCELLED');
 
