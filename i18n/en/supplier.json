@@ -3,5 +3,9 @@
   "PHONE_TAKEN": "Another supplier in this shop already uses this phone number",
   "HAS_OPEN_DEBT": "This supplier still has money owed or a refund due, so they cannot be deactivated",
   "PAID_EXCEEDS_TOTAL": "The amount paid cannot be more than the invoice total ({total})",
-  "INVOICE_TAKEN": "This supplier already has an open or paid bill under this invoice number"
+  "INVOICE_TAKEN": "This supplier already has an open or paid bill under this invoice number",
+  "ITEMS_TOTAL_MISMATCH": "The products on this bill add up to {itemsTotal}, which does not match the invoice total of {total}",
+  "DUPLICATE_ITEM": "The same product appears more than once on this bill — combine it into a single line",
+  "INACTIVE": "This supplier is deactivated, so no new bills can be recorded against them",
+  "ITEM_COST_INVALID": "The unit price for product {productId} must be greater than 0"
 }

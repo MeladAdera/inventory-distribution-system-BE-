@@ -12,5 +12,6 @@
   "NO_OPEN_DEBTS": "This customer does not owe anything",
   "NO_OPEN_SUPPLIER_DEBTS": "Nothing is owed to this supplier",
   "NOT_CANCELLABLE_BY_ID": "This debt must be cancelled through its order or receipt, not directly",
-  "ALREADY_CANCELLED": "This debt is already cancelled"
+  "ALREADY_CANCELLED": "This debt is already cancelled",
+  "HAS_STOCKED_ITEMS": "This bill added products to your inventory, so it cannot be cancelled. Correct the quantities with an inventory adjustment — the bill itself stays on the supplier's account."
 }

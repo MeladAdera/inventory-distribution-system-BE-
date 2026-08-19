@@ -1,13 +1,11 @@
 {
   "NOT_FOUND": "سجل المراجعة غير موجود",
   "ACCESS_DENIED": "ليس لديك صلاحية الوصول إلى هذا السجل",
-
   "TYPE": {
     "INVENTORY": "المخزون",
     "ORDER": "الطلبات",
     "DEBT": "الديون"
   },
-
   "ACTION": {
     "STOCK_IN": "إدخال مخزون",
     "PRODUCT_ADDED": "إضافة منتج",
@@ -22,13 +20,11 @@
     "PAYMENT": "دفعة",
     "REVERSAL": "عكس دفعة"
   },
-
   "ENTITY": {
     "inventory": "صنف في المخزون",
     "order": "طلب",
     "debt": "دين"
   },
-
   "STATUS": {
     "PENDING": "قيد الانتظار",
     "PROCESSING": "قيد التجهيز",
@@ -37,7 +33,6 @@
     "COMPLETED": "مكتمل",
     "CANCELLED": "ملغي"
   },
-
   "NOTE_PRICE_CHANGE": "سعر البيع: من {from} إلى {to}",
   "NOTE_STATUS_CHANGED": "من {from} إلى {to}",
   "NOTE_ORDER_RESERVED": "الطلب رقم {orderId} — تم حجز الكمية للمتجر رقم {shopId}",
@@ -46,5 +41,7 @@
   "NOTE_ORDER_CANCELLED": "تم إلغاء الطلب رقم {orderId}",
   "NOTE_RECEIPT_CANCELLED": "تم إلغاء الفاتورة رقم {receiptId}",
   "NOTE_RECEIPT_MARKED_FREE": "تم تعليم الفاتورة رقم {receiptId} كمجانية",
-  "NOTE_WITH_INVOICE": "{note} (فاتورة {invoiceNo})"
+  "NOTE_WITH_INVOICE": "{note} (فاتورة {invoiceNo})",
+  "NOTE_SUPPLIER_INVOICE": "شراء من {supplier} (فاتورة {invoiceNo})",
+  "NOTE_SUPPLIER_PURCHASE": "شراء من {supplier}"
 }

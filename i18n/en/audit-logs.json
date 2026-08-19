@@ -1,13 +1,11 @@
 {
   "NOT_FOUND": "Audit log not found",
   "ACCESS_DENIED": "You do not have access to this audit log",
-
   "TYPE": {
     "INVENTORY": "Inventory",
     "ORDER": "Order",
     "DEBT": "Debt"
   },
-
   "ACTION": {
     "STOCK_IN": "Stock In",
     "PRODUCT_ADDED": "Product Added",
@@ -22,13 +20,11 @@
     "PAYMENT": "Payment",
     "REVERSAL": "Payment Reversed"
   },
-
   "ENTITY": {
     "inventory": "Inventory Item",
     "order": "Order",
     "debt": "Debt"
   },
-
   "STATUS": {
     "PENDING": "Pending",
     "PROCESSING": "Processing",
@@ -37,7 +33,6 @@
     "COMPLETED": "Completed",
     "CANCELLED": "Cancelled"
   },
-
   "NOTE_PRICE_CHANGE": "Selling price: {from} → {to}",
   "NOTE_STATUS_CHANGED": "{from} → {to}",
   "NOTE_ORDER_RESERVED": "Order #{orderId} — reserved for shop {shopId}",
@@ -46,5 +41,7 @@
   "NOTE_ORDER_CANCELLED": "Order #{orderId} cancelled",
   "NOTE_RECEIPT_CANCELLED": "Receipt #{receiptId} cancelled",
   "NOTE_RECEIPT_MARKED_FREE": "Receipt #{receiptId} marked free",
-  "NOTE_WITH_INVOICE": "{note} (invoice {invoiceNo})"
+  "NOTE_WITH_INVOICE": "{note} (invoice {invoiceNo})",
+  "NOTE_SUPPLIER_INVOICE": "Purchased from {supplier} (invoice {invoiceNo})",
+  "NOTE_SUPPLIER_PURCHASE": "Purchased from {supplier}"
 }
