@@ -14,6 +14,7 @@
   "MIN_LENGTH": "{property} must be at least {constraints.0} characters long",
   "MAX_LENGTH": "{property} must be at most {constraints.0} characters long",
   "ARRAY_MIN_SIZE": "{property} must contain at least {constraints.0} items",
+  "ARRAY_MAX_SIZE": "{property} must contain no more than {constraints.0} items",
   "ARRAY_NOT_EMPTY": "{property} should not be empty",
   "NOT_EQUALS": "{property} must not equal {constraints.0}",
   "MATCHES": "{property} is not in the correct format"

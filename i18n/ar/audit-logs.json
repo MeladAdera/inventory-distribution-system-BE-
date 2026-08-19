@@ -46,5 +46,7 @@
   "NOTE_ORDER_CANCELLED": "تم إلغاء الطلب رقم {orderId}",
   "NOTE_RECEIPT_CANCELLED": "تم إلغاء الفاتورة رقم {receiptId}",
   "NOTE_RECEIPT_MARKED_FREE": "تم تعليم الفاتورة رقم {receiptId} كمجانية",
-  "NOTE_WITH_INVOICE": "{note} (فاتورة {invoiceNo})"
+  "NOTE_WITH_INVOICE": "{note} (فاتورة {invoiceNo})",
+  "NOTE_SUPPLIER_INVOICE": "شراء من {supplier} (فاتورة {invoiceNo})",
+  "NOTE_SUPPLIER_PURCHASE": "شراء من {supplier}"
 }

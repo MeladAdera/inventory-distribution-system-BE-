@@ -187,6 +187,22 @@ export class InventoryRepository {
     );
   }
 
+  /**
+   * Batch form of `findProductForStockIn`, for callers stocking several
+   * products at once (a supplier invoice). One query instead of N, and the
+   * caller compares the returned ids against what it asked for to find which
+   * ones were missing — a silently short result set would otherwise read as
+   * "all fine" while a line quietly went unstocked.
+   */
+  findProductsForStockIn(
+    productIds: readonly number[],
+  ): Promise<{ id: number; shop_id: number; source: 'WAREHOUSE' | 'LOCAL' }[]> {
+    return this.db.query<{ id: number; shop_id: number; source: 'WAREHOUSE' | 'LOCAL' }>(
+      `SELECT id, shop_id, source FROM products WHERE id = ANY($1::int[]) AND is_active = TRUE`,
+      [productIds],
+    );
+  }
+
   async findByShopAndProduct(shopId: number, productId: number, client?: pg.PoolClient): Promise<Inventory | null> {
     const sql = 'SELECT * FROM inventory WHERE shop_id = $1 AND product_id = $2';
     if (client) {

@@ -14,6 +14,7 @@
   "MIN_LENGTH": "{property} يجب أن يتكون من {constraints.0} أحرف على الأقل",
   "MAX_LENGTH": "{property} يجب ألا يتجاوز {constraints.0} حرفًا",
   "ARRAY_MIN_SIZE": "{property} يجب أن يحتوي على {constraints.0} عناصر على الأقل",
+  "ARRAY_MAX_SIZE": "{property} يجب ألا يحتوي على أكثر من {constraints.0} عناصر",
   "ARRAY_NOT_EMPTY": "{property} يجب ألا يكون فارغًا",
   "NOT_EQUALS": "{property} يجب ألا يساوي {constraints.0}",
   "MATCHES": "{property} بالصيغة الصحيحة"

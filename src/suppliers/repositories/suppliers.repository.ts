@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import * as pg from 'pg';
 import { DatabaseService } from '../../database/database.service';
 import { Supplier, SupplierListItem } from '../entities/supplier.entity';
+import { SupplierDebtItem, SupplierDebtItemDetail } from '../entities/supplier-debt-item.entity';
 import { CreateSupplierDto } from '../dto/create-supplier.dto';
 import { UpdateSupplierDto } from '../dto/update-supplier.dto';
 import { SupplierQueryDto } from '../dto/supplier-query.dto';
@@ -123,6 +124,50 @@ export class SuppliersRepository {
       [supplierId, invoiceNo],
     );
     return rows.length > 0;
+  }
+
+  /**
+   * One invoice line, plus the inventory row the units landed in. Always called
+   * inside the caller's transaction — the line and the stock movement it
+   * describes must commit together or not at all, so `client` is required
+   * rather than optional here.
+   */
+  async insertDebtItem(
+    item: {
+      debtId: number;
+      productId: number;
+      inventoryId: number;
+      quantity: number;
+      unitCost: string;
+    },
+    client: pg.PoolClient,
+  ): Promise<SupplierDebtItem> {
+    const result = await client.query<SupplierDebtItem>(
+      `INSERT INTO supplier_debt_items (debt_id, product_id, inventory_id, quantity, unit_cost)
+       VALUES ($1, $2, $3, $4, $5::numeric)
+       RETURNING *`,
+      [item.debtId, item.productId, item.inventoryId, item.quantity, item.unitCost],
+    );
+    return result.rows[0];
+  }
+
+  /**
+   * The lines on one invoice. `avg_cost` and `sale_price` are read live from
+   * inventory rather than snapshotted onto the line: the useful question on an
+   * invoice screen is "what is my basis now", and a snapshot would answer a
+   * question nobody is asking once a later delivery has moved the average.
+   */
+  findDebtItems(debtId: number, client?: pg.PoolClient): Promise<SupplierDebtItemDetail[]> {
+    const sql = `SELECT sdi.*, p.name AS product_name, i.avg_cost, i.sale_price
+                 FROM supplier_debt_items sdi
+                 JOIN products  p ON p.id = sdi.product_id
+                 JOIN inventory i ON i.id = sdi.inventory_id
+                 WHERE sdi.debt_id = $1
+                 ORDER BY sdi.id`;
+
+    return client
+      ? client.query<SupplierDebtItemDetail>(sql, [debtId]).then((r) => r.rows)
+      : this.db.query<SupplierDebtItemDetail>(sql, [debtId]);
   }
 
   async findPaginated(

@@ -1,10 +1,17 @@
-import { Injectable, NotFoundException, BadRequestException, ConflictException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+} from '@nestjs/common';
 import { SuppliersRepository } from '../repositories/suppliers.repository';
 import { Supplier, SupplierListItem } from '../entities/supplier.entity';
+import { SupplierDebtItemDetail } from '../entities/supplier-debt-item.entity';
 import { CreateSupplierDto } from '../dto/create-supplier.dto';
 import { UpdateSupplierDto } from '../dto/update-supplier.dto';
 import { SupplierQueryDto } from '../dto/supplier-query.dto';
-import { CreateSupplierDebtDto } from '../dto/create-supplier-debt.dto';
+import { CreateSupplierDebtDto, SupplierDebtItemDto } from '../dto/create-supplier-debt.dto';
 import { paginate, PaginatedResponse } from '../../common/utils/pagination.util';
 import { RequestUser } from '../../common/interfaces/request-user.interface';
 import { DebtsService } from '../../debts/services/debts.service';
@@ -12,6 +19,8 @@ import { Debt, DebtListItem, DebtsSummary, DebtPaymentAllocation } from '../../d
 import { DebtQueryDto } from '../../debts/dto/debt-query.dto';
 import { CreateSupplierPaymentDto } from '../../debts/dto/create-supplier-payment.dto';
 import { DatabaseService } from '../../database/database.service';
+import { InventoryRepository } from '../../inventory/repositories/inventory.repository';
+import { AuditLogsService } from '../../audit-logs/services/audit-logs.service';
 import { toMinor, fromMinor } from '../../common/utils/money.util';
 
 /**
@@ -29,6 +38,8 @@ export class SuppliersService {
     private readonly suppliersRepo: SuppliersRepository,
     private readonly debtsService: DebtsService,
     private readonly db: DatabaseService,
+    private readonly inventoryRepo: InventoryRepository,
+    private readonly auditLogsService: AuditLogsService,
   ) {}
 
   async create(dto: CreateSupplierDto, user: RequestUser): Promise<Supplier> {
@@ -93,12 +104,30 @@ export class SuppliersService {
    * starting total — so the history always shows the real bill size next to
    * the real payment.
    */
+  /**
+   * Records a bill from a supplier, and — when the bill lists goods — stocks
+   * those goods into this shop's inventory in the same transaction.
+   *
+   * The two halves are inseparable on purpose: a delivery that raised a payable
+   * but failed to land on the shelf (or vice versa) would leave the ledger and
+   * the cost basis permanently disagreeing, with nothing in the data to say
+   * which one is wrong.
+   */
   async createDebt(
     id: number,
     dto: CreateSupplierDebtDto,
     user: RequestUser,
-  ): Promise<Debt & { remaining: string }> {
+  ): Promise<Debt & { remaining: string; items: SupplierDebtItemDetail[] }> {
     const supplier = await this.requireOwnSupplier(id, user);
+
+    // Raising a *new* bill against a supplier the shop has retired is almost
+    // always a mis-selected id. Reads and payments deliberately stay open on a
+    // deactivated supplier — history has to remain legible, and money already
+    // owed has to stay payable — so this guard lives here rather than in
+    // requireOwnSupplier.
+    if (!supplier.is_active) {
+      throw new BadRequestException('supplier.INACTIVE');
+    }
 
     // Pre-check for a clean, translatable error; the partial unique index
     // (idx_debts_supplier_invoice_unique) is still the real guard against a
@@ -118,6 +147,11 @@ export class SuppliersService {
       });
     }
 
+    // Everything that can be rejected without touching the database is rejected
+    // before the transaction opens, so a bad line never holds inventory row
+    // locks while the request unwinds.
+    const items = dto.items ? await this.resolveItems(dto.items, totalMinor, supplier.shop_id) : [];
+
     const created = await this.db.transaction(async (client) => {
       const debt = await this.debtsService.createDebt(
         {
@@ -132,6 +166,52 @@ export class SuppliersService {
         client,
       );
 
+      for (const item of items) {
+        // The same call the orders flow makes on delivery
+        // (orders.service.ts:312): blends this batch's cost into the shop's
+        // moving average, or seeds a fresh inventory row from it when the shop
+        // has never carried the product. The cost is always stated — never
+        // inherited — because an invoice knows what it charged.
+        const inventory = await this.inventoryRepo.upsertStockIn(
+          supplier.shop_id,
+          item.productId,
+          item.quantity,
+          Number(item.unitCost),
+          client,
+        );
+
+        await this.suppliersRepo.insertDebtItem(
+          {
+            debtId: debt.id,
+            productId: item.productId,
+            inventoryId: inventory.id,
+            quantity: item.quantity,
+            unitCost: item.unitCost,
+          },
+          client,
+        );
+
+        await this.auditLogsService.log(
+          {
+            shop_id: supplier.shop_id,
+            user_id: user.id,
+            type: 'INVENTORY',
+            action: 'STOCK_IN',
+            entity_type: 'inventory',
+            entity_id: inventory.id,
+            quantity: item.quantity,
+            amount: Number(fromMinor(BigInt(item.quantity) * toMinor(item.unitCost))),
+            notes: dto.invoiceNo
+              ? {
+                  key: 'audit-logs.NOTE_SUPPLIER_INVOICE',
+                  args: { supplier: supplier.name, invoiceNo: dto.invoiceNo },
+                }
+              : { key: 'audit-logs.NOTE_SUPPLIER_PURCHASE', args: { supplier: supplier.name } },
+          },
+          client,
+        );
+      }
+
       if (paidMinor > 0n) {
         await this.debtsService.addPayment(
           debt.id,
@@ -144,8 +224,101 @@ export class SuppliersService {
     });
 
     // Re-fetch after the transaction: `created` still shows paid_amount from
-    // before the payment above was applied.
-    return this.debtsService.findByIdForUser(created.id, user);
+    // before the payment above was applied. The lines come back with the
+    // resulting avg_cost, so the caller can show what each purchase did to the
+    // cost basis without a second round trip.
+    const debt = await this.debtsService.findByIdForUser(created.id, user);
+    const lines = items.length > 0 ? await this.suppliersRepo.findDebtItems(created.id) : [];
+
+    return { ...debt, items: lines };
+  }
+
+  /**
+   * The goods on one bill. Reads `avg_cost` live, so the screen shows today's
+   * basis rather than the one this delivery happened to produce.
+   */
+  async findDebtItems(
+    id: number,
+    debtId: number,
+    user: RequestUser,
+  ): Promise<SupplierDebtItemDetail[]> {
+    await this.requireOwnSupplier(id, user);
+
+    // Reuses the debt engine's own visibility rules, then confirms the bill
+    // really belongs to the supplier in the path — otherwise the supplier id
+    // would be decorative and any visible debt could be read through any of
+    // this shop's suppliers.
+    const debt = await this.debtsService.findByIdForUser(debtId, user);
+    if (debt.supplier_id !== id) throw new NotFoundException('debt.NOT_FOUND');
+
+    return this.suppliersRepo.findDebtItems(debtId);
+  }
+
+  /**
+   * Validates the invoice lines against the catalog and against the bill's own
+   * total, and returns them in a lock-safe order.
+   */
+  private async resolveItems(
+    items: SupplierDebtItemDto[],
+    totalMinor: bigint,
+    shopId: number,
+  ): Promise<SupplierDebtItemDto[]> {
+    const productIds = items.map((item) => item.productId);
+
+    // Two lines for one product would blend the average twice from a stale
+    // base and leave the invoice with no single per-unit cost. Merging them is
+    // the client's job — guessing here would hide a keying mistake.
+    if (new Set(productIds).size !== productIds.length) {
+      throw new BadRequestException('supplier.DUPLICATE_ITEM');
+    }
+
+    const products = await this.inventoryRepo.findProductsForStockIn(productIds);
+    const byId = new Map(products.map((product) => [product.id, product]));
+
+    for (const item of items) {
+      // Strictly positive. The column CHECK would catch this too, but only as a
+      // raw constraint violation; MONEY_PATTERN cannot express it because '0'
+      // is a perfectly well-formed money string.
+      if (toMinor(item.unitCost) <= 0n) {
+        throw new BadRequestException({
+          key: 'supplier.ITEM_COST_INVALID',
+          args: { productId: item.productId },
+        });
+      }
+
+      const product = byId.get(item.productId);
+
+      // Same two guards as InventoryService.stockIn, per line. Without the
+      // scope check a shop could stock another shop's private (LOCAL) product
+      // onto its own shelves through the invoice route.
+      if (!product) {
+        throw new NotFoundException({
+          key: 'inventory.PRODUCT_NOT_FOUND',
+          args: { productId: item.productId },
+        });
+      }
+      if (product.shop_id !== shopId && product.source !== 'WAREHOUSE') {
+        throw new ForbiddenException('inventory.PRODUCT_NOT_IN_SCOPE');
+      }
+    }
+
+    // Summed in bigint minor units, never floats: 3 x 0.10 must be exactly 0.30
+    // or the reconciliation below would reject perfectly good invoices.
+    const linesMinor = items.reduce(
+      (sum, item) => sum + BigInt(item.quantity) * toMinor(item.unitCost),
+      0n,
+    );
+
+    if (linesMinor !== totalMinor) {
+      throw new BadRequestException({
+        key: 'supplier.ITEMS_TOTAL_MISMATCH',
+        args: { itemsTotal: fromMinor(linesMinor), total: fromMinor(totalMinor) },
+      });
+    }
+
+    // Sorted by product id so two invoices touching overlapping products take
+    // the inventory row locks in the same order and cannot deadlock each other.
+    return [...items].sort((a, b) => a.productId - b.productId);
   }
 
   async findDebts(

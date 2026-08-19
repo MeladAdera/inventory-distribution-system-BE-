@@ -198,6 +198,29 @@ export class DebtsRepository {
   }
 
   /**
+   * Whether this payable moved goods onto a shelf.
+   *
+   * Reaches across to `supplier_debt_items` rather than going through
+   * SuppliersModule, which imports this one — the alternative is a circular
+   * dependency for a single existence check. Cancelling such a bill would
+   * void the money while leaving the units in inventory, so the cancel path
+   * refuses instead of quietly desynchronising the two.
+   *
+   * This tests for line rows, not for stock on hand — an inventory adjustment
+   * does not clear it. Once a bill has lines it can never be cancelled, until
+   * a cancel-and-restock path exists.
+   */
+  async hasStockedItems(debtId: number, client?: pg.PoolClient): Promise<boolean> {
+    const sql = 'SELECT 1 FROM supplier_debt_items WHERE debt_id = $1 LIMIT 1';
+
+    const rows = client
+      ? (await client.query(sql, [debtId])).rows
+      : await this.db.query(sql, [debtId]);
+
+    return rows.length > 0;
+  }
+
+  /**
    * Conditional on the debt not already being cancelled, so a source document
    * cancelled twice produces exactly one cancellation. Returns null when there
    * was no live debt — a fully-paid or never-indebted order is not an error.

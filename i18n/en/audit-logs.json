@@ -46,5 +46,7 @@
   "NOTE_ORDER_CANCELLED": "Order #{orderId} cancelled",
   "NOTE_RECEIPT_CANCELLED": "Receipt #{receiptId} cancelled",
   "NOTE_RECEIPT_MARKED_FREE": "Receipt #{receiptId} marked free",
-  "NOTE_WITH_INVOICE": "{note} (invoice {invoiceNo})"
+  "NOTE_WITH_INVOICE": "{note} (invoice {invoiceNo})",
+  "NOTE_SUPPLIER_INVOICE": "Purchased from {supplier} (invoice {invoiceNo})",
+  "NOTE_SUPPLIER_PURCHASE": "Purchased from {supplier}"
 }
