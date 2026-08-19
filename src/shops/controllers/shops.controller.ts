@@ -48,7 +48,7 @@ export class ShopsController {
   @Roles(UserRole.WAREHOUSE_ADMIN, UserRole.SHOP_OWNER)
   @ApiOperation({
     summary:
-      'Both sides of a shop\'s ledger: what it owes the warehouse (owed_by_shop) and what its customers owe it (owed_to_shop). SHOP_OWNER: own shop only.',
+      'Both sides of a shop\'s ledger: what it owes the warehouse (owed_by_shop) and what its customers owe it (owed_to_shop). SHOP_OWNER: own shop only. owed_to_suppliers is included only for your own shop — absent when an admin reads another shop.',
   })
   getDebtsSummary(
     @Param('id', ParseIntPipe) id: number,

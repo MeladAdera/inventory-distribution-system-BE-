@@ -163,6 +163,62 @@ dropped supplier bills from any list that tried to include them. Changed to
 `LEFT JOIN`, with a second `LEFT JOIN suppliers` and a `COALESCE` so the
 "creditor name" column resolves to a supplier's name on a payable row.
 
+### The fifth leak — the admin's cross-shop read (found 2026-08-15)
+
+The audit above checked whether payables were landing on the **wrong side**
+of a report. It did not check **whose** payables a caller could see, and
+that turned out to be the bigger hole: a warehouse admin opening the
+payables report saw every shop's supplier bills summed together with its
+own.
+
+The cause was a single early return in `visibilityFor`:
+
+```ts
+if (user.role === UserRole.WAREHOUSE_ADMIN) return { creditorType };  // no shopId
+```
+
+With no `shopId`, `buildFilters` never adds its shop condition, so the only
+surviving `WHERE` on a payables query was `d.creditor_type = 'SUPPLIER'` —
+every shop's bills.
+
+That rule is correct for **receivables** and wrong for **payables**, and the
+reason is worth stating because it is the whole principle: the warehouse is
+the creditor on every order debt, so "all shops" there is really "every debt
+I am a party to". A payable inverts the relationship — the warehouse is not
+a party to what another shop owes its own suppliers, and the same "a shop's
+suppliers are its own business" rule that governs the `/suppliers` routes
+applies. The write path already knew this (`assertCanReverse` says so
+outright: *"No global override for other shops' payables"*); only the read
+path had missed it.
+
+**Three fixes, all restating a rule that already existed elsewhere:**
+
+1. `visibilityFor` — the admin's unscoped branch is now conditional on
+   `creditorType === 'SHOP'`. `'ANY'` scopes too: it spans both sides, so it
+   carries the payable risk with it.
+2. `assertReadAccess` — a `SUPPLIER` branch dispatched **before** the admin
+   override, checking `debtor_shop_id === user.shopId`, mirroring
+   `assertCanReverse`. Without it, `GET /debts/:id` and `/:id/payments`
+   would still read by id exactly what the list queries now hide. The
+   employee half of the payable rule moved into that branch, since the
+   receivables path below it can no longer see a payable at all.
+3. `getShopSummary` — `owed_to_suppliers` is **omitted** for an admin
+   reading another shop, not zeroed. A zero would read as "this shop owes
+   its suppliers nothing"; absent reads as "not your business".
+   `ShopDebtsSummary.owed_to_suppliers` became optional to match.
+
+A fourth change came along with the first: `visibilityFor` used to fall back
+to `shopId: user.shopId ?? undefined` for a user with no shop, and an absent
+`shopId` means *no filter at all* — the same "hand them everything" failure
+as the admin branch. Now refused with `debt.ACCESS_DENIED`, matching the
+guard `assertReadAccess` already had.
+
+**The lesson, and it is the same shape as the null-shop bugs below:** every
+one of these was a rule that already existed correctly on the write path and
+was simply never mirrored onto the read path. When a permission rule is
+written in one place, the question to ask is not "is it right?" but "where
+else does this same decision get made?"
+
 ### The null-shop permission bugs
 
 Making `creditor_shop_id` nullable opened a class of bug that was
@@ -228,11 +284,13 @@ twice.)
 | Pay a supplier | ✓ | ✓ | ✗ |
 | Reverse a supplier payment | ✓ (own shop's bills) | ✓ (own shop's bills) | ✗ |
 | Cancel a bill by id | ✓ | ✓ | ✗ |
-| Payables reports | ✓ | ✓ | ✗ |
+| Payables reports | ✓ (own shop only) | ✓ (own shop only) | ✗ |
+| Read a payable by id | ✓ (own shop's bills) | ✓ (own shop's bills) | ✗ |
 
 No cross-shop visibility anywhere, for anyone — including the admin. This
 is stricter than the receivables side, where the admin sees every shop's
-order debts.
+order debts. The read path did not actually enforce this until the fifth
+leak was fixed; the table describes the rule as it now behaves.
 
 ---
 
@@ -259,7 +317,9 @@ against a payable — this is the direct payoff of reusing the existing
 `debts` table.
 
 `GET /shops/:id/debts/summary` gained a third block, `owed_to_suppliers`,
-alongside the existing `owed_by_shop`/`owed_to_shop`.
+alongside the existing `owed_by_shop`/`owed_to_shop`. That block is present
+**only for your own shop** — it is absent, not zero, when an admin reads
+another shop's summary (see the fifth leak above).
 
 ---
 
@@ -345,6 +405,15 @@ receivables already accepted a `creditorType` parameter (that's the whole
 point of the leak-fix work above). The routes just call them with
 `'SUPPLIER'` instead of `'SHOP'`. `EMPLOYEE` is excluded from both, unlike
 the receivables versions.
+
+Scoping differs from receivables as well: both roles, **admin included**,
+see their own shop only — see the fifth leak above for why the admin's
+warehouse-wide receivables view does not carry over to this side.
+
+Note that `?agingBucket=` drill-down does not work for payables the way it
+does for receivables: `GET /debts` is pinned to `creditorType: 'SHOP'`, so
+payables never appear in it. The per-supplier list
+(`GET /suppliers/:id/debts`) is the only way to list individual bills today.
 
 ---
 
