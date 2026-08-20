@@ -66,5 +66,7 @@
   "closeTime": "Closing time",
   "isClosed": "Closed",
   "timezone": "Timezone",
-  "days": "Days"
+  "days": "Days",
+  "startTime": "Start time",
+  "endTime": "End time"
 }

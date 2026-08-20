@@ -2,5 +2,11 @@
   "SHOP_REQUIRED": "Shift scheduling belongs to a shop — this account is not attached to one",
   "OPENING_HOURS_INCOMPLETE": "Send all 7 days, one for each weekday from Sunday to Saturday",
   "INVALID_OPENING_HOURS": "Opening and closing time are the same. For a day open around the clock use 00:00 to 24:00, or mark the day closed",
-  "INVALID_TIMEZONE": "\"{timezone}\" is not a valid timezone name"
+  "INVALID_TIMEZONE": "\"{timezone}\" is not a valid timezone name",
+  "TEMPLATE_NOT_FOUND": "Shift not found",
+  "SLOT_LIMIT_REACHED": "This day already has {max} shifts. Remove one before adding another",
+  "DAY_CLOSED": "The shop is closed on this day. Set its opening hours before adding a shift",
+  "OUTSIDE_OPENING_HOURS": "The shift must fit inside this day's opening hours ({open} to {close})",
+  "SLOTS_OVERLAP": "This shift overlaps \"{name}\". Shifts on the same day must not overlap",
+  "INVALID_SLOT_WINDOW": "Start and end time are the same — the shift would have no length"
 }

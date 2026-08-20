@@ -1,12 +1,27 @@
-import { BadRequestException, ForbiddenException, Injectable } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import * as pg from 'pg';
 import { DatabaseService } from '../../database/database.service';
 import { ShiftsRepository } from '../repositories/shifts.repository';
 import { UpdateOpeningHoursDto } from '../dto/update-opening-hours.dto';
+import { CreateShiftTemplateDto, UpdateShiftTemplateDto } from '../dto/shift-template.dto';
 import { OpeningHoursWeek, ShopOpeningHours } from '../entities/opening-hours.entity';
+import { ShiftTemplate, ShiftTemplateWithDuration } from '../entities/shift-template.entity';
+import {
+  contains,
+  durationMinutes,
+  openingWindow,
+  overlaps,
+  slotWindow,
+  toTimeString,
+  TimeWindow,
+} from '../utils/shift-time.util';
 import { RequestUser } from '../../common/interfaces/request-user.interface';
 
 /** Sunday..Saturday, matching JavaScript's `Date.getDay()`. */
 const WEEKDAYS = [0, 1, 2, 3, 4, 5, 6];
+
+/** The client's requirement: a weekday splits into at most four parts. */
+export const MAX_SLOTS_PER_DAY = 4;
 
 /**
  * What an unsaved weekday looks like. Closed, so a shop that has never set its
@@ -123,5 +138,192 @@ export class ShiftsService {
     });
 
     return this.getOpeningHours(user);
+  }
+
+  // ── Shift templates ────────────────────────────────────────────────────────
+
+  /** The week's plan, ordered by weekday then position within the day. */
+  async getTemplates(user: RequestUser): Promise<ShiftTemplateWithDuration[]> {
+    const shopId = this.shopIdOf(user);
+    const templates = await this.shiftsRepo.findTemplates(shopId);
+
+    // Length is derived per day, because how long a window lasts depends on
+    // whether it crosses midnight, which only the day's opening hours settle.
+    const week = await this.shiftsRepo.findOpeningHours(shopId);
+    const hoursByWeekday = new Map(week.map((day) => [day.weekday, day]));
+
+    return templates.map((template) => this.withDuration(template, hoursByWeekday.get(template.weekday)));
+  }
+
+  async createTemplate(dto: CreateShiftTemplateDto, user: RequestUser): Promise<ShiftTemplateWithDuration> {
+    const shopId = this.shopIdOf(user);
+
+    return this.db.transaction(async (client) => {
+      // Before reading the day's occupied slots, so the index this picks is
+      // still free when it writes. See `lockShop`.
+      await this.shiftsRepo.lockShop(shopId, client);
+
+      const { opening, siblings } = await this.loadDay(shopId, dto.weekday, client);
+
+      if (siblings.length >= MAX_SLOTS_PER_DAY) {
+        throw new BadRequestException({
+          key: 'shift.SLOT_LIMIT_REACHED',
+          args: { max: MAX_SLOTS_PER_DAY },
+        });
+      }
+
+      const slot = this.buildSlot(dto.startTime, dto.endTime, opening);
+      this.assertFitsDay(slot, opening, siblings, null);
+
+      const created = await this.shiftsRepo.insertTemplate(
+        shopId,
+        {
+          weekday: dto.weekday,
+          slotIndex: this.firstFreeSlotIndex(siblings),
+          name: dto.name,
+          startTime: toSqlTime(dto.startTime),
+          endTime: toSqlTime(dto.endTime),
+        },
+        client,
+      );
+
+      return { ...created, duration_minutes: durationMinutes(slot) };
+    });
+  }
+
+  async updateTemplate(
+    id: number,
+    dto: UpdateShiftTemplateDto,
+    user: RequestUser,
+  ): Promise<ShiftTemplateWithDuration> {
+    const shopId = this.shopIdOf(user);
+
+    return this.db.transaction(async (client) => {
+      await this.shiftsRepo.lockShop(shopId, client);
+
+      const existing = await this.shiftsRepo.findTemplateById(id, shopId, client);
+      if (!existing) throw new NotFoundException('shift.TEMPLATE_NOT_FOUND');
+
+      const { opening, siblings } = await this.loadDay(shopId, existing.weekday, client);
+
+      // Fall back to what is stored, so changing only the start time is still
+      // validated as the whole window it will become.
+      const startTime = dto.startTime ?? existing.start_time;
+      const endTime = dto.endTime ?? existing.end_time;
+
+      const slot = this.buildSlot(startTime, endTime, opening);
+      // Excluded from its own overlap check — a slot always collides with the
+      // stored copy of itself.
+      this.assertFitsDay(slot, opening, siblings, existing.id);
+
+      const updated = await this.shiftsRepo.updateTemplate(
+        id,
+        shopId,
+        {
+          name: dto.name,
+          startTime: dto.startTime !== undefined ? toSqlTime(dto.startTime) : undefined,
+          endTime: dto.endTime !== undefined ? toSqlTime(dto.endTime) : undefined,
+        },
+        client,
+      );
+
+      if (!updated) throw new NotFoundException('shift.TEMPLATE_NOT_FOUND');
+
+      return { ...updated, duration_minutes: durationMinutes(slot) };
+    });
+  }
+
+  async deleteTemplate(id: number, user: RequestUser): Promise<void> {
+    const shopId = this.shopIdOf(user);
+
+    await this.db.transaction(async (client) => {
+      const removed = await this.shiftsRepo.deactivateTemplate(id, shopId, client);
+      if (!removed) throw new NotFoundException('shift.TEMPLATE_NOT_FOUND');
+    });
+  }
+
+  /**
+   * The day's trading window and its existing slots — everything the three
+   * rules are decided against, fetched once so they all judge the same state.
+   */
+  private async loadDay(
+    shopId: number,
+    weekday: number,
+    client: pg.PoolClient,
+  ): Promise<{ opening: TimeWindow; siblings: ShiftTemplate[] }> {
+    const day = await this.shiftsRepo.findOpeningHoursForDay(shopId, weekday, client);
+
+    // An unsaved day reads as closed, so shifts cannot be hung on hours nobody
+    // has chosen — the owner sets the trading week first.
+    if (!day || day.is_closed) {
+      throw new BadRequestException({ key: 'shift.DAY_CLOSED', args: { weekday } });
+    }
+
+    return {
+      opening: openingWindow(day.open_time, day.close_time),
+      siblings: await this.shiftsRepo.findTemplatesForDay(shopId, weekday, client),
+    };
+  }
+
+  private buildSlot(startTime: string, endTime: string, opening: TimeWindow): TimeWindow {
+    // Equal ends would otherwise resolve to a full 24 hours, silently turning
+    // a typo into a day-long shift.
+    if (toSqlTime(startTime) === toSqlTime(endTime)) {
+      throw new BadRequestException('shift.INVALID_SLOT_WINDOW');
+    }
+
+    return slotWindow(startTime, endTime, opening);
+  }
+
+  /** Rules 2 and 3: inside the trading window, and clear of every other slot. */
+  private assertFitsDay(
+    slot: TimeWindow,
+    opening: TimeWindow,
+    siblings: ShiftTemplate[],
+    excludeId: number | null,
+  ): void {
+    if (!contains(opening, slot)) {
+      throw new BadRequestException({
+        key: 'shift.OUTSIDE_OPENING_HOURS',
+        args: { open: toTimeString(opening.start), close: toTimeString(opening.end) },
+      });
+    }
+
+    for (const sibling of siblings) {
+      if (sibling.id === excludeId) continue;
+
+      if (overlaps(slot, slotWindow(sibling.start_time, sibling.end_time, opening))) {
+        throw new BadRequestException({ key: 'shift.SLOTS_OVERLAP', args: { name: sibling.name } });
+      }
+    }
+  }
+
+  /**
+   * Lowest unused position, rather than "count + 1": deleting slot 2 of three
+   * must free position 2, or the day would run out of positions long before it
+   * runs out of its four shifts.
+   */
+  private firstFreeSlotIndex(siblings: ShiftTemplate[]): number {
+    const taken = new Set(siblings.map((sibling) => sibling.slot_index));
+
+    for (let index = 1; index <= MAX_SLOTS_PER_DAY; index++) {
+      if (!taken.has(index)) return index;
+    }
+
+    // Unreachable: the caller checks the slot limit first, under the same lock.
+    throw new BadRequestException({ key: 'shift.SLOT_LIMIT_REACHED', args: { max: MAX_SLOTS_PER_DAY } });
+  }
+
+  private withDuration(template: ShiftTemplate, day: ShopOpeningHours | undefined): ShiftTemplateWithDuration {
+    // A slot whose day was later closed keeps its stored times; measure it
+    // against itself so the grid still renders a length instead of failing.
+    const opening = day
+      ? openingWindow(day.open_time, day.close_time)
+      : openingWindow(template.start_time, template.end_time);
+
+    return {
+      ...template,
+      duration_minutes: durationMinutes(slotWindow(template.start_time, template.end_time, opening)),
+    };
   }
 }

@@ -1,7 +1,21 @@
-import { Body, Controller, Get, Put, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Param,
+  ParseIntPipe,
+  Patch,
+  Post,
+  Put,
+  UseGuards,
+} from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { ShiftsService } from '../services/shifts.service';
 import { UpdateOpeningHoursDto } from '../dto/update-opening-hours.dto';
+import { CreateShiftTemplateDto, UpdateShiftTemplateDto } from '../dto/shift-template.dto';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../auth/guards/roles.guard';
 import { Roles } from '../../auth/decorators/roles.decorator';
@@ -39,5 +53,51 @@ export class ShiftsController {
   })
   updateOpeningHours(@Body() dto: UpdateOpeningHoursDto, @CurrentUser() user: RequestUser) {
     return this.shiftsService.updateOpeningHours(dto, user);
+  }
+
+  @Get('templates')
+  @Roles(UserRole.SHOP_OWNER, UserRole.EMPLOYEE)
+  @ApiOperation({
+    summary:
+      "The week's shift plan, ordered by weekday then position, each with its length in minutes. Employees read it to see when they work.",
+  })
+  getTemplates(@CurrentUser() user: RequestUser) {
+    return this.shiftsService.getTemplates(user);
+  }
+
+  @Post('templates')
+  @HttpCode(HttpStatus.CREATED)
+  @Roles(UserRole.SHOP_OWNER)
+  @ApiOperation({
+    summary:
+      'Add a shift to a weekday. Max 4 per day; it must fit inside that day\'s opening hours and must not overlap another shift. Position within the day is assigned by the server.',
+  })
+  createTemplate(@Body() dto: CreateShiftTemplateDto, @CurrentUser() user: RequestUser) {
+    return this.shiftsService.createTemplate(dto, user);
+  }
+
+  @Patch('templates/:id')
+  @Roles(UserRole.SHOP_OWNER)
+  @ApiOperation({
+    summary:
+      'Rename a shift or move its boundaries. Re-checks opening hours and overlap. To move a shift to another weekday, delete it and create it there.',
+  })
+  updateTemplate(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: UpdateShiftTemplateDto,
+    @CurrentUser() user: RequestUser,
+  ) {
+    return this.shiftsService.updateTemplate(id, dto, user);
+  }
+
+  @Delete('templates/:id')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @Roles(UserRole.SHOP_OWNER)
+  @ApiOperation({
+    summary:
+      'Remove a shift from the plan. Retired rather than erased, so past sessions keep naming the shift they were worked under, and its position is freed for reuse.',
+  })
+  deleteTemplate(@Param('id', ParseIntPipe) id: number, @CurrentUser() user: RequestUser) {
+    return this.shiftsService.deleteTemplate(id, user);
   }
 }
