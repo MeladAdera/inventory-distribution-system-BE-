@@ -1,0 +1,6 @@
+{
+  "SHOP_REQUIRED": "Shift scheduling belongs to a shop — this account is not attached to one",
+  "OPENING_HOURS_INCOMPLETE": "Send all 7 days, one for each weekday from Sunday to Saturday",
+  "INVALID_OPENING_HOURS": "Opening and closing time are the same. For a day open around the clock use 00:00 to 24:00, or mark the day closed",
+  "INVALID_TIMEZONE": "\"{timezone}\" is not a valid timezone name"
+}

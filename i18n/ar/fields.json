@@ -60,5 +60,11 @@
   "supplierId": "المورّد",
   "customerId": "الزبون",
   "debtId": "الدين",
-  "clientReceiptId": "مرجع الفاتورة"
+  "clientReceiptId": "مرجع الفاتورة",
+  "weekday": "اليوم",
+  "openTime": "وقت الفتح",
+  "closeTime": "وقت الإغلاق",
+  "isClosed": "مغلق",
+  "timezone": "المنطقة الزمنية",
+  "days": "الأيام"
 }

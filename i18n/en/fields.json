@@ -60,5 +60,11 @@
   "supplierId": "Supplier",
   "customerId": "Customer",
   "debtId": "Debt",
-  "clientReceiptId": "Receipt reference"
+  "clientReceiptId": "Receipt reference",
+  "weekday": "Weekday",
+  "openTime": "Opening time",
+  "closeTime": "Closing time",
+  "isClosed": "Closed",
+  "timezone": "Timezone",
+  "days": "Days"
 }

@@ -25,6 +25,7 @@ import { ReceiptsModule } from './receipts/receipts.module';
 import { DebtsModule } from './debts/debts.module';
 import { CustomersModule } from './customers/customers.module';
 import { SuppliersModule } from './suppliers/suppliers.module';
+import { ShiftsModule } from './shifts/shifts.module';
 
 @Module({
   imports: [
@@ -73,6 +74,7 @@ import { SuppliersModule } from './suppliers/suppliers.module';
     DebtsModule,
     CustomersModule,
     SuppliersModule,
+    ShiftsModule,
   ],
   controllers: [AppController],
   providers: [
