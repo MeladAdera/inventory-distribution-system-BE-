@@ -1,4 +1,4 @@
-import { IsArray, IsInt, IsOptional, IsPositive, IsString, Matches, MaxLength, ValidateNested, ArrayMinSize } from 'class-validator';
+import { IsArray, IsInt, IsOptional, IsPositive, IsString, IsUUID, Matches, MaxLength, ValidateNested, ArrayMinSize } from 'class-validator';
 import { Type, Transform } from 'class-transformer';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { i18nValidationMessage } from 'nestjs-i18n';
@@ -52,4 +52,21 @@ export class CreateReceiptDto {
   @IsString({ message: i18nValidationMessage('validation.IS_STRING') })
   @Matches(MONEY_PATTERN, { message: i18nValidationMessage('validation.MATCHES') })
   paidAmount?: string;
+
+  /**
+   * An id the client generates once per sale and reuses on every retry. Send it
+   * on every create, not only on replayed offline sales: a request that commits
+   * but loses its response is retried by the same code path either way, and
+   * without this id that retry rings the sale up twice.
+   *
+   * Sending the same id again returns the receipt from the first attempt
+   * instead of creating a second one.
+   */
+  @ApiPropertyOptional({
+    example: 'f0b0c1e2-3d4a-4b5c-8d9e-0f1a2b3c4d5e',
+    description: 'Client-generated UUID. Resending the same one returns the original receipt instead of duplicating the sale.',
+  })
+  @IsOptional()
+  @IsUUID(undefined, { message: i18nValidationMessage('validation.IS_UUID') })
+  clientReceiptId?: string;
 }

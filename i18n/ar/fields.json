@@ -59,5 +59,6 @@
   "invoiceNo": "رقم الفاتورة",
   "supplierId": "المورّد",
   "customerId": "الزبون",
-  "debtId": "الدين"
+  "debtId": "الدين",
+  "clientReceiptId": "مرجع الفاتورة"
 }
