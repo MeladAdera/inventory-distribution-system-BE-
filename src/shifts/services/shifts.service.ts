@@ -448,6 +448,83 @@ export class ShiftsService {
   }
 
   /**
+   * Which session a sale or collection belongs to.
+   *
+   * The shop's open shift, not the seller's own: when the owner rings something
+   * up during Ahmad's shift, the cash physically lands in Ahmad's drawer, so
+   * that is where it has to count. Who sold it is a separate question, answered
+   * by `receipts.created_by`.
+   *
+   * An explicit id overrides, and exists for offline replay. A sale rung up
+   * offline and sent an hour later has to name the session it was made in, or
+   * it would attach to whichever shift happens to be open when it arrives.
+   *
+   * Null when no shift is open — selling without one stays possible, the money
+   * simply belongs to no drawer.
+   */
+  async resolveForSale(
+    shopId: number,
+    explicitId: number | undefined,
+    client?: pg.PoolClient,
+  ): Promise<number | null> {
+    // A named session is accepted even once closed. That is the whole point of
+    // naming one: an offline queue can drain long after the shift ended, and
+    // the sale genuinely happened in it. Refusing would reject a real sale and
+    // lose it, which is worse than a closed shift's frozen total no longer
+    // matching — that figure is a snapshot of what was known at the count, and
+    // the late arrival stays visible hanging off the session it belongs to.
+    if (explicitId !== undefined) {
+      return this.assertSessionInShop(explicitId, shopId, false, client);
+    }
+
+    const open = await this.shiftsRepo.findOpenSession(shopId, client);
+    return open?.id ?? null;
+  }
+
+  /**
+   * The same check without the fallback: null unless the caller names a session.
+   *
+   * For money the shop pays *out*. An owner settling a supplier bill may take
+   * the cash from the till or from the safe, and the two are indistinguishable
+   * from here. Guessing the open shift would make the employee on it look short
+   * by that amount for a movement they never touched — the exact silent
+   * misattribution this feature exists to prevent. So the caller must say, and
+   * saying nothing means "not from any shift".
+   */
+  resolveExplicit(
+    shopId: number,
+    explicitId: number | undefined,
+    client?: pg.PoolClient,
+  ): Promise<number | null> {
+    if (explicitId === undefined) return Promise.resolve(null);
+
+    // Open is required here, unlike a sale. These movements are made by a
+    // person standing at the till right now, so a closed shift is a mistyped
+    // id rather than a late arrival — and putting cash into a drawer that has
+    // already been counted would break a total nobody will re-check.
+    return this.assertSessionInShop(explicitId, shopId, true, client);
+  }
+
+  private async assertSessionInShop(
+    id: number,
+    shopId: number,
+    requireOpen: boolean,
+    client?: pg.PoolClient,
+  ): Promise<number> {
+    const session = await this.shiftsRepo.findSessionInShop(id, shopId, client);
+
+    // Another shop's session reads as missing rather than forbidden, matching
+    // how every other cross-shop lookup here behaves.
+    if (!session) throw new NotFoundException('shift.SESSION_NOT_FOUND');
+
+    if (requireOpen && session.status !== 'OPEN') {
+      throw new ConflictException('shift.SESSION_NOT_OPEN');
+    }
+
+    return session.id;
+  }
+
+  /**
    * Which slot is running right now, or null.
    *
    * Two weekdays are considered, because a shift that began before midnight is

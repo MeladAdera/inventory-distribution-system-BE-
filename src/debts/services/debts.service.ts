@@ -24,6 +24,7 @@ import { CreateSupplierPaymentDto } from '../dto/create-supplier-payment.dto';
 import { ReverseDebtPaymentDto } from '../dto/reverse-debt-payment.dto';
 import { UserRole } from '../../common/enums/user-role.enum';
 import { RequestUser } from '../../common/interfaces/request-user.interface';
+import { ShiftsService } from '../../shifts/services/shifts.service';
 import { paginate, PaginatedResponse } from '../../common/utils/pagination.util';
 import { toMinor, fromMinor, InvalidMoneyError } from '../../common/utils/money.util';
 
@@ -53,11 +54,28 @@ export interface AddPaymentInput {
   method?: PaymentMethod;
   note?: string;
   createdBy: number;
+  /**
+   * The shift whose drawer this cash moved through, decided by the caller.
+   *
+   * This module stays unaware of shifts on purpose: whether a movement should
+   * attach to the open shift automatically or only when named is a question
+   * about *where the money came from*, and only the entry point knows. A
+   * customer handing over cash goes in the open drawer; an owner paying a
+   * supplier may have taken it from the safe.
+   */
+  shiftSessionId?: number | null;
 }
 
 export interface ReversePaymentInput {
   reason?: string;
   createdBy: number;
+  /**
+   * The shift whose drawer the money is handed back out of — which is today's,
+   * not the one that took it in. A reversal moves cash now, so inheriting the
+   * original payment's session would credit a drawer that has already been
+   * counted.
+   */
+  shiftSessionId?: number | null;
 }
 
 /**
@@ -78,6 +96,7 @@ export class DebtsService {
     private readonly debtsRepo: DebtsRepository,
     private readonly auditLogsService: AuditLogsService,
     private readonly db: DatabaseService,
+    private readonly shiftsService: ShiftsService,
   ) {}
 
   async createDebt(input: CreateDebtInput, client?: pg.PoolClient): Promise<Debt> {
@@ -155,6 +174,7 @@ export class DebtsService {
           reversesPaymentId: null,
           note: input.note ?? null,
           createdBy: input.createdBy,
+          shiftSessionId: input.shiftSessionId ?? null,
         },
         c,
       );
@@ -213,6 +233,7 @@ export class DebtsService {
           reversesPaymentId: paymentId,
           note: input.reason ?? null,
           createdBy: input.createdBy,
+          shiftSessionId: input.shiftSessionId ?? null,
         },
         c,
       );
@@ -422,8 +443,9 @@ export class DebtsService {
     creditorShopId: number,
     dto: CreateCustomerPaymentDto,
     userId: number,
+    shiftSessionId: number | null,
   ): Promise<DebtPaymentAllocation[]> {
-    return this.addPartyPayment({ kind: 'CUSTOMER', id: customerId }, creditorShopId, dto, userId);
+    return this.addPartyPayment({ kind: 'CUSTOMER', id: customerId }, creditorShopId, dto, userId, shiftSessionId);
   }
 
   /**
@@ -436,8 +458,9 @@ export class DebtsService {
     debtorShopId: number,
     dto: CreateSupplierPaymentDto,
     userId: number,
+    shiftSessionId: number | null,
   ): Promise<DebtPaymentAllocation[]> {
-    return this.addPartyPayment({ kind: 'SUPPLIER', id: supplierId }, debtorShopId, dto, userId);
+    return this.addPartyPayment({ kind: 'SUPPLIER', id: supplierId }, debtorShopId, dto, userId, shiftSessionId);
   }
 
   /**
@@ -457,6 +480,9 @@ export class DebtsService {
     owningShopId: number,
     dto: CreateCustomerPaymentDto | CreateSupplierPaymentDto,
     userId: number,
+    // Every slice of one FIFO collection lands in the same drawer: the money
+    // was handed over once, however many bills it happens to settle.
+    shiftSessionId: number | null,
   ): Promise<DebtPaymentAllocation[]> {
     const amountMinor = this.parseAmount(dto.amount);
 
@@ -516,7 +542,13 @@ export class DebtsService {
         // transaction is a no-op.
         const updated = await this.addPayment(
           debt.id,
-          { amount: fromMinor(share), method: dto.method, note: dto.note, createdBy: userId },
+          {
+            amount: fromMinor(share),
+            method: dto.method,
+            note: dto.note,
+            createdBy: userId,
+            shiftSessionId,
+          },
           c,
         );
 
@@ -554,7 +586,19 @@ export class DebtsService {
 
     this.assertCanReverse(debt, user);
 
-    return this.reversePayment(debtId, paymentId, { reason: dto.reason, createdBy: user.id });
+    // Explicit only, like a supplier payment: the cash goes back out of
+    // whichever drawer the person opens, which they have to say. A warehouse
+    // admin reversing an order payment has no shop at all, so nothing attaches.
+    const shiftSessionId =
+      user.shopId === null
+        ? null
+        : await this.shiftsService.resolveExplicit(user.shopId, dto.shiftSessionId);
+
+    return this.reversePayment(debtId, paymentId, {
+      reason: dto.reason,
+      createdBy: user.id,
+      shiftSessionId,
+    });
   }
 
   /**

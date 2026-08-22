@@ -20,6 +20,7 @@ import { UserRole } from '../../common/enums/user-role.enum';
 import { paginate, PaginatedResponse } from '../../common/utils/pagination.util';
 import { toMinor, fromMinor } from '../../common/utils/money.util';
 import { RequestUser } from '../../common/interfaces/request-user.interface';
+import { ShiftsService } from '../../shifts/services/shifts.service';
 
 /** Postgres SQLSTATE for a unique constraint violation. */
 const UNIQUE_VIOLATION = '23505';
@@ -48,6 +49,7 @@ export class ReceiptsService {
     private readonly debtsService: DebtsService,
     private readonly customersRepo: CustomersRepository,
     private readonly db: DatabaseService,
+    private readonly shiftsService: ShiftsService,
   ) {}
 
   async create(dto: CreateReceiptDto, user: RequestUser): Promise<ReceiptWithItems> {
@@ -74,6 +76,12 @@ export class ReceiptsService {
       const customer = await this.customersRepo.findByIdInShop(dto.customerId, shopId);
       if (!customer) throw new NotFoundException('customer.NOT_FOUND');
     }
+
+    // Resolved once, before the transaction, and used for both writes below.
+    // A credit sale produces two rows — the receipt and the down payment on its
+    // debt — and they have to name the same shift: the money was handed over
+    // once, so it belongs to one drawer.
+    const shiftSessionId = await this.shiftsService.resolveForSale(shopId, dto.shiftSessionId);
 
     const write = this.db.transaction(async (client) => {
       // Lock all inventory rows for the duration of this transaction
@@ -148,6 +156,7 @@ export class ReceiptsService {
         dto.notes,
         dto.customerId,
         dto.clientReceiptId,
+        shiftSessionId,
         client,
       );
 
@@ -199,9 +208,12 @@ export class ReceiptsService {
         );
 
         if (paidMinor > 0n) {
+          // The same session as the receipt above. This row is where a credit
+          // sale's cash actually lives, so the close counts it once from here
+          // rather than deriving it from the sale total.
           await this.debtsService.addPayment(
             debt.id,
-            { amount: fromMinor(paidMinor), note: dto.notes, createdBy: user.id },
+            { amount: fromMinor(paidMinor), note: dto.notes, createdBy: user.id, shiftSessionId },
             client,
           );
         }

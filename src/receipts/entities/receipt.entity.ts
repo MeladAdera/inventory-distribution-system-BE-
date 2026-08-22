@@ -32,6 +32,11 @@ export class Receipt {
   // receipts written before idempotency existed, and on any client that does
   // not send one. See `06-ReceiptIdempotency.sql`.
   client_receipt_id!: string | null;
+  /**
+   * The shift whose drawer this sale's cash went into. Null when it was rung
+   * up with no shift open, or before shifts existed.
+   */
+  shift_session_id!: number | null;
   created_at!: Date;
 }
 

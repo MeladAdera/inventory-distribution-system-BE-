@@ -29,13 +29,14 @@ export class ReceiptsRepository {
     notes: string | undefined,
     customerId: number | undefined,
     clientReceiptId: string | undefined,
+    shiftSessionId: number | null,
     client: pg.PoolClient,
   ): Promise<Receipt> {
     const result = await client.query<Receipt>(
-      `INSERT INTO receipts (shop_id, created_by, notes, customer_id, client_receipt_id)
-       VALUES ($1, $2, $3, $4, $5)
+      `INSERT INTO receipts (shop_id, created_by, notes, customer_id, client_receipt_id, shift_session_id)
+       VALUES ($1, $2, $3, $4, $5, $6)
        RETURNING *`,
-      [shopId, createdBy, notes ?? null, customerId ?? null, clientReceiptId ?? null],
+      [shopId, createdBy, notes ?? null, customerId ?? null, clientReceiptId ?? null, shiftSessionId],
     );
     return result.rows[0];
   }
@@ -107,7 +108,7 @@ export class ReceiptsRepository {
       `SELECT
          r.id, r.shop_id, r.created_by, r.notes, r.is_free,
          r.is_cancelled, r.cancelled_at, r.cancelled_by, r.cancel_reason, r.created_at,
-         r.customer_id, r.client_receipt_id, cu.name AS customer_name,
+         r.customer_id, r.client_receipt_id, r.shift_session_id, cu.name AS customer_name,
          COALESCE(SUM(ri.quantity * ri.price), 0)::float8 AS total_price,
          COALESCE(
            JSON_AGG(

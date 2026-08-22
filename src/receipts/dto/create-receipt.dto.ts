@@ -69,4 +69,22 @@ export class CreateReceiptDto {
   @IsOptional()
   @IsUUID(undefined, { message: i18nValidationMessage('validation.IS_UUID') })
   clientReceiptId?: string;
+
+  /**
+   * The shift this sale was rung up in. Omit and the server uses the shop's
+   * currently open shift, which is what an online sale wants.
+   *
+   * Send it when replaying a sale made offline: by the time the queue drains,
+   * that shift may have been closed and another opened, and resolving at
+   * arrival time would file the money under the wrong drawer.
+   */
+  @ApiPropertyOptional({
+    example: 4,
+    description: "Shift this sale belongs to. Omit to use the shop's open shift; send it when replaying an offline sale.",
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt({ message: i18nValidationMessage('validation.IS_INT') })
+  @IsPositive({ message: i18nValidationMessage('validation.IS_POSITIVE') })
+  shiftSessionId?: number;
 }

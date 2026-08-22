@@ -4,6 +4,7 @@ import { DebtsController } from './controllers/debts.controller';
 import { DebtsRepository } from './repositories/debts.repository';
 import { DatabaseModule } from '../database/database.module';
 import { AuditLogsModule } from '../audit-logs/audit-logs.module';
+import { ShiftsModule } from '../shifts/shifts.module';
 
 /**
  * Owns the `/debts` routes, and exports `DebtsService` so the modules that own
@@ -11,7 +12,7 @@ import { AuditLogsModule } from '../audit-logs/audit-logs.module';
  * inside their own transactions.
  */
 @Module({
-  imports: [DatabaseModule, AuditLogsModule],
+  imports: [ShiftsModule, DatabaseModule, AuditLogsModule],
   controllers: [DebtsController],
   providers: [DebtsService, DebtsRepository],
   exports: [DebtsService],

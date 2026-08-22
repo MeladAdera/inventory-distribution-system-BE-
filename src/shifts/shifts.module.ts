@@ -10,6 +10,9 @@ import { UsersModule } from '../users/users.module';
   imports: [UsersModule],
   controllers: [ShiftsController],
   providers: [ShiftsService, ShiftsRepository],
-  exports: [ShiftsRepository],
+  // ShiftsService is exported for its session resolvers: receipts, customers
+  // and suppliers each need to stamp money with the shift it moved in, and the
+  // rule for which shift that is belongs here rather than in each of them.
+  exports: [ShiftsRepository, ShiftsService],
 })
 export class ShiftsModule {}

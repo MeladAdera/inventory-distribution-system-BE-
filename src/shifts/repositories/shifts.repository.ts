@@ -371,6 +371,28 @@ export class ShiftsRepository {
   }
 
   /**
+   * One session by id, scoped to the shop — so a session id from another shop
+   * is indistinguishable from one that does not exist. Used to check an id the
+   * client supplied rather than one the server resolved.
+   */
+  async findSessionInShop(
+    id: number,
+    shopId: number,
+    client?: pg.PoolClient,
+  ): Promise<ShiftSession | null> {
+    const sql = `SELECT id, shop_id, user_id, shift_template_id, business_date::text,
+                        opened_at, closed_at, closed_by, opening_float::text,
+                        counted_cash::text, expected_cash::text, cash_difference::text,
+                        is_off_schedule, notes, client_session_id, status
+                   FROM shift_sessions
+                  WHERE id = $1 AND shop_id = $2`;
+
+    return client
+      ? client.query<ShiftSession>(sql, [id, shopId]).then((r) => r.rows[0] ?? null)
+      : this.db.queryOne<ShiftSession>(sql, [id, shopId]);
+  }
+
+  /**
    * Opens a session, taking `business_date` from the shop's own timezone in the
    * same statement. Deriving it in SQL rather than in Node keeps the stamp on
    * the same clock as `opened_at`, with no window between reading the zone and
