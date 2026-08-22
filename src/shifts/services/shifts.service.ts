@@ -4,6 +4,8 @@ import { DatabaseService } from '../../database/database.service';
 import { ShiftsRepository } from '../repositories/shifts.repository';
 import { UpdateOpeningHoursDto } from '../dto/update-opening-hours.dto';
 import { CreateShiftTemplateDto, UpdateShiftTemplateDto } from '../dto/shift-template.dto';
+import { AssignEmployeesDto } from '../dto/assign-employees.dto';
+import { UsersRepository } from '../../users/repositories/users.repository';
 import { OpeningHoursWeek, ShopOpeningHours } from '../entities/opening-hours.entity';
 import { ShiftTemplate, ShiftTemplateWithDuration } from '../entities/shift-template.entity';
 import {
@@ -53,6 +55,7 @@ function toSqlTime(value: string): string {
 export class ShiftsService {
   constructor(
     private readonly shiftsRepo: ShiftsRepository,
+    private readonly usersRepo: UsersRepository,
     private readonly db: DatabaseService,
   ) {}
 
@@ -152,7 +155,58 @@ export class ShiftsService {
     const week = await this.shiftsRepo.findOpeningHours(shopId);
     const hoursByWeekday = new Map(week.map((day) => [day.weekday, day]));
 
-    return templates.map((template) => this.withDuration(template, hoursByWeekday.get(template.weekday)));
+    return templates.map((template) => ({
+      ...template,
+      duration_minutes: this.durationOf(template, hoursByWeekday.get(template.weekday)),
+    }));
+  }
+
+  /**
+   * Replaces a slot's whole rota.
+   *
+   * Several employees on one slot is deliberate: a weekly template is worked
+   * by whoever is on rota that week, so both halves of a rotation belong on it,
+   * and a colleague covering a sick shift should not be flagged unscheduled.
+   * How many people work at the same moment is settled by the one-open-session
+   * rule, not by this list.
+   */
+  async assignEmployees(
+    templateId: number,
+    dto: AssignEmployeesDto,
+    user: RequestUser,
+  ): Promise<ShiftTemplateWithDuration> {
+    const shopId = this.shopIdOf(user);
+
+    // Naming someone twice says nothing the first mention did not, so it is
+    // reduced rather than refused — a slip in the client, not a bad save.
+    const userIds = [...new Set(dto.userIds)];
+
+    if (userIds.length > 0) {
+      const eligible = new Set(await this.usersRepo.findActiveEmployeeIdsInShop(userIds, shopId));
+      // Reports the first id that failed rather than "one of these is wrong":
+      // deactivated staff, another shop's staff and the owner themselves are
+      // all rejected here, and the owner needs to know which name to fix.
+      const rejected = userIds.find((id) => !eligible.has(id));
+
+      if (rejected !== undefined) {
+        throw new BadRequestException({ key: 'shift.ASSIGNEE_NOT_EMPLOYEE', args: { userId: rejected } });
+      }
+    }
+
+    return this.db.transaction(async (client) => {
+      const template = await this.shiftsRepo.findTemplateById(templateId, shopId, client);
+      if (!template) throw new NotFoundException('shift.TEMPLATE_NOT_FOUND');
+
+      await this.shiftsRepo.replaceAssignees(templateId, userIds, client);
+
+      const day = await this.shiftsRepo.findOpeningHoursForDay(shopId, template.weekday, client);
+
+      return {
+        ...template,
+        duration_minutes: this.durationOf(template, day ?? undefined),
+        assignees: await this.shiftsRepo.findAssignees(templateId, client),
+      };
+    });
   }
 
   async createTemplate(dto: CreateShiftTemplateDto, user: RequestUser): Promise<ShiftTemplateWithDuration> {
@@ -187,7 +241,8 @@ export class ShiftsService {
         client,
       );
 
-      return { ...created, duration_minutes: durationMinutes(slot) };
+      // A slot nobody is on yet — the owner assigns after creating it.
+      return { ...created, duration_minutes: durationMinutes(slot), assignees: [] };
     });
   }
 
@@ -229,7 +284,11 @@ export class ShiftsService {
 
       if (!updated) throw new NotFoundException('shift.TEMPLATE_NOT_FOUND');
 
-      return { ...updated, duration_minutes: durationMinutes(slot) };
+      return {
+        ...updated,
+        duration_minutes: durationMinutes(slot),
+        assignees: await this.shiftsRepo.findAssignees(id, client),
+      };
     });
   }
 
@@ -239,6 +298,11 @@ export class ShiftsService {
     await this.db.transaction(async (client) => {
       const removed = await this.shiftsRepo.deactivateTemplate(id, shopId, client);
       if (!removed) throw new NotFoundException('shift.TEMPLATE_NOT_FOUND');
+
+      // Retiring a slot is a soft delete, so the FK cascade never fires and
+      // its rota would sit pointing at a slot no grid shows. Clearing it here
+      // also means the position, once reused, starts with nobody on it.
+      await this.shiftsRepo.replaceAssignees(id, [], client);
     });
   }
 
@@ -314,16 +378,13 @@ export class ShiftsService {
     throw new BadRequestException({ key: 'shift.SLOT_LIMIT_REACHED', args: { max: MAX_SLOTS_PER_DAY } });
   }
 
-  private withDuration(template: ShiftTemplate, day: ShopOpeningHours | undefined): ShiftTemplateWithDuration {
+  private durationOf(template: ShiftTemplate, day: ShopOpeningHours | undefined): number {
     // A slot whose day was later closed keeps its stored times; measure it
     // against itself so the grid still renders a length instead of failing.
     const opening = day
       ? openingWindow(day.open_time, day.close_time)
       : openingWindow(template.start_time, template.end_time);
 
-    return {
-      ...template,
-      duration_minutes: durationMinutes(slotWindow(template.start_time, template.end_time, opening)),
-    };
+    return durationMinutes(slotWindow(template.start_time, template.end_time, opening));
   }
 }

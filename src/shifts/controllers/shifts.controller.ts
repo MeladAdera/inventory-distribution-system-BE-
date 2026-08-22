@@ -16,6 +16,7 @@ import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { ShiftsService } from '../services/shifts.service';
 import { UpdateOpeningHoursDto } from '../dto/update-opening-hours.dto';
 import { CreateShiftTemplateDto, UpdateShiftTemplateDto } from '../dto/shift-template.dto';
+import { AssignEmployeesDto } from '../dto/assign-employees.dto';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../auth/guards/roles.guard';
 import { Roles } from '../../auth/decorators/roles.decorator';
@@ -99,5 +100,19 @@ export class ShiftsController {
   })
   deleteTemplate(@Param('id', ParseIntPipe) id: number, @CurrentUser() user: RequestUser) {
     return this.shiftsService.deleteTemplate(id, user);
+  }
+
+  @Put('templates/:id/assignees')
+  @Roles(UserRole.SHOP_OWNER)
+  @ApiOperation({
+    summary:
+      "Replace a slot's rota. Send the complete list of user ids; an empty list clears it. Assignees must be active employees of this shop.",
+  })
+  assignEmployees(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: AssignEmployeesDto,
+    @CurrentUser() user: RequestUser,
+  ) {
+    return this.shiftsService.assignEmployees(id, dto, user);
   }
 }

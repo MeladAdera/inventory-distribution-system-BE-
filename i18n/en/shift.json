@@ -8,5 +8,6 @@
   "DAY_CLOSED": "The shop is closed on this day. Set its opening hours before adding a shift",
   "OUTSIDE_OPENING_HOURS": "The shift must fit inside this day's opening hours ({open} to {close})",
   "SLOTS_OVERLAP": "This shift overlaps \"{name}\". Shifts on the same day must not overlap",
-  "INVALID_SLOT_WINDOW": "Start and end time are the same — the shift would have no length"
+  "INVALID_SLOT_WINDOW": "Start and end time are the same — the shift would have no length",
+  "ASSIGNEE_NOT_EMPLOYEE": "User {userId} cannot be assigned — assignees must be active employees of this shop"
 }

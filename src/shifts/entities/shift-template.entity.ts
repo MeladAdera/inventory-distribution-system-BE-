@@ -25,9 +25,25 @@ export class ShiftTemplate {
 }
 
 /**
- * A template with the length the owner actually cares about. Derived from the
- * window rather than stored, so it can never disagree with the times beside it.
+ * An employee on a slot's rota, trimmed to what the grid renders. Deactivated
+ * staff are filtered out on read rather than unassigned on deactivation, so a
+ * user switched off in the users module cannot leave a name on the roster that
+ * nothing here was told to remove.
+ */
+export class ShiftAssignee {
+  id!: number;
+  name!: string;
+}
+
+/**
+ * A template as the grid needs it: the length the owner actually cares about,
+ * and who is on it.
+ *
+ * `duration_minutes` is derived from the window rather than stored, so it can
+ * never disagree with the times beside it — and only the day's opening hours
+ * settle whether a window crosses midnight, so it cannot be a column.
  */
 export class ShiftTemplateWithDuration extends ShiftTemplate {
   duration_minutes!: number;
+  assignees!: ShiftAssignee[];
 }

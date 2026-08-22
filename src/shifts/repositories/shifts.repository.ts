@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import * as pg from 'pg';
 import { DatabaseService } from '../../database/database.service';
 import { ShopOpeningHours } from '../entities/opening-hours.entity';
-import { ShiftTemplate } from '../entities/shift-template.entity';
+import { ShiftAssignee, ShiftTemplate } from '../entities/shift-template.entity';
 
 export interface OpeningHourInsert {
   weekday: number;
@@ -119,15 +119,64 @@ export class ShiftsRepository {
     await client.query(`SELECT id FROM shops WHERE id = $1 FOR UPDATE`, [shopId]);
   }
 
-  /** Every live slot in the week, ordered as the owner's grid reads. */
-  findTemplates(shopId: number): Promise<ShiftTemplate[]> {
-    return this.db.query<ShiftTemplate>(
-      `SELECT id, shop_id, weekday, slot_index, name,
-              start_time::text, end_time::text, is_active, created_at, updated_at
-         FROM shift_templates
-        WHERE shop_id = $1 AND is_active
-        ORDER BY weekday ASC, slot_index ASC`,
+  /**
+   * Every live slot in the week with its rota, ordered as the owner's grid
+   * reads. One query rather than a roster lookup per slot.
+   *
+   * The join to `users` filters on `is_active`, so an employee deactivated in
+   * the users module drops off every roster immediately. Nothing there knows
+   * to clean up assignments, and a name on a grid for someone who no longer
+   * works here is worse than a slot that reads as empty.
+   */
+  findTemplates(shopId: number): Promise<(ShiftTemplate & { assignees: ShiftAssignee[] })[]> {
+    return this.db.query<ShiftTemplate & { assignees: ShiftAssignee[] }>(
+      `SELECT t.id, t.shop_id, t.weekday, t.slot_index, t.name,
+              t.start_time::text, t.end_time::text, t.is_active, t.created_at, t.updated_at,
+              COALESCE(
+                JSON_AGG(JSON_BUILD_OBJECT('id', u.id, 'name', u.name) ORDER BY u.name ASC)
+                  FILTER (WHERE u.id IS NOT NULL),
+                '[]'
+              ) AS assignees
+         FROM shift_templates t
+         LEFT JOIN shift_assignments a ON a.shift_template_id = t.id
+         LEFT JOIN users u ON u.id = a.user_id AND u.is_active
+        WHERE t.shop_id = $1 AND t.is_active
+        GROUP BY t.id
+        ORDER BY t.weekday ASC, t.slot_index ASC`,
       [shopId],
+    );
+  }
+
+  /** One slot's rota. Same active-user filter as the grid query. */
+  findAssignees(templateId: number, client?: pg.PoolClient): Promise<ShiftAssignee[]> {
+    const sql = `SELECT u.id, u.name
+                   FROM shift_assignments a
+                   JOIN users u ON u.id = a.user_id AND u.is_active
+                  WHERE a.shift_template_id = $1
+                  ORDER BY u.name ASC`;
+
+    return client
+      ? client.query<ShiftAssignee>(sql, [templateId]).then((r) => r.rows)
+      : this.db.query<ShiftAssignee>(sql, [templateId]);
+  }
+
+  /**
+   * Swaps a slot's whole rota. Delete then insert inside the caller's
+   * transaction, so no reader ever observes the empty moment between the two.
+   */
+  async replaceAssignees(
+    templateId: number,
+    userIds: number[],
+    client: pg.PoolClient,
+  ): Promise<void> {
+    await client.query(`DELETE FROM shift_assignments WHERE shift_template_id = $1`, [templateId]);
+
+    if (userIds.length === 0) return;
+
+    const rows = userIds.map((_, i) => `($1, $${i + 2})`);
+    await client.query(
+      `INSERT INTO shift_assignments (shift_template_id, user_id) VALUES ${rows.join(', ')}`,
+      [templateId, ...userIds],
     );
   }
 
