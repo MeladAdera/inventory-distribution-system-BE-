@@ -69,5 +69,6 @@
   "days": "Days",
   "startTime": "Start time",
   "endTime": "End time",
-  "userIds": "Employees"
+  "userIds": "Employees",
+  "openingFloat": "Opening float"
 }

@@ -1,16 +1,25 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import * as pg from 'pg';
 import { DatabaseService } from '../../database/database.service';
-import { ShiftsRepository } from '../repositories/shifts.repository';
+import { ShiftsRepository, ShopClock, TemplateWithHours } from '../repositories/shifts.repository';
 import { UpdateOpeningHoursDto } from '../dto/update-opening-hours.dto';
 import { CreateShiftTemplateDto, UpdateShiftTemplateDto } from '../dto/shift-template.dto';
 import { AssignEmployeesDto } from '../dto/assign-employees.dto';
+import { OpenShiftDto } from '../dto/open-shift.dto';
+import { ShiftSessionWithNames } from '../entities/shift-session.entity';
 import { UsersRepository } from '../../users/repositories/users.repository';
 import { OpeningHoursWeek, ShopOpeningHours } from '../entities/opening-hours.entity';
 import { ShiftTemplate, ShiftTemplateWithDuration } from '../entities/shift-template.entity';
 import {
   contains,
   durationMinutes,
+  MINUTES_PER_DAY,
   openingWindow,
   overlaps,
   slotWindow,
@@ -376,6 +385,107 @@ export class ShiftsService {
 
     // Unreachable: the caller checks the slot limit first, under the same lock.
     throw new BadRequestException({ key: 'shift.SLOT_LIMIT_REACHED', args: { max: MAX_SLOTS_PER_DAY } });
+  }
+
+  // ── Sessions ───────────────────────────────────────────────────────────────
+
+  /**
+   * The shop's open shift, or null when nobody is clocked in.
+   *
+   * One endpoint answers both "is anyone working" and "am I working", because
+   * one shop has one open session: the client compares `user_id` with its own.
+   */
+  getOpenSession(user: RequestUser): Promise<ShiftSessionWithNames | null> {
+    return this.shiftsRepo.findOpenSession(this.shopIdOf(user));
+  }
+
+  async openShift(dto: OpenShiftDto, user: RequestUser): Promise<ShiftSessionWithNames> {
+    const shopId = this.shopIdOf(user);
+
+    return this.db.transaction(async (client) => {
+      // Serializes the check below against a concurrent open, so two people
+      // starting at once get a readable "Ahmad's shift is open" rather than a
+      // unique-violation from the index underneath.
+      await this.shiftsRepo.lockShop(shopId, client);
+
+      const alreadyOpen = await this.shiftsRepo.findOpenSession(shopId, client);
+      if (alreadyOpen) {
+        // Named, so the app can say whose drawer needs counting rather than
+        // leaving the next employee with a dead end.
+        throw new ConflictException({
+          key: 'shift.SESSION_ALREADY_OPEN',
+          args: { name: alreadyOpen.user_name },
+        });
+      }
+
+      const clock = await this.shiftsRepo.findShopClock(shopId, client);
+      if (!clock) throw new NotFoundException('shift.SHOP_REQUIRED');
+
+      const running = await this.findRunningTemplate(shopId, clock, client);
+
+      // Off-schedule covers both "no shift is running now" and "a shift is
+      // running but this is not their slot". Either way the session opens —
+      // the owner gets visibility, the employee never gets stuck.
+      const isOffSchedule =
+        running === null || !(await this.shiftsRepo.isAssignedTo(running.id, user.id, client));
+
+      await this.shiftsRepo.insertSession(
+        shopId,
+        user.id,
+        running?.id ?? null,
+        dto.openingFloat,
+        isOffSchedule,
+        client,
+      );
+
+      // Re-read through the same query the GET uses, so opening a shift and
+      // polling for it return an identical shape with the names resolved.
+      const opened = await this.shiftsRepo.findOpenSession(shopId, client);
+      if (!opened) throw new ConflictException('shift.SESSION_NOT_OPEN');
+
+      return opened;
+    });
+  }
+
+  /**
+   * Which slot is running right now, or null.
+   *
+   * Two weekdays are considered, because a shift that began before midnight is
+   * still running after it: at 00:30 on Saturday, Friday's 22:00-02:00 slot is
+   * the one being worked. Yesterday's windows are therefore probed against the
+   * current minute *plus a day*, which is the same frame `slotWindow` positions
+   * them in.
+   *
+   * At most one can match: templates on a weekday may not overlap, and two
+   * different weekdays' slots both containing this instant would mean one
+   * spilled past its own trading window, which containment already forbids.
+   */
+  private async findRunningTemplate(
+    shopId: number,
+    clock: ShopClock,
+    client: pg.PoolClient,
+  ): Promise<TemplateWithHours | null> {
+    const yesterday = (clock.weekday + 6) % 7;
+
+    const candidates = await this.shiftsRepo.findTemplatesWithHours(
+      shopId,
+      [clock.weekday, yesterday],
+      client,
+    );
+
+    for (const candidate of candidates) {
+      if (candidate.is_closed) continue;
+
+      const opening = openingWindow(candidate.open_time, candidate.close_time);
+      const window = slotWindow(candidate.start_time, candidate.end_time, opening);
+      const probe = candidate.weekday === clock.weekday ? clock.minutes : clock.minutes + MINUTES_PER_DAY;
+
+      // Half-open, matching every other window comparison here: a shift that
+      // ends exactly now has ended, and the next one has started.
+      if (probe >= window.start && probe < window.end) return candidate;
+    }
+
+    return null;
   }
 
   private durationOf(template: ShiftTemplate, day: ShopOpeningHours | undefined): number {

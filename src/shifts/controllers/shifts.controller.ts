@@ -17,6 +17,7 @@ import { ShiftsService } from '../services/shifts.service';
 import { UpdateOpeningHoursDto } from '../dto/update-opening-hours.dto';
 import { CreateShiftTemplateDto, UpdateShiftTemplateDto } from '../dto/shift-template.dto';
 import { AssignEmployeesDto } from '../dto/assign-employees.dto';
+import { OpenShiftDto } from '../dto/open-shift.dto';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../auth/guards/roles.guard';
 import { Roles } from '../../auth/decorators/roles.decorator';
@@ -114,5 +115,26 @@ export class ShiftsController {
     @CurrentUser() user: RequestUser,
   ) {
     return this.shiftsService.assignEmployees(id, dto, user);
+  }
+
+  @Get('open')
+  @Roles(UserRole.SHOP_OWNER, UserRole.EMPLOYEE)
+  @ApiOperation({
+    summary:
+      "The shop's open shift with the names resolved, or null. One shop has one open shift, so this answers both \"is anyone working\" and \"am I working\" — compare user_id with your own.",
+  })
+  getOpenSession(@CurrentUser() user: RequestUser) {
+    return this.shiftsService.getOpenSession(user);
+  }
+
+  @Post('open')
+  @HttpCode(HttpStatus.CREATED)
+  @Roles(UserRole.SHOP_OWNER, UserRole.EMPLOYEE)
+  @ApiOperation({
+    summary:
+      'Start a shift with the cash already in the drawer. The server resolves which slot is running from the shop clock, so no shift id is sent. Opening outside your own slot is allowed and flagged is_off_schedule. Conflicts while another shift is open.',
+  })
+  openShift(@Body() dto: OpenShiftDto, @CurrentUser() user: RequestUser) {
+    return this.shiftsService.openShift(dto, user);
   }
 }

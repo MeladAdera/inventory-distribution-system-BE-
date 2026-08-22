@@ -3,6 +3,29 @@ import * as pg from 'pg';
 import { DatabaseService } from '../../database/database.service';
 import { ShopOpeningHours } from '../entities/opening-hours.entity';
 import { ShiftAssignee, ShiftTemplate } from '../entities/shift-template.entity';
+import { ShiftSession, ShiftSessionWithNames } from '../entities/shift-session.entity';
+
+/** The shop's own wall clock, for deciding which slot is running right now. */
+export interface ShopClock {
+  /** `YYYY-MM-DD` in the shop's timezone. */
+  business_date: string;
+  /** 0 = Sunday, matching `Date.getDay()` and Postgres `DOW`. */
+  weekday: number;
+  /** Minutes since local midnight, 0..1439. */
+  minutes: number;
+}
+
+/** A slot together with the trading window of the day it sits in. */
+export interface TemplateWithHours {
+  id: number;
+  weekday: number;
+  name: string;
+  start_time: string;
+  end_time: string;
+  open_time: string;
+  close_time: string;
+  is_closed: boolean;
+}
 
 export interface OpeningHourInsert {
   weekday: number;
@@ -267,5 +290,112 @@ export class ShiftsRepository {
       [id, shopId],
     );
     return (result.rowCount ?? 0) > 0;
+  }
+
+  // ── Sessions ───────────────────────────────────────────────────────────────
+
+  /**
+   * What time it is where the shop is. Read inside the caller's transaction so
+   * it agrees exactly with the `business_date` stamped on insert: Postgres
+   * `NOW()` is the transaction timestamp, so both see the same instant even if
+   * the clock crosses midnight between the two statements.
+   */
+  async findShopClock(shopId: number, client: pg.PoolClient): Promise<ShopClock | null> {
+    const result = await client.query<ShopClock>(
+      `SELECT (NOW() AT TIME ZONE s.timezone)::date::text            AS business_date,
+              EXTRACT(DOW FROM (NOW() AT TIME ZONE s.timezone))::int AS weekday,
+              (EXTRACT(HOUR   FROM (NOW() AT TIME ZONE s.timezone)) * 60
+             + EXTRACT(MINUTE FROM (NOW() AT TIME ZONE s.timezone)))::int AS minutes
+         FROM shops s
+        WHERE s.id = $1`,
+      [shopId],
+    );
+    return result.rows[0] ?? null;
+  }
+
+  /**
+   * Live slots on the given weekdays, each with the trading window of its own
+   * day — the caller needs both to place a window that crosses midnight.
+   *
+   * Two weekdays are asked for at once because at 00:30 the shift still
+   * running belongs to *yesterday's* trading day.
+   */
+  findTemplatesWithHours(
+    shopId: number,
+    weekdays: number[],
+    client: pg.PoolClient,
+  ): Promise<TemplateWithHours[]> {
+    return client
+      .query<TemplateWithHours>(
+        `SELECT t.id, t.weekday, t.name,
+                t.start_time::text, t.end_time::text,
+                h.open_time::text, h.close_time::text, h.is_closed
+           FROM shift_templates t
+           JOIN shop_opening_hours h
+             ON h.shop_id = t.shop_id AND h.weekday = t.weekday
+          WHERE t.shop_id = $1 AND t.is_active AND t.weekday = ANY($2::int[])`,
+        [shopId, weekdays],
+      )
+      .then((r) => r.rows);
+  }
+
+  async isAssignedTo(templateId: number, userId: number, client: pg.PoolClient): Promise<boolean> {
+    const result = await client.query(
+      `SELECT 1 FROM shift_assignments WHERE shift_template_id = $1 AND user_id = $2`,
+      [templateId, userId],
+    );
+    return (result.rowCount ?? 0) > 0;
+  }
+
+  /**
+   * The shop's open shift, or null. Exactly one row can match — the partial
+   * unique index guarantees it — which is what makes "which shift does this
+   * sale belong to" answerable without the client saying.
+   */
+  findOpenSession(shopId: number, client?: pg.PoolClient): Promise<ShiftSessionWithNames | null> {
+    const sql = `SELECT ss.id, ss.shop_id, ss.user_id, ss.shift_template_id,
+                        ss.business_date::text, ss.opened_at, ss.closed_at, ss.closed_by,
+                        ss.opening_float::text, ss.counted_cash::text,
+                        ss.expected_cash::text, ss.cash_difference::text,
+                        ss.is_off_schedule, ss.notes, ss.client_session_id, ss.status,
+                        u.name AS user_name,
+                        t.name AS shift_template_name
+                   FROM shift_sessions ss
+                   JOIN users u ON u.id = ss.user_id
+                   LEFT JOIN shift_templates t ON t.id = ss.shift_template_id
+                  WHERE ss.shop_id = $1 AND ss.status = 'OPEN'`;
+
+    return client
+      ? client.query<ShiftSessionWithNames>(sql, [shopId]).then((r) => r.rows[0] ?? null)
+      : this.db.queryOne<ShiftSessionWithNames>(sql, [shopId]);
+  }
+
+  /**
+   * Opens a session, taking `business_date` from the shop's own timezone in the
+   * same statement. Deriving it in SQL rather than in Node keeps the stamp on
+   * the same clock as `opened_at`, with no window between reading the zone and
+   * writing the row.
+   */
+  async insertSession(
+    shopId: number,
+    userId: number,
+    shiftTemplateId: number | null,
+    openingFloat: string,
+    isOffSchedule: boolean,
+    client: pg.PoolClient,
+  ): Promise<ShiftSession> {
+    const result = await client.query<ShiftSession>(
+      `INSERT INTO shift_sessions
+              (shop_id, user_id, shift_template_id, business_date, opening_float, is_off_schedule)
+       SELECT $1, $2, $3, (NOW() AT TIME ZONE s.timezone)::date, $4::numeric, $5
+         FROM shops s
+        WHERE s.id = $1
+       RETURNING id, shop_id, user_id, shift_template_id, business_date::text,
+                 opened_at, closed_at, closed_by, opening_float::text,
+                 counted_cash::text, expected_cash::text, cash_difference::text,
+                 is_off_schedule, notes, client_session_id, status`,
+      [shopId, userId, shiftTemplateId, openingFloat, isOffSchedule],
+    );
+    return result.rows[0];
   }
 }
