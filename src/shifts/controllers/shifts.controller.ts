@@ -18,6 +18,7 @@ import { UpdateOpeningHoursDto } from '../dto/update-opening-hours.dto';
 import { CreateShiftTemplateDto, UpdateShiftTemplateDto } from '../dto/shift-template.dto';
 import { AssignEmployeesDto } from '../dto/assign-employees.dto';
 import { OpenShiftDto } from '../dto/open-shift.dto';
+import { CloseShiftDto } from '../dto/close-shift.dto';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../auth/guards/roles.guard';
 import { Roles } from '../../auth/decorators/roles.decorator';
@@ -136,5 +137,19 @@ export class ShiftsController {
   })
   openShift(@Body() dto: OpenShiftDto, @CurrentUser() user: RequestUser) {
     return this.shiftsService.openShift(dto, user);
+  }
+
+  @Post(':id/close')
+  @Roles(UserRole.SHOP_OWNER, UserRole.EMPLOYEE)
+  @ApiOperation({
+    summary:
+      "End a shift by counting the drawer. The server works out what should be there and freezes the difference — it is never recalculated on read. Anyone in the shop may close, so a drawer left open does not block the next employee; closed_by records who counted.",
+  })
+  closeShift(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: CloseShiftDto,
+    @CurrentUser() user: RequestUser,
+  ) {
+    return this.shiftsService.closeShift(id, dto, user);
   }
 }

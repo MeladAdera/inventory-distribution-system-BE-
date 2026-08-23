@@ -70,5 +70,6 @@
   "startTime": "وقت البداية",
   "endTime": "وقت النهاية",
   "userIds": "الموظفون",
-  "openingFloat": "النقد الابتدائي"
+  "openingFloat": "النقد الابتدائي",
+  "countedCash": "النقد المعدود"
 }

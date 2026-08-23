@@ -15,6 +15,17 @@ export interface ShopClock {
   minutes: number;
 }
 
+/**
+ * The raw components of a drawer's expected total, straight from SQL as money
+ * strings. The arithmetic happens in the service through bigint minor units.
+ */
+export interface CashTotals {
+  opening_float: string;
+  cash_sales: string;
+  collections: string;
+  payouts: string;
+}
+
 /** A slot together with the trading window of the day it sits in. */
 export interface TemplateWithHours {
   id: number;
@@ -390,6 +401,139 @@ export class ShiftsRepository {
     return client
       ? client.query<ShiftSession>(sql, [id, shopId]).then((r) => r.rows[0] ?? null)
       : this.db.queryOne<ShiftSession>(sql, [id, shopId]);
+  }
+
+  /**
+   * The three figures the drawer's expected total is built from, read in one
+   * statement so they cannot disagree about which instant they describe.
+   *
+   * Every term is `numeric`, never `float8`. The receipt list elsewhere casts
+   * totals to float because it is display; this number decides whether somebody
+   * is short, so it stays exact and leaves as text for `toMinor`.
+   */
+  async findCashTotals(sessionId: number, client: pg.PoolClient): Promise<CashTotals | null> {
+    const result = await client.query<CashTotals>(
+      `SELECT
+         s.opening_float::text AS opening_float,
+
+         -- Sales settled entirely in cash. The NOT EXISTS is what makes a
+         -- credit sale work: a sale paid in full has no debt row, so its whole
+         -- total is cash, while a credit sale's cash arrived as a payment row
+         -- and is counted in "collections" below. Summing both without this
+         -- would report a 100-for-30 credit sale as 130 in the drawer.
+         --
+         -- Deliberately unfiltered by debt status: a cancelled debt still
+         -- proves the sale was made on credit, and ignoring it would make a
+         -- cancelled credit sale count its full total as cash.
+         COALESCE((
+           SELECT SUM(ri.quantity * ri.price)
+             FROM receipts r
+             JOIN receipt_items ri ON ri.receipt_id = r.id
+            WHERE r.shift_session_id = s.id
+              AND r.is_free = FALSE
+              AND r.is_cancelled = FALSE
+              AND NOT EXISTS (SELECT 1 FROM debts d WHERE d.receipt_id = r.id)
+         ), 0)::numeric(15,2)::text AS cash_sales,
+
+         -- Cash in from customers, including the down payment on a credit sale.
+         -- No is_reversal filter anywhere here: a reversal is stored with a
+         -- negative amount, so SUM already nets it out. Subtracting reversals
+         -- separately would remove each one twice.
+         COALESCE((
+           SELECT SUM(p.amount)
+             FROM debt_payments p
+             JOIN debts d ON d.id = p.debt_id
+            WHERE p.shift_session_id = s.id
+              AND p.method = 'CASH'
+              AND d.creditor_type = 'SHOP'
+         ), 0)::numeric(15,2)::text AS collections,
+
+         -- Cash out to suppliers. Customer collections and supplier payments
+         -- share this table, so without the creditor_type split, paying a
+         -- supplier 500 would *add* 500 to the drawer.
+         COALESCE((
+           SELECT SUM(p.amount)
+             FROM debt_payments p
+             JOIN debts d ON d.id = p.debt_id
+            WHERE p.shift_session_id = s.id
+              AND p.method = 'CASH'
+              AND d.creditor_type = 'SUPPLIER'
+         ), 0)::numeric(15,2)::text AS payouts
+
+       FROM shift_sessions s
+       WHERE s.id = $1`,
+      [sessionId],
+    );
+    return result.rows[0] ?? null;
+  }
+
+  /**
+   * Closes the shift and freezes the numbers.
+   *
+   * Conditional on `status = 'OPEN'`, the same guard style as cancelling a
+   * receipt: two people closing at once serialize here and only the request
+   * that flips the row does the work, so a drawer can never be counted twice.
+   */
+  async closeSession(
+    id: number,
+    shopId: number,
+    close: {
+      countedCash: string;
+      expectedCash: string;
+      cashDifference: string;
+      closedBy: number;
+      notes: string | undefined;
+    },
+    client: pg.PoolClient,
+  ): Promise<ShiftSession | null> {
+    const result = await client.query<ShiftSession>(
+      `UPDATE shift_sessions
+          SET status          = 'CLOSED',
+              closed_at       = NOW(),
+              closed_by       = $3,
+              counted_cash    = $4::numeric,
+              expected_cash   = $5::numeric,
+              cash_difference = $6::numeric,
+              notes           = $7
+        WHERE id = $1 AND shop_id = $2 AND status = 'OPEN'
+       RETURNING id, shop_id, user_id, shift_template_id, business_date::text,
+                 opened_at, closed_at, closed_by, opening_float::text,
+                 counted_cash::text, expected_cash::text, cash_difference::text,
+                 is_off_schedule, notes, client_session_id, status`,
+      [
+        id,
+        shopId,
+        close.closedBy,
+        close.countedCash,
+        close.expectedCash,
+        close.cashDifference,
+        close.notes ?? null,
+      ],
+    );
+    return result.rows[0] ?? null;
+  }
+
+  /** One session with its names resolved, open or closed. */
+  findSessionWithNames(
+    id: number,
+    shopId: number,
+    client?: pg.PoolClient,
+  ): Promise<ShiftSessionWithNames | null> {
+    const sql = `SELECT ss.id, ss.shop_id, ss.user_id, ss.shift_template_id,
+                        ss.business_date::text, ss.opened_at, ss.closed_at, ss.closed_by,
+                        ss.opening_float::text, ss.counted_cash::text,
+                        ss.expected_cash::text, ss.cash_difference::text,
+                        ss.is_off_schedule, ss.notes, ss.client_session_id, ss.status,
+                        u.name AS user_name,
+                        t.name AS shift_template_name
+                   FROM shift_sessions ss
+                   JOIN users u ON u.id = ss.user_id
+                   LEFT JOIN shift_templates t ON t.id = ss.shift_template_id
+                  WHERE ss.id = $1 AND ss.shop_id = $2`;
+
+    return client
+      ? client.query<ShiftSessionWithNames>(sql, [id, shopId]).then((r) => r.rows[0] ?? null)
+      : this.db.queryOne<ShiftSessionWithNames>(sql, [id, shopId]);
   }
 
   /**

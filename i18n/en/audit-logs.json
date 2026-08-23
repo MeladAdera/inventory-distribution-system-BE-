@@ -1,13 +1,12 @@
 {
   "NOT_FOUND": "Audit log not found",
   "ACCESS_DENIED": "You do not have access to this audit log",
-
   "TYPE": {
     "INVENTORY": "Inventory",
     "ORDER": "Order",
-    "DEBT": "Debt"
+    "DEBT": "Debt",
+    "SHIFT": "Shift"
   },
-
   "ACTION": {
     "STOCK_IN": "Stock In",
     "PRODUCT_ADDED": "Product Added",
@@ -20,15 +19,16 @@
     "UNMARKED_FREE": "Unmarked Free",
     "CANCELLED": "Cancelled",
     "PAYMENT": "Payment",
-    "REVERSAL": "Payment Reversed"
+    "REVERSAL": "Payment Reversed",
+    "CLOCK_IN": "Shift Started",
+    "CLOCK_OUT": "Shift Closed"
   },
-
   "ENTITY": {
     "inventory": "Inventory Item",
     "order": "Order",
-    "debt": "Debt"
+    "debt": "Debt",
+    "shift_session": "Shift"
   },
-
   "STATUS": {
     "PENDING": "Pending",
     "PROCESSING": "Processing",
@@ -37,7 +37,6 @@
     "COMPLETED": "Completed",
     "CANCELLED": "Cancelled"
   },
-
   "NOTE_PRICE_CHANGE": "Selling price: {from} → {to}",
   "NOTE_STATUS_CHANGED": "{from} → {to}",
   "NOTE_ORDER_RESERVED": "Order #{orderId} — reserved for shop {shopId}",

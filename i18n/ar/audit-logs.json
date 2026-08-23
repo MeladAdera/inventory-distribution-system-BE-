@@ -1,13 +1,12 @@
 {
   "NOT_FOUND": "سجل المراجعة غير موجود",
   "ACCESS_DENIED": "ليس لديك صلاحية الوصول إلى هذا السجل",
-
   "TYPE": {
     "INVENTORY": "المخزون",
     "ORDER": "الطلبات",
-    "DEBT": "الديون"
+    "DEBT": "الديون",
+    "SHIFT": "وردية"
   },
-
   "ACTION": {
     "STOCK_IN": "إدخال مخزون",
     "PRODUCT_ADDED": "إضافة منتج",
@@ -20,15 +19,16 @@
     "UNMARKED_FREE": "إلغاء التعليم كمجانية",
     "CANCELLED": "إلغاء",
     "PAYMENT": "دفعة",
-    "REVERSAL": "عكس دفعة"
+    "REVERSAL": "عكس دفعة",
+    "CLOCK_IN": "بدء الوردية",
+    "CLOCK_OUT": "إغلاق الوردية"
   },
-
   "ENTITY": {
     "inventory": "صنف في المخزون",
     "order": "طلب",
-    "debt": "دين"
+    "debt": "دين",
+    "shift_session": "وردية"
   },
-
   "STATUS": {
     "PENDING": "قيد الانتظار",
     "PROCESSING": "قيد التجهيز",
@@ -37,7 +37,6 @@
     "COMPLETED": "مكتمل",
     "CANCELLED": "ملغي"
   },
-
   "NOTE_PRICE_CHANGE": "سعر البيع: من {from} إلى {to}",
   "NOTE_STATUS_CHANGED": "من {from} إلى {to}",
   "NOTE_ORDER_RESERVED": "الطلب رقم {orderId} — تم حجز الكمية للمتجر رقم {shopId}",

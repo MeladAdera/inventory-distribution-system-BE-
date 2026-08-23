@@ -70,5 +70,6 @@
   "startTime": "Start time",
   "endTime": "End time",
   "userIds": "Employees",
-  "openingFloat": "Opening float"
+  "openingFloat": "Opening float",
+  "countedCash": "Counted cash"
 }

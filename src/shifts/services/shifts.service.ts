@@ -14,6 +14,10 @@ import { AssignEmployeesDto } from '../dto/assign-employees.dto';
 import { OpenShiftDto } from '../dto/open-shift.dto';
 import { ShiftSessionWithNames } from '../entities/shift-session.entity';
 import { UsersRepository } from '../../users/repositories/users.repository';
+import { AuditLogsService } from '../../audit-logs/services/audit-logs.service';
+import { CloseShiftDto } from '../dto/close-shift.dto';
+import { ClosedShiftSession, ShiftCashBreakdown } from '../entities/shift-session.entity';
+import { fromMinor, toMinor } from '../../common/utils/money.util';
 import { OpeningHoursWeek, ShopOpeningHours } from '../entities/opening-hours.entity';
 import { ShiftTemplate, ShiftTemplateWithDuration } from '../entities/shift-template.entity';
 import {
@@ -65,6 +69,7 @@ export class ShiftsService {
   constructor(
     private readonly shiftsRepo: ShiftsRepository,
     private readonly usersRepo: UsersRepository,
+    private readonly auditLogsService: AuditLogsService,
     private readonly db: DatabaseService,
   ) {}
 
@@ -429,12 +434,28 @@ export class ShiftsService {
       const isOffSchedule =
         running === null || !(await this.shiftsRepo.isAssignedTo(running.id, user.id, client));
 
-      await this.shiftsRepo.insertSession(
+      const session = await this.shiftsRepo.insertSession(
         shopId,
         user.id,
         running?.id ?? null,
         dto.openingFloat,
         isOffSchedule,
+        client,
+      );
+
+      // Shift events go in the same trail as the sales and payments they
+      // explain, so an owner looking at a shortage sees the clock-in beside
+      // the receipts rather than in a screen of its own.
+      await this.auditLogsService.log(
+        {
+          shop_id: shopId,
+          user_id: user.id,
+          type: 'SHIFT',
+          action: 'CLOCK_IN',
+          entity_type: 'shift_session',
+          entity_id: session.id,
+          amount: Number(session.opening_float),
+        },
         client,
       );
 
@@ -444,6 +465,92 @@ export class ShiftsService {
       if (!opened) throw new ConflictException('shift.SESSION_NOT_OPEN');
 
       return opened;
+    });
+  }
+
+  /**
+   * Ends a shift: the person's count against the server's, frozen.
+   *
+   * Anyone in the shop may close, not only the session's own user. The handover
+   * needs it — if Ahmad goes home without clocking out, Sara has to be able to
+   * count the drawer and start her own shift rather than being locked out until
+   * the owner appears. `closed_by` records who actually counted, so the owner
+   * sees that it was not Ahmad and knows to ask.
+   */
+  async closeShift(id: number, dto: CloseShiftDto, user: RequestUser): Promise<ClosedShiftSession> {
+    const shopId = this.shopIdOf(user);
+
+    return this.db.transaction(async (client) => {
+      const session = await this.shiftsRepo.findSessionWithNames(id, shopId, client);
+      if (!session) throw new NotFoundException('shift.SESSION_NOT_FOUND');
+      if (session.status !== 'OPEN') throw new ConflictException('shift.SESSION_NOT_OPEN');
+
+      const totals = await this.shiftsRepo.findCashTotals(id, client);
+      if (!totals) throw new NotFoundException('shift.SESSION_NOT_FOUND');
+
+      // Minor units throughout: this figure decides whether someone is accused
+      // of being short, so it never touches a float.
+      const expectedMinor =
+        toMinor(totals.opening_float) +
+        toMinor(totals.cash_sales) +
+        toMinor(totals.collections) -
+        toMinor(totals.payouts);
+
+      const countedMinor = toMinor(dto.countedCash);
+      const differenceMinor = countedMinor - expectedMinor;
+
+      const expectedCash = fromMinor(expectedMinor);
+      const cashDifference = fromMinor(differenceMinor);
+
+      const closed = await this.shiftsRepo.closeSession(
+        id,
+        shopId,
+        {
+          countedCash: dto.countedCash,
+          expectedCash,
+          cashDifference,
+          closedBy: user.id,
+          notes: dto.notes,
+        },
+        client,
+      );
+
+      // The UPDATE is conditional on the row still being open, so losing this
+      // race means someone else counted the drawer first. Their count stands.
+      if (!closed) throw new ConflictException('shift.SESSION_NOT_OPEN');
+
+      await this.auditLogsService.log(
+        {
+          shop_id: shopId,
+          user_id: user.id,
+          type: 'SHIFT',
+          action: 'CLOCK_OUT',
+          entity_type: 'shift_session',
+          entity_id: id,
+          // The difference, not the total: a shortage is the part of a close
+          // worth finding in a list of events.
+          amount: Number(cashDifference),
+          notes: dto.notes,
+        },
+        client,
+      );
+
+      const breakdown: ShiftCashBreakdown = {
+        opening_float: totals.opening_float,
+        cash_sales: totals.cash_sales,
+        collections: totals.collections,
+        payouts: totals.payouts,
+        expected_cash: expectedCash,
+        counted_cash: dto.countedCash,
+        cash_difference: cashDifference,
+      };
+
+      return {
+        ...closed,
+        user_name: session.user_name,
+        shift_template_name: session.shift_template_name,
+        breakdown,
+      };
     });
   }
 
