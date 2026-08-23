@@ -17,8 +17,6 @@ import { UsersRepository } from '../../users/repositories/users.repository';
 import { AuditLogsService } from '../../audit-logs/services/audit-logs.service';
 import { CloseShiftDto } from '../dto/close-shift.dto';
 import {
-  ClosedShiftSession,
-  ShiftCashBreakdown,
   ShiftReport,
   ShiftSessionDetail,
   ShiftSessionListItem,
@@ -553,7 +551,7 @@ export class ShiftsService {
    * the owner appears. `closed_by` records who actually counted, so the owner
    * sees that it was not Ahmad and knows to ask.
    */
-  async closeShift(id: number, dto: CloseShiftDto, user: RequestUser): Promise<ClosedShiftSession> {
+  async closeShift(id: number, dto: CloseShiftDto, user: RequestUser): Promise<ShiftSessionWithNames> {
     const shopId = this.shopIdOf(user);
 
     return this.db.transaction(async (client) => {
@@ -616,21 +614,13 @@ export class ShiftsService {
         client,
       );
 
-      const breakdown: ShiftCashBreakdown = {
-        opening_float: totals.opening_float,
-        cash_sales: totals.cash_sales,
-        collections: totals.collections,
-        payouts: totals.payouts,
-        expected_cash: expectedCash,
-        counted_cash: dto.countedCash,
-        cash_difference: cashDifference,
-      };
-
+      // Exactly the shape every other session read returns — the frozen
+      // columns already carry the working, so a separate breakdown object
+      // would be the same three figures twice under two sets of names.
       return {
         ...closed,
         user_name: session.user_name,
         shift_template_name: session.shift_template_name,
-        breakdown,
       };
     });
   }

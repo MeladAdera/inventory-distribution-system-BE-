@@ -46,32 +46,6 @@ export class ShiftSessionWithNames extends ShiftSession {
 }
 
 /**
- * Where the expected figure came from. A difference on its own tells the owner
- * something is wrong but not where to look, so the three components that built
- * it travel with it.
- *
- * All money strings. `payouts` is the amount that *left* the drawer, so it is
- * reported positive and subtracted, rather than arriving as a negative number
- * that reads like a mistake.
- */
-export class ShiftCashBreakdown {
-  opening_float!: string;
-  /** Sales settled entirely in cash. A credit sale's cash is in `collections`. */
-  cash_sales!: string;
-  /** Cash taken from customers against debts, net of reversals. */
-  collections!: string;
-  /** Cash handed to suppliers out of this drawer, net of reversals. */
-  payouts!: string;
-  expected_cash!: string;
-  counted_cash!: string;
-  cash_difference!: string;
-}
-
-export class ClosedShiftSession extends ShiftSessionWithNames {
-  breakdown!: ShiftCashBreakdown;
-}
-
-/**
  * A row of the owner's shift history.
  *
  * `sales_total` is what was *sold*, which is not what landed in the drawer — a

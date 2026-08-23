@@ -52,6 +52,11 @@ There is **no public registration** — every account is created by a privileged
   the order is marked `RECEIVED`.
 - **Receipts** — batch stock-consumption records (e.g. end-of-day counts, damage write-offs),
   applied atomically and immutable once created.
+- **Shifts** — the shop's trading week divided into named shifts (max 4 per weekday) with
+  employees assigned to them; employees clock in with the cash already in the drawer, every
+  sale and payment is stamped with the shift it moved in, and clocking out compares a hand
+  count against a server-computed total. One employee works one shift, enforced as one open
+  session per shop.
 - **Audit Logs** — append-only, queryable history of every inventory-affecting event system-wide.
 - **Notifications** — triggered on order creation, order status changes, and low stock.
 - **Analytics** — top products, consumption trends, per-shop consumption, and cost/profit
@@ -79,6 +84,13 @@ There is **no public registration** — every account is created by a privileged
 ## Where to Read More
 
 Each feature has a dedicated write-up in [`docs/features/`](docs/features/) — start with
-`01-users.md` through `15-warehouse-catalog-icons-and-orderability.md` in order; they build
-on each other (e.g. inventory pricing in `14` extends the model introduced in `13`).
+`01-users.md` through `20-shifts.md` in order; they build on each other (e.g. inventory
+pricing in `14` extends the model introduced in `13`, and shifts in `20` build on receipts
+in `11` and debts in `17`).
 [`API_REFERENCE.md`](API_REFERENCE.md) documents every endpoint.
+
+Frontend handoffs live at the repo root, one per feature area:
+[`FRONTEND_HANDOFF.md`](FRONTEND_HANDOFF.md) (auth, envelope, pagination),
+[`DEBTS_HANDOFF.md`](DEBTS_HANDOFF.md),
+[`SUPPLIER_INVOICE_ITEMS_HANDOFF.md`](SUPPLIER_INVOICE_ITEMS_HANDOFF.md) and
+[`SHIFTS_HANDOFF.md`](SHIFTS_HANDOFF.md).
