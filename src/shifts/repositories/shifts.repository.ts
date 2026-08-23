@@ -3,7 +3,28 @@ import * as pg from 'pg';
 import { DatabaseService } from '../../database/database.service';
 import { ShopOpeningHours } from '../entities/opening-hours.entity';
 import { ShiftAssignee, ShiftTemplate } from '../entities/shift-template.entity';
-import { ShiftSession, ShiftSessionWithNames } from '../entities/shift-session.entity';
+import {
+  ShiftReceiptLine,
+  ShiftReportByEmployee,
+  ShiftReportByShift,
+  ShiftSession,
+  ShiftSessionListItem,
+  ShiftSessionWithNames,
+} from '../entities/shift-session.entity';
+import { ShiftSessionQueryDto } from '../dto/shift-query.dto';
+
+/**
+ * Every session read projects the same shape, so a row from the history, the
+ * detail screen and the live lookup are interchangeable on the client. Money
+ * and dates leave as text: `numeric` and `date` both lose fidelity through
+ * `pg`'s default parsing.
+ */
+const SESSION_COLUMNS = `ss.id, ss.shop_id, ss.user_id, ss.shift_template_id,
+                         ss.business_date::text, ss.opened_at, ss.closed_at, ss.closed_by,
+                         ss.opening_float::text, ss.counted_cash::text,
+                         ss.expected_cash::text, ss.cash_difference::text,
+                         ss.cash_sales::text, ss.cash_collections::text, ss.cash_payouts::text,
+                         ss.is_off_schedule, ss.notes, ss.client_session_id, ss.status`;
 
 /** The shop's own wall clock, for deciding which slot is running right now. */
 export interface ShopClock {
@@ -364,11 +385,7 @@ export class ShiftsRepository {
    * sale belong to" answerable without the client saying.
    */
   findOpenSession(shopId: number, client?: pg.PoolClient): Promise<ShiftSessionWithNames | null> {
-    const sql = `SELECT ss.id, ss.shop_id, ss.user_id, ss.shift_template_id,
-                        ss.business_date::text, ss.opened_at, ss.closed_at, ss.closed_by,
-                        ss.opening_float::text, ss.counted_cash::text,
-                        ss.expected_cash::text, ss.cash_difference::text,
-                        ss.is_off_schedule, ss.notes, ss.client_session_id, ss.status,
+    const sql = `SELECT ${SESSION_COLUMNS},
                         u.name AS user_name,
                         t.name AS shift_template_name
                    FROM shift_sessions ss
@@ -394,7 +411,8 @@ export class ShiftsRepository {
     const sql = `SELECT id, shop_id, user_id, shift_template_id, business_date::text,
                         opened_at, closed_at, closed_by, opening_float::text,
                         counted_cash::text, expected_cash::text, cash_difference::text,
-                        is_off_schedule, notes, client_session_id, status
+                        cash_sales::text, cash_collections::text, cash_payouts::text,
+                 is_off_schedule, notes, client_session_id, status
                    FROM shift_sessions
                   WHERE id = $1 AND shop_id = $2`;
 
@@ -481,6 +499,9 @@ export class ShiftsRepository {
       countedCash: string;
       expectedCash: string;
       cashDifference: string;
+      cashSales: string;
+      cashCollections: string;
+      cashPayouts: string;
       closedBy: number;
       notes: string | undefined;
     },
@@ -494,11 +515,15 @@ export class ShiftsRepository {
               counted_cash    = $4::numeric,
               expected_cash   = $5::numeric,
               cash_difference = $6::numeric,
+              cash_sales       = $8::numeric,
+              cash_collections = $9::numeric,
+              cash_payouts     = $10::numeric,
               notes           = $7
         WHERE id = $1 AND shop_id = $2 AND status = 'OPEN'
        RETURNING id, shop_id, user_id, shift_template_id, business_date::text,
                  opened_at, closed_at, closed_by, opening_float::text,
                  counted_cash::text, expected_cash::text, cash_difference::text,
+                 cash_sales::text, cash_collections::text, cash_payouts::text,
                  is_off_schedule, notes, client_session_id, status`,
       [
         id,
@@ -508,9 +533,186 @@ export class ShiftsRepository {
         close.expectedCash,
         close.cashDifference,
         close.notes ?? null,
+        close.cashSales,
+        close.cashCollections,
+        close.cashPayouts,
       ],
     );
     return result.rows[0] ?? null;
+  }
+
+  /**
+   * The owner's shift history.
+   *
+   * Filtered on `business_date` rather than `opened_at`: a shift running 23:30
+   * to 02:00 belongs to the day it started, so asking for one day returns it
+   * whole instead of splitting it in two.
+   *
+   * `sales_total` counts what was sold, not what reached the drawer — a credit
+   * sale counts in full here while only its down payment reaches the cash
+   * figures beside it. The two answer different questions.
+   */
+  async findSessionsPaginated(
+    shopId: number,
+    query: ShiftSessionQueryDto,
+  ): Promise<{ data: ShiftSessionListItem[]; total: number }> {
+    const conditions = ['ss.shop_id = $1'];
+    const params: unknown[] = [shopId];
+    let idx = 2;
+
+    if (query.from) {
+      conditions.push(`ss.business_date >= $${idx++}::date`);
+      params.push(query.from);
+    }
+    if (query.to) {
+      conditions.push(`ss.business_date <= $${idx++}::date`);
+      params.push(query.to);
+    }
+    if (query.userId !== undefined) {
+      conditions.push(`ss.user_id = $${idx++}`);
+      params.push(query.userId);
+    }
+    if (query.status) {
+      conditions.push(`ss.status = $${idx++}`);
+      params.push(query.status);
+    }
+
+    params.push(query.limit, query.offset);
+
+    const rows = await this.db.query<ShiftSessionListItem & { total_count: string }>(
+      `SELECT ${SESSION_COLUMNS},
+              u.name AS user_name,
+              t.name AS shift_template_name,
+              COALESCE(sales.receipt_count, 0)::int          AS receipt_count,
+              COALESCE(sales.sales_total, 0)::numeric(15,2)::text AS sales_total,
+              COUNT(*) OVER() AS total_count
+         FROM shift_sessions ss
+         JOIN users u ON u.id = ss.user_id
+         LEFT JOIN shift_templates t ON t.id = ss.shift_template_id
+         -- Aggregated in a lateral rather than a join, so a shift with three
+         -- receipts is still one row and its cash columns are not multiplied.
+         LEFT JOIN LATERAL (
+           SELECT COUNT(DISTINCT r.id) AS receipt_count,
+                  SUM(ri.quantity * ri.price) AS sales_total
+             FROM receipts r
+             JOIN receipt_items ri ON ri.receipt_id = r.id
+            WHERE r.shift_session_id = ss.id
+              AND r.is_free = FALSE
+              AND r.is_cancelled = FALSE
+         ) sales ON TRUE
+        WHERE ${conditions.join(' AND ')}
+        ORDER BY ss.business_date DESC, ss.opened_at DESC
+        LIMIT $${idx++} OFFSET $${idx}`,
+      params,
+    );
+
+    return {
+      data: rows.map(({ total_count: _ignored, ...row }) => row as ShiftSessionListItem),
+      total: rows.length > 0 ? parseInt(rows[0].total_count, 10) : 0,
+    };
+  }
+
+  /** The receipts rung up on one shift, as its detail screen lists them. */
+  findReceiptsForSession(sessionId: number): Promise<ShiftReceiptLine[]> {
+    return this.db.query<ShiftReceiptLine>(
+      `SELECT r.id, r.created_at, r.created_by, r.is_free, r.is_cancelled,
+              u.name  AS created_by_name,
+              cu.name AS customer_name,
+              EXISTS (SELECT 1 FROM debts d WHERE d.receipt_id = r.id) AS on_credit,
+              COALESCE(SUM(ri.quantity * ri.price), 0)::numeric(15,2)::text AS total_price
+         FROM receipts r
+         JOIN users u ON u.id = r.created_by
+         LEFT JOIN customers cu ON cu.id = r.customer_id
+         LEFT JOIN receipt_items ri ON ri.receipt_id = r.id
+        WHERE r.shift_session_id = $1
+        GROUP BY r.id, u.name, cu.name
+        ORDER BY r.created_at ASC`,
+      [sessionId],
+    );
+  }
+
+  /**
+   * Revenue and cash accuracy grouped two ways.
+   *
+   * Per employee is meaningful here because one employee works one shift, so a
+   * difference belongs to a person rather than to a crowd around one till.
+   *
+   * Sales are attributed by `receipts.created_by`, not by whose shift it was:
+   * an owner ringing something up during an employee's shift put the cash in
+   * that employee's drawer, but the sale is the owner's.
+   */
+  reportByEmployee(shopId: number, from?: string, to?: string): Promise<ShiftReportByEmployee[]> {
+    const { where, params } = this.reportRange(shopId, from, to);
+
+    return this.db.query<ShiftReportByEmployee>(
+      `SELECT ss.user_id, u.name AS user_name,
+              COUNT(DISTINCT ss.id)::int AS shifts,
+              COALESCE(SUM(sales.receipt_count), 0)::int AS receipt_count,
+              COALESCE(SUM(sales.sales_total), 0)::numeric(15,2)::text AS sales_total,
+              COALESCE(SUM(ss.cash_difference), 0)::numeric(15,2)::text AS cash_difference,
+              COUNT(*) FILTER (WHERE ss.cash_difference < 0)::int AS short_shifts
+         FROM shift_sessions ss
+         JOIN users u ON u.id = ss.user_id
+         LEFT JOIN LATERAL (
+           SELECT COUNT(DISTINCT r.id) AS receipt_count,
+                  SUM(ri.quantity * ri.price) AS sales_total
+             FROM receipts r
+             JOIN receipt_items ri ON ri.receipt_id = r.id
+            WHERE r.shift_session_id = ss.id
+              AND r.is_free = FALSE AND r.is_cancelled = FALSE
+         ) sales ON TRUE
+        WHERE ${where}
+        GROUP BY ss.user_id, u.name
+        ORDER BY sales_total DESC`,
+      params,
+    );
+  }
+
+  reportByShift(shopId: number, from?: string, to?: string): Promise<ShiftReportByShift[]> {
+    const { where, params } = this.reportRange(shopId, from, to);
+
+    return this.db.query<ShiftReportByShift>(
+      `SELECT ss.shift_template_id, t.name AS shift_template_name, t.weekday,
+              COUNT(DISTINCT ss.id)::int AS shifts,
+              COALESCE(SUM(sales.receipt_count), 0)::int AS receipt_count,
+              COALESCE(SUM(sales.sales_total), 0)::numeric(15,2)::text AS sales_total,
+              COALESCE(SUM(ss.cash_difference), 0)::numeric(15,2)::text AS cash_difference
+         FROM shift_sessions ss
+         LEFT JOIN shift_templates t ON t.id = ss.shift_template_id
+         LEFT JOIN LATERAL (
+           SELECT COUNT(DISTINCT r.id) AS receipt_count,
+                  SUM(ri.quantity * ri.price) AS sales_total
+             FROM receipts r
+             JOIN receipt_items ri ON ri.receipt_id = r.id
+            WHERE r.shift_session_id = ss.id
+              AND r.is_free = FALSE AND r.is_cancelled = FALSE
+         ) sales ON TRUE
+        WHERE ${where}
+        GROUP BY ss.shift_template_id, t.name, t.weekday
+        ORDER BY sales_total DESC`,
+      params,
+    );
+  }
+
+  private reportRange(
+    shopId: number,
+    from?: string,
+    to?: string,
+  ): { where: string; params: unknown[] } {
+    const conditions = ['ss.shop_id = $1'];
+    const params: unknown[] = [shopId];
+    let idx = 2;
+
+    if (from) {
+      conditions.push(`ss.business_date >= $${idx++}::date`);
+      params.push(from);
+    }
+    if (to) {
+      conditions.push(`ss.business_date <= $${idx++}::date`);
+      params.push(to);
+    }
+
+    return { where: conditions.join(' AND '), params };
   }
 
   /** One session with its names resolved, open or closed. */
@@ -519,11 +721,7 @@ export class ShiftsRepository {
     shopId: number,
     client?: pg.PoolClient,
   ): Promise<ShiftSessionWithNames | null> {
-    const sql = `SELECT ss.id, ss.shop_id, ss.user_id, ss.shift_template_id,
-                        ss.business_date::text, ss.opened_at, ss.closed_at, ss.closed_by,
-                        ss.opening_float::text, ss.counted_cash::text,
-                        ss.expected_cash::text, ss.cash_difference::text,
-                        ss.is_off_schedule, ss.notes, ss.client_session_id, ss.status,
+    const sql = `SELECT ${SESSION_COLUMNS},
                         u.name AS user_name,
                         t.name AS shift_template_name
                    FROM shift_sessions ss
@@ -559,6 +757,7 @@ export class ShiftsRepository {
        RETURNING id, shop_id, user_id, shift_template_id, business_date::text,
                  opened_at, closed_at, closed_by, opening_float::text,
                  counted_cash::text, expected_cash::text, cash_difference::text,
+                 cash_sales::text, cash_collections::text, cash_payouts::text,
                  is_off_schedule, notes, client_session_id, status`,
       [shopId, userId, shiftTemplateId, openingFloat, isOffSchedule],
     );

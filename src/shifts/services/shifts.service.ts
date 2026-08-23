@@ -16,8 +16,17 @@ import { ShiftSessionWithNames } from '../entities/shift-session.entity';
 import { UsersRepository } from '../../users/repositories/users.repository';
 import { AuditLogsService } from '../../audit-logs/services/audit-logs.service';
 import { CloseShiftDto } from '../dto/close-shift.dto';
-import { ClosedShiftSession, ShiftCashBreakdown } from '../entities/shift-session.entity';
+import {
+  ClosedShiftSession,
+  ShiftCashBreakdown,
+  ShiftReport,
+  ShiftSessionDetail,
+  ShiftSessionListItem,
+} from '../entities/shift-session.entity';
+import { ShiftReportQueryDto, ShiftSessionQueryDto } from '../dto/shift-query.dto';
 import { fromMinor, toMinor } from '../../common/utils/money.util';
+import { paginate, PaginatedResponse } from '../../common/utils/pagination.util';
+import { UserRole } from '../../common/enums/user-role.enum';
 import { OpeningHoursWeek, ShopOpeningHours } from '../entities/opening-hours.entity';
 import { ShiftTemplate, ShiftTemplateWithDuration } from '../entities/shift-template.entity';
 import {
@@ -468,6 +477,73 @@ export class ShiftsService {
     });
   }
 
+  // ── Reporting ──────────────────────────────────────────────────────────────
+
+  /** The owner's shift history, newest trading day first. */
+  async findSessions(
+    query: ShiftSessionQueryDto,
+    user: RequestUser,
+  ): Promise<PaginatedResponse<ShiftSessionListItem>> {
+    const shopId = this.shopIdOf(user);
+    const result = await this.shiftsRepo.findSessionsPaginated(shopId, query);
+
+    return paginate(result.data, query.page, query.limit, result.total);
+  }
+
+  /**
+   * One shift with the receipts that explain it.
+   *
+   * Readable by the owner, or by the employee who worked it — someone accused
+   * of being short has to be able to see the sales the figure was built from.
+   */
+  async findSessionById(id: number, user: RequestUser): Promise<ShiftSessionDetail> {
+    const shopId = this.shopIdOf(user);
+
+    const session = await this.shiftsRepo.findSessionWithNames(id, shopId);
+    if (!session) throw new NotFoundException('shift.SESSION_NOT_FOUND');
+
+    if (user.role !== UserRole.SHOP_OWNER && session.user_id !== user.id) {
+      throw new ForbiddenException('shift.SESSION_ACCESS_DENIED');
+    }
+
+    const receipts = await this.shiftsRepo.findReceiptsForSession(id);
+
+    // Counted from the same rows the list shows, and deliberately not from the
+    // frozen cash columns: these describe what was sold, which is a different
+    // question from what ended up in the drawer.
+    const counted = receipts.filter((receipt) => !receipt.is_free && !receipt.is_cancelled);
+    const salesTotal = counted.reduce((sum, receipt) => sum + toMinor(receipt.total_price), 0n);
+
+    return {
+      ...session,
+      receipt_count: counted.length,
+      sales_total: fromMinor(salesTotal),
+      receipts,
+    };
+  }
+
+  /**
+   * Money grouped by employee and by shift.
+   *
+   * Per-employee cash accuracy is meaningful only because one employee works
+   * one shift: a difference belongs to a person, not to a crowd sharing a till.
+   */
+  async getReport(query: ShiftReportQueryDto, user: RequestUser): Promise<ShiftReport> {
+    const shopId = this.shopIdOf(user);
+
+    const [byEmployee, byShift] = await Promise.all([
+      this.shiftsRepo.reportByEmployee(shopId, query.from, query.to),
+      this.shiftsRepo.reportByShift(shopId, query.from, query.to),
+    ]);
+
+    return {
+      from: query.from ?? null,
+      to: query.to ?? null,
+      by_employee: byEmployee,
+      by_shift: byShift,
+    };
+  }
+
   /**
    * Ends a shift: the person's count against the server's, frozen.
    *
@@ -509,6 +585,11 @@ export class ShiftsService {
           countedCash: dto.countedCash,
           expectedCash,
           cashDifference,
+          // Frozen alongside the total, so a shift read months later still
+          // shows the working and not just the answer.
+          cashSales: totals.cash_sales,
+          cashCollections: totals.collections,
+          cashPayouts: totals.payouts,
           closedBy: user.id,
           notes: dto.notes,
         },

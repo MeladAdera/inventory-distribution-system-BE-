@@ -10,6 +10,7 @@ import {
   Patch,
   Post,
   Put,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
@@ -19,6 +20,7 @@ import { CreateShiftTemplateDto, UpdateShiftTemplateDto } from '../dto/shift-tem
 import { AssignEmployeesDto } from '../dto/assign-employees.dto';
 import { OpenShiftDto } from '../dto/open-shift.dto';
 import { CloseShiftDto } from '../dto/close-shift.dto';
+import { ShiftReportQueryDto, ShiftSessionQueryDto } from '../dto/shift-query.dto';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../auth/guards/roles.guard';
 import { Roles } from '../../auth/decorators/roles.decorator';
@@ -151,5 +153,35 @@ export class ShiftsController {
     @CurrentUser() user: RequestUser,
   ) {
     return this.shiftsService.closeShift(id, dto, user);
+  }
+
+  @Get('report')
+  @Roles(UserRole.SHOP_OWNER)
+  @ApiOperation({
+    summary:
+      'Money grouped by employee and by shift over a date range. Sales are attributed by who rang them up; cash differences by whose shift it was.',
+  })
+  getReport(@Query() query: ShiftReportQueryDto, @CurrentUser() user: RequestUser) {
+    return this.shiftsService.getReport(query, user);
+  }
+
+  @Get('sessions')
+  @Roles(UserRole.SHOP_OWNER)
+  @ApiOperation({
+    summary:
+      'Shift history, newest trading day first. Filters: from, to (business date), userId, status. Paginated.',
+  })
+  findSessions(@Query() query: ShiftSessionQueryDto, @CurrentUser() user: RequestUser) {
+    return this.shiftsService.findSessions(query, user);
+  }
+
+  @Get('sessions/:id')
+  @Roles(UserRole.SHOP_OWNER, UserRole.EMPLOYEE)
+  @ApiOperation({
+    summary:
+      'One shift with the receipts behind it. The owner sees any; an employee only shifts they worked — being asked about a shortage means being able to see the sales it came from.',
+  })
+  findSessionById(@Param('id', ParseIntPipe) id: number, @CurrentUser() user: RequestUser) {
+    return this.shiftsService.findSessionById(id, user);
   }
 }

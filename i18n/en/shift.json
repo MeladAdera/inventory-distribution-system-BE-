@@ -12,5 +12,6 @@
   "ASSIGNEE_NOT_EMPLOYEE": "User {userId} cannot be assigned — assignees must be active employees of this shop",
   "SESSION_ALREADY_OPEN": "{name}'s shift is still open. Count the drawer and close it before starting a new shift",
   "SESSION_NOT_OPEN": "This shift is not open",
-  "SESSION_NOT_FOUND": "Shift session not found"
+  "SESSION_NOT_FOUND": "Shift session not found",
+  "SESSION_ACCESS_DENIED": "You can only open shifts you worked yourself"
 }

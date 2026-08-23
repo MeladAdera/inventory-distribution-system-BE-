@@ -70,3 +70,70 @@ export class ShiftCashBreakdown {
 export class ClosedShiftSession extends ShiftSessionWithNames {
   breakdown!: ShiftCashBreakdown;
 }
+
+/**
+ * A row of the owner's shift history.
+ *
+ * `sales_total` is what was *sold*, which is not what landed in the drawer — a
+ * credit sale counts here in full while only its down payment reaches the cash
+ * figures. The two answer different questions: how the shift traded, and
+ * whether its cash added up.
+ */
+export class ShiftSessionListItem extends ShiftSessionWithNames {
+  receipt_count!: number;
+  sales_total!: string;
+}
+
+/** One receipt as the shift-detail screen lists it. */
+export class ShiftReceiptLine {
+  id!: number;
+  created_at!: Date;
+  created_by!: number;
+  created_by_name!: string;
+  customer_name!: string | null;
+  is_free!: boolean;
+  is_cancelled!: boolean;
+  /** True when the sale opened a debt, i.e. its cash was only part of the total. */
+  on_credit!: boolean;
+  total_price!: string;
+}
+
+/**
+ * One shift, with the receipts that explain it.
+ *
+ * The cash figures come from the stored columns and are never recomputed. If a
+ * receipt was cancelled after the close it appears in the list marked cancelled
+ * while the frozen totals still show what was counted on the night — which is
+ * the true story of both moments.
+ */
+export class ShiftSessionDetail extends ShiftSessionListItem {
+  receipts!: ShiftReceiptLine[];
+}
+
+export class ShiftReportByEmployee {
+  user_id!: number;
+  user_name!: string;
+  shifts!: number;
+  receipt_count!: number;
+  sales_total!: string;
+  /** Sum of differences over closed shifts. Negative means short overall. */
+  cash_difference!: string;
+  short_shifts!: number;
+}
+
+export class ShiftReportByShift {
+  shift_template_id!: number | null;
+  shift_template_name!: string | null;
+  weekday!: number | null;
+  shifts!: number;
+  receipt_count!: number;
+  sales_total!: string;
+  cash_difference!: string;
+}
+
+export class ShiftReport {
+  from!: string | null;
+  to!: string | null;
+  by_employee!: ShiftReportByEmployee[];
+  by_shift!: ShiftReportByShift[];
+}
