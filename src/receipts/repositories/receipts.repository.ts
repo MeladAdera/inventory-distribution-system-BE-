@@ -28,15 +28,36 @@ export class ReceiptsRepository {
     createdBy: number,
     notes: string | undefined,
     customerId: number | undefined,
+    clientReceiptId: string | undefined,
+    shiftSessionId: number | null,
     client: pg.PoolClient,
   ): Promise<Receipt> {
     const result = await client.query<Receipt>(
-      `INSERT INTO receipts (shop_id, created_by, notes, customer_id)
-       VALUES ($1, $2, $3, $4)
+      `INSERT INTO receipts (shop_id, created_by, notes, customer_id, client_receipt_id, shift_session_id)
+       VALUES ($1, $2, $3, $4, $5, $6)
        RETURNING *`,
-      [shopId, createdBy, notes ?? null, customerId ?? null],
+      [shopId, createdBy, notes ?? null, customerId ?? null, clientReceiptId ?? null, shiftSessionId],
     );
     return result.rows[0];
+  }
+
+  /**
+   * Resolves a client-generated sale id to the receipt it already produced, so
+   * a retry can be answered with the original instead of writing a second sale.
+   *
+   * Only the id is returned: the caller re-reads the full receipt through
+   * `findById` so a replay and a first attempt come back through exactly the
+   * same shape, with no second copy of that query to drift.
+   *
+   * Scoped to the shop. A client id belongs to whoever first used it, and one
+   * shop must never be handed another shop's receipt by guessing an id.
+   */
+  async findIdByClientReceiptId(clientReceiptId: string, shopId: number): Promise<number | null> {
+    const row = await this.db.queryOne<{ id: number }>(
+      `SELECT id FROM receipts WHERE client_receipt_id = $1 AND shop_id = $2`,
+      [clientReceiptId, shopId],
+    );
+    return row?.id ?? null;
   }
 
   async insertItems(
@@ -87,7 +108,7 @@ export class ReceiptsRepository {
       `SELECT
          r.id, r.shop_id, r.created_by, r.notes, r.is_free,
          r.is_cancelled, r.cancelled_at, r.cancelled_by, r.cancel_reason, r.created_at,
-         r.customer_id, cu.name AS customer_name,
+         r.customer_id, r.client_receipt_id, r.shift_session_id, cu.name AS customer_name,
          COALESCE(SUM(ri.quantity * ri.price), 0)::float8 AS total_price,
          COALESCE(
            JSON_AGG(

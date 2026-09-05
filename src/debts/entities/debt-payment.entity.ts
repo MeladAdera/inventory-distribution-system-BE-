@@ -20,5 +20,10 @@ export class DebtPayment {
   note!: string | null;
   paid_at!: Date;
   created_by!: number;
+  /**
+   * The shift whose drawer this cash moved through, so the close can add it up.
+   * Null when it touched no drawer — a transfer, or the shop safe.
+   */
+  shift_session_id!: number | null;
   created_at!: Date;
 }

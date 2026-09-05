@@ -28,7 +28,12 @@ async function bootstrap(): Promise<void> {
 
   app.enableCors({
     origin: allowedOrigins,
-    methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
+    // PUT is here because the shift routes replace a whole collection at once —
+    // the seven-day trading week, and a slot's entire rota. Every module before
+    // them patched single fields, so the omission was invisible until the first
+    // PUT shipped: the browser blocks the request at preflight, and the caller
+    // sees a failure with no response body to explain it.
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'Accept-Language'],
     credentials: true,
   });

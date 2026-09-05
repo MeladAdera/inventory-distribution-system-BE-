@@ -7,6 +7,7 @@
   "IS_BOOLEAN": "{property} must be a boolean value (true or false)",
   "IS_ENUM": "{property} must be a valid value",
   "IS_EMAIL": "{property} must be a valid email address",
+  "IS_UUID": "{property} must be a valid UUID",
   "IS_ARRAY": "{property} must be an array",
   "IS_PHONE_NUMBER": "{property} must be a valid phone number",
   "MIN": "{property} must not be less than {constraints.0}",

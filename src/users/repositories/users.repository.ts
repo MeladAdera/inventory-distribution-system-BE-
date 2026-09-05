@@ -124,6 +124,30 @@ export class UsersRepository {
     );
   }
 
+  /**
+   * Of the given ids, those that are active employees of this shop.
+   *
+   * Set-based on purpose: callers validating a roster hold a list, and asking
+   * per id would be one round trip each. Returning the ids that *passed* lets
+   * the caller name the one that failed, which is the difference between
+   * "someone is not an employee" and a message the owner can act on.
+   */
+  async findActiveEmployeeIdsInShop(ids: number[], shopId: number): Promise<number[]> {
+    if (ids.length === 0) return [];
+
+    const rows = await this.db.query<{ id: number }>(
+      `SELECT id
+         FROM users
+        WHERE id = ANY($1::int[])
+          AND shop_id = $2
+          AND role = $3
+          AND is_active`,
+      [ids, shopId, UserRole.EMPLOYEE],
+    );
+
+    return rows.map((row) => row.id);
+  }
+
   async update(
     id: number,
     data: { name?: string; email?: string; password_hash?: string },

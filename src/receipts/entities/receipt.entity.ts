@@ -28,6 +28,15 @@ export class Receipt {
   // Set only on credit sales (or when the shop wants the buyer on record); an
   // ordinary cash sale stays anonymous.
   customer_id!: number | null;
+  // The id the client generated for this sale, reused on every retry. Null on
+  // receipts written before idempotency existed, and on any client that does
+  // not send one. See `06-ReceiptIdempotency.sql`.
+  client_receipt_id!: string | null;
+  /**
+   * The shift whose drawer this sale's cash went into. Null when it was rung
+   * up with no shift open, or before shifts existed.
+   */
+  shift_session_id!: number | null;
   created_at!: Date;
 }
 

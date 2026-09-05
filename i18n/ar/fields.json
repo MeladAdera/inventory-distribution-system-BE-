@@ -59,5 +59,17 @@
   "invoiceNo": "رقم الفاتورة",
   "supplierId": "المورّد",
   "customerId": "الزبون",
-  "debtId": "الدين"
+  "debtId": "الدين",
+  "clientReceiptId": "مرجع الفاتورة",
+  "weekday": "اليوم",
+  "openTime": "وقت الفتح",
+  "closeTime": "وقت الإغلاق",
+  "isClosed": "مغلق",
+  "timezone": "المنطقة الزمنية",
+  "days": "الأيام",
+  "startTime": "وقت البداية",
+  "endTime": "وقت النهاية",
+  "userIds": "الموظفون",
+  "openingFloat": "النقد الابتدائي",
+  "countedCash": "النقد المعدود"
 }

@@ -14,6 +14,7 @@ import { SupplierQueryDto } from '../dto/supplier-query.dto';
 import { CreateSupplierDebtDto, SupplierDebtItemDto } from '../dto/create-supplier-debt.dto';
 import { paginate, PaginatedResponse } from '../../common/utils/pagination.util';
 import { RequestUser } from '../../common/interfaces/request-user.interface';
+import { ShiftsService } from '../../shifts/services/shifts.service';
 import { DebtsService } from '../../debts/services/debts.service';
 import { Debt, DebtListItem, DebtsSummary, DebtPaymentAllocation } from '../../debts/entities/debt.entity';
 import { DebtQueryDto } from '../../debts/dto/debt-query.dto';
@@ -40,6 +41,7 @@ export class SuppliersService {
     private readonly db: DatabaseService,
     private readonly inventoryRepo: InventoryRepository,
     private readonly auditLogsService: AuditLogsService,
+    private readonly shiftsService: ShiftsService,
   ) {}
 
   async create(dto: CreateSupplierDto, user: RequestUser): Promise<Supplier> {
@@ -343,7 +345,17 @@ export class SuppliersService {
     user: RequestUser,
   ): Promise<DebtPaymentAllocation[]> {
     const supplier = await this.requireOwnSupplier(id, user);
-    return this.debtsService.addSupplierPayment(id, supplier.shop_id, dto, user.id);
+
+    // Cash out, and only the person paying knows whether it came from the till
+    // or the safe. Guessing the open shift would make whoever is on it look
+    // short by this amount for money they never touched, so nothing is assumed:
+    // no id means it belongs to no shift.
+    const shiftSessionId = await this.shiftsService.resolveExplicit(
+      supplier.shop_id,
+      dto.shiftSessionId,
+    );
+
+    return this.debtsService.addSupplierPayment(id, supplier.shop_id, dto, user.id, shiftSessionId);
   }
 
   /**

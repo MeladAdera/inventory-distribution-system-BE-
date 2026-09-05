@@ -62,6 +62,11 @@ export interface InsertPaymentRow {
   reversesPaymentId: number | null;
   note: string | null;
   createdBy: number;
+  /**
+   * The shift whose drawer this cash moved through. Null when it moved through
+   * none — a bank transfer, or money the owner took from the safe.
+   */
+  shiftSessionId: number | null;
 }
 
 // The source document lives in one of two columns. Mapping a closed union to a
@@ -256,11 +261,15 @@ export class DebtsRepository {
   async insertPayment(row: InsertPaymentRow, client: pg.PoolClient): Promise<DebtPayment> {
     const result = await client.query<DebtPayment>(
       `INSERT INTO debt_payments (
-         debt_id, amount, method, is_reversal, reverses_payment_id, note, created_by
+         debt_id, amount, method, is_reversal, reverses_payment_id, note, created_by,
+         shift_session_id
        )
-       VALUES ($1, $2, $3, $4, $5, $6, $7)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
        RETURNING *`,
-      [row.debtId, row.amount, row.method, row.isReversal, row.reversesPaymentId, row.note, row.createdBy],
+      [
+        row.debtId, row.amount, row.method, row.isReversal, row.reversesPaymentId,
+        row.note, row.createdBy, row.shiftSessionId,
+      ],
     );
     return result.rows[0];
   }

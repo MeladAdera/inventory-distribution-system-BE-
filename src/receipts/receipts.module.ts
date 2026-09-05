@@ -8,9 +8,10 @@ import { NotificationsModule } from '../notifications/notifications.module';
 import { InventoryModule } from '../inventory/inventory.module';
 import { DebtsModule } from '../debts/debts.module';
 import { CustomersModule } from '../customers/customers.module';
+import { ShiftsModule } from '../shifts/shifts.module';
 
 @Module({
-  imports: [DatabaseModule, AuditLogsModule, NotificationsModule, InventoryModule, DebtsModule, CustomersModule],
+  imports: [ShiftsModule, DatabaseModule, AuditLogsModule, NotificationsModule, InventoryModule, DebtsModule, CustomersModule],
   controllers: [ReceiptsController],
   providers: [ReceiptsService, ReceiptsRepository],
 })

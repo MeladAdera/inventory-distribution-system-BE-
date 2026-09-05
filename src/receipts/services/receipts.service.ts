@@ -20,6 +20,22 @@ import { UserRole } from '../../common/enums/user-role.enum';
 import { paginate, PaginatedResponse } from '../../common/utils/pagination.util';
 import { toMinor, fromMinor } from '../../common/utils/money.util';
 import { RequestUser } from '../../common/interfaces/request-user.interface';
+import { ShiftsService } from '../../shifts/services/shifts.service';
+
+/** Postgres SQLSTATE for a unique constraint violation. */
+const UNIQUE_VIOLATION = '23505';
+
+/**
+ * Narrows an unknown catch to "this exact index rejected the write". Matching
+ * the constraint name as well as the code matters: a receipt insert can only
+ * trip this one index, but a future column would otherwise be silently
+ * swallowed by the duplicate-sale path.
+ */
+function isUniqueViolation(err: unknown, constraint: string): boolean {
+  if (typeof err !== 'object' || err === null) return false;
+  const { code, constraint: hit } = err as { code?: unknown; constraint?: unknown };
+  return code === UNIQUE_VIOLATION && hit === constraint;
+}
 
 @Injectable()
 export class ReceiptsService {
@@ -33,10 +49,20 @@ export class ReceiptsService {
     private readonly debtsService: DebtsService,
     private readonly customersRepo: CustomersRepository,
     private readonly db: DatabaseService,
+    private readonly shiftsService: ShiftsService,
   ) {}
 
   async create(dto: CreateReceiptDto, user: RequestUser): Promise<ReceiptWithItems> {
     const shopId = user.shopId!;
+
+    // A retry of a sale that already committed — a lost response, an offline
+    // queue replaying — must not ring it up again. Answering with the original
+    // receipt is what makes the endpoint safe to call twice.
+    if (dto.clientReceiptId !== undefined) {
+      const existingId = await this.receiptsRepo.findIdByClientReceiptId(dto.clientReceiptId, shopId);
+      if (existingId !== null) return this.withDebt(existingId);
+    }
+
     const inventoryIds = dto.items.map((i) => i.inventoryId);
 
     const uniqueIds = new Set(inventoryIds);
@@ -51,7 +77,13 @@ export class ReceiptsService {
       if (!customer) throw new NotFoundException('customer.NOT_FOUND');
     }
 
-    const { receiptId, lowStockItems } = await this.db.transaction(async (client) => {
+    // Resolved once, before the transaction, and used for both writes below.
+    // A credit sale produces two rows — the receipt and the down payment on its
+    // debt — and they have to name the same shift: the money was handed over
+    // once, so it belongs to one drawer.
+    const shiftSessionId = await this.shiftsService.resolveForSale(shopId, dto.shiftSessionId);
+
+    const write = this.db.transaction(async (client) => {
       // Lock all inventory rows for the duration of this transaction
       const inventoryRows = await this.inventoryRepo.findByIdsForUpdate(inventoryIds, client);
 
@@ -118,7 +150,15 @@ export class ReceiptsService {
       }
 
       // Insert receipt header
-      const receipt = await this.receiptsRepo.insertReceipt(shopId, user.id, dto.notes, dto.customerId, client);
+      const receipt = await this.receiptsRepo.insertReceipt(
+        shopId,
+        user.id,
+        dto.notes,
+        dto.customerId,
+        dto.clientReceiptId,
+        shiftSessionId,
+        client,
+      );
 
       // Apply each inventory adjustment
       for (const item of dto.items) {
@@ -168,9 +208,12 @@ export class ReceiptsService {
         );
 
         if (paidMinor > 0n) {
+          // The same session as the receipt above. This row is where a credit
+          // sale's cash actually lives, so the close counts it once from here
+          // rather than deriving it from the sale total.
           await this.debtsService.addPayment(
             debt.id,
-            { amount: fromMinor(paidMinor), note: dto.notes, createdBy: user.id },
+            { amount: fromMinor(paidMinor), note: dto.notes, createdBy: user.id, shiftSessionId },
             client,
           );
         }
@@ -179,6 +222,28 @@ export class ReceiptsService {
       return { receiptId: receipt.id, lowStockItems };
     });
 
+    let receiptId: number;
+    let lowStockItems: { product_name: string }[];
+
+    try {
+      ({ receiptId, lowStockItems } = await write);
+    } catch (err: unknown) {
+      // Two retries of the same sale arriving together: both missed the
+      // pre-check above, and the unique index rejected whichever committed
+      // second. That loser's transaction rolled back whole — stock, items and
+      // debt included — so the winner's receipt is the only sale on record and
+      // returning it is exact rather than a repair.
+      if (dto.clientReceiptId === undefined || !isUniqueViolation(err, 'idx_receipts_client_id')) {
+        throw err;
+      }
+
+      const existingId = await this.receiptsRepo.findIdByClientReceiptId(dto.clientReceiptId, shopId);
+      // The index fired but the row is not ours — the same id was used by
+      // another shop. That is a genuine conflict, not a retry, so it surfaces.
+      if (existingId === null) throw err;
+
+      return this.withDebt(existingId);
+    }
 
     // Fire-and-forget low stock notifications after the transaction commits
     for (const item of lowStockItems) {

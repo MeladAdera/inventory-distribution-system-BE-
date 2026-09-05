@@ -1,5 +1,5 @@
-import { IsOptional, IsString, IsIn, MaxLength, Matches } from 'class-validator';
-import { Transform } from 'class-transformer';
+import { IsInt, IsOptional, IsPositive, IsString, IsIn, MaxLength, Matches } from 'class-validator';
+import { Transform, Type } from 'class-transformer';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { i18nValidationMessage } from 'nestjs-i18n';
 import { PaymentMethod } from '../entities/debt-payment.entity';
@@ -21,6 +21,21 @@ export class CreateDebtPaymentDto {
   @IsString({ message: i18nValidationMessage('validation.IS_STRING') })
   @Matches(MONEY_PATTERN, { message: i18nValidationMessage('validation.MATCHES') })
   amount!: string;
+
+  /**
+   * The shift whose drawer this cash moved through.
+   *
+   * How it is treated depends on which way the money went, and that is decided
+   * by the endpoint, not here: a customer collection falls back to the shop's
+   * open shift when omitted, while a supplier payment stays unattached unless
+   * this names a shift, because the cash may have come from the safe.
+   */
+  @ApiPropertyOptional({ example: 4, description: "Shift whose drawer this cash moved through" })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt({ message: i18nValidationMessage('validation.IS_INT') })
+  @IsPositive({ message: i18nValidationMessage('validation.IS_POSITIVE') })
+  shiftSessionId?: number;
 
   @ApiPropertyOptional({ example: 'CASH', enum: PAYMENT_METHODS, default: 'CASH' })
   @IsOptional()

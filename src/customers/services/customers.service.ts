@@ -10,6 +10,7 @@ import { CreateCustomerPaymentDto } from '../../debts/dto/create-customer-paymen
 import { DebtPaymentAllocation, DebtsSummary, DebtListItem } from '../../debts/entities/debt.entity';
 import { paginate, PaginatedResponse } from '../../common/utils/pagination.util';
 import { RequestUser } from '../../common/interfaces/request-user.interface';
+import { ShiftsService } from '../../shifts/services/shifts.service';
 
 /**
  * Customers belong to a shop, not to the warehouse — the route guard keeps the
@@ -21,6 +22,7 @@ export class CustomersService {
   constructor(
     private readonly customersRepo: CustomersRepository,
     private readonly debtsService: DebtsService,
+    private readonly shiftsService: ShiftsService,
   ) {}
 
   async create(dto: CreateCustomerDto, user: RequestUser): Promise<Customer> {
@@ -99,7 +101,17 @@ export class CustomersService {
     user: RequestUser,
   ): Promise<DebtPaymentAllocation[]> {
     const customer = await this.requireOwnCustomer(id, user);
-    return this.debtsService.addCustomerPayment(id, customer.shop_id, dto, user.id);
+
+    // Cash in. A customer settling an old bill hands it to whoever is on shift
+    // now, so it belongs to the collecting drawer — not to the shift that made
+    // the original sale. Resolved automatically because there is nowhere else
+    // the money could have gone.
+    const shiftSessionId = await this.shiftsService.resolveForSale(
+      customer.shop_id,
+      dto.shiftSessionId,
+    );
+
+    return this.debtsService.addCustomerPayment(id, customer.shop_id, dto, user.id, shiftSessionId);
   }
 
   /**

@@ -59,5 +59,17 @@
   "invoiceNo": "Invoice number",
   "supplierId": "Supplier",
   "customerId": "Customer",
-  "debtId": "Debt"
+  "debtId": "Debt",
+  "clientReceiptId": "Receipt reference",
+  "weekday": "Weekday",
+  "openTime": "Opening time",
+  "closeTime": "Closing time",
+  "isClosed": "Closed",
+  "timezone": "Timezone",
+  "days": "Days",
+  "startTime": "Start time",
+  "endTime": "End time",
+  "userIds": "Employees",
+  "openingFloat": "Opening float",
+  "countedCash": "Counted cash"
 }

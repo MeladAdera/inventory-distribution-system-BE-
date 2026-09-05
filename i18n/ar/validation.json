@@ -7,6 +7,7 @@
   "IS_BOOLEAN": "{property} يجب أن يكون قيمة منطقية (true أو false)",
   "IS_ENUM": "{property} يجب أن يكون قيمة صحيحة",
   "IS_EMAIL": "{property} يجب أن يكون بريدًا إلكترونيًا صحيحًا",
+  "IS_UUID": "{property} يجب أن يكون معرّف UUID صحيحًا",
   "IS_ARRAY": "{property} يجب أن يكون مصفوفة",
   "IS_PHONE_NUMBER": "{property} يجب أن يكون رقم هاتف صحيحًا",
   "MIN": "{property} يجب ألا يقل عن {constraints.0}",

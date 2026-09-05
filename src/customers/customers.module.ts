@@ -3,9 +3,10 @@ import { CustomersService } from './services/customers.service';
 import { CustomersController } from './controllers/customers.controller';
 import { CustomersRepository } from './repositories/customers.repository';
 import { DebtsModule } from '../debts/debts.module';
+import { ShiftsModule } from '../shifts/shifts.module';
 
 @Module({
-  imports: [DebtsModule],
+  imports: [ShiftsModule, DebtsModule],
   controllers: [CustomersController],
   providers: [CustomersService, CustomersRepository],
   exports: [CustomersRepository],
