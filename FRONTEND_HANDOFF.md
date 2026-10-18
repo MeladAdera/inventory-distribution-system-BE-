@@ -221,7 +221,7 @@ Request → 401?
 | `shop_id` | number | Filter by shop (admin only) |
 | `search` | string | Search by name or email |
 | `page` | number | Page number (default: 1) |
-| `limit` | number | Items per page (default: 10, max: 100) |
+| `limit` | number | Items per page (default: 10; no enforced maximum, but page through with `totalPages` / `hasNext` rather than guessing one big number) |
 
 **User Object:**
 ```json
@@ -412,6 +412,11 @@ No body required. Sets `image_url` back to `null`.
 > `GET /products?source=WAREHOUSE`, group by `category_name`, render each card as
 > **Add** or **Added ✓** based on `in_inventory`, and call `POST /inventory` on
 > tap. The product then appears on the inventory page as out-of-stock.
+>
+> The warehouse catalog is **larger than one page** (140+ seeded products plus
+> anything the admin adds), so fetch every page — read `totalPages` from page 1
+> and request the rest — instead of a single `limit=100` call. A single-page
+> fetch silently drops everything past row 100.
 >
 > **Restocking depends on `is_orderable`.** `true` (the default) means the
 > warehouse actually carries the product and it can be restocked via

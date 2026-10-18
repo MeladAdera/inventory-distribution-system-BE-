@@ -49,7 +49,7 @@ export class ProductsRepository {
        LEFT JOIN inventory i ON i.product_id = p.id AND i.shop_id = p.shop_id
        LEFT JOIN shops s ON s.id = p.shop_id
        WHERE ${conditions.join(' AND ')}
-       ORDER BY p.created_at DESC
+       ORDER BY p.created_at DESC, p.id DESC
        LIMIT $${limitIdx} OFFSET $${offsetIdx}`,
       params,
     );
@@ -61,6 +61,12 @@ export class ProductsRepository {
   }
 
   // SHOP_OWNER / EMPLOYEE: own shop + warehouse products
+  //
+  // Both list queries order by created_at with `p.id` as a tiebreaker. The
+  // seeded warehouse catalog is inserted in one transaction, so all 140 rows
+  // share the same created_at; without the tiebreaker Postgres returns those
+  // ties in arbitrary order, and LIMIT/OFFSET pages can overlap or skip rows
+  // from one request to the next.
   async findPaginatedForShop(shopId: number, query: ProductQueryDto): Promise<PaginatedProducts> {
     const conditions: string[] = [
       'p.is_active = TRUE',
@@ -97,7 +103,7 @@ export class ProductsRepository {
        LEFT JOIN inventory i ON i.product_id = p.id AND i.shop_id = $1
        LEFT JOIN inventory wi ON wi.product_id = p.id AND wi.shop_id = p.shop_id
        WHERE ${conditions.join(' AND ')}
-       ORDER BY p.source DESC, p.created_at DESC
+       ORDER BY p.source DESC, p.created_at DESC, p.id DESC
        LIMIT $${limitIdx} OFFSET $${offsetIdx}`,
       params,
     );
