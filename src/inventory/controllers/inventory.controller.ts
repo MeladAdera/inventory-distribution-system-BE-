@@ -17,6 +17,7 @@ import { StockInDto } from '../dto/stock-in.dto';
 import { AddInventoryProductDto } from '../dto/add-inventory-product.dto';
 import { AdjustInventoryDto } from '../dto/adjust-inventory.dto';
 import { UpdateSalePriceDto } from '../dto/update-sale-price.dto';
+import { UpdateLowStockThresholdDto } from '../dto/update-low-stock-threshold.dto';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../auth/guards/roles.guard';
 import { Roles } from '../../auth/decorators/roles.decorator';
@@ -93,5 +94,16 @@ export class InventoryController {
     @CurrentUser() user: RequestUser,
   ) {
     return this.inventoryService.setSalePrice(id, dto, user);
+  }
+
+  @Patch(':id/threshold')
+  @Roles(UserRole.WAREHOUSE_ADMIN, UserRole.SHOP_OWNER)
+  @ApiOperation({ summary: 'Set the per-shop minimum quantity (low-stock threshold) for an inventory item (shop owner: own shop only)' })
+  setLowStockThreshold(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: UpdateLowStockThresholdDto,
+    @CurrentUser() user: RequestUser,
+  ) {
+    return this.inventoryService.setLowStockThreshold(id, dto, user);
   }
 }

@@ -12,6 +12,7 @@
     "PRODUCT_ADDED": "إضافة منتج",
     "ADJUSTMENT": "تعديل كمية",
     "PRICE_CHANGE": "تغيير السعر",
+    "THRESHOLD_CHANGE": "تغيير الحد الأدنى للكمية",
     "TRANSFER_IN": "تحويل وارد",
     "TRANSFER_OUT": "تحويل صادر",
     "STATUS_CHANGED": "تغيير الحالة",
@@ -38,6 +39,7 @@
     "CANCELLED": "ملغي"
   },
   "NOTE_PRICE_CHANGE": "سعر البيع: من {from} إلى {to}",
+  "NOTE_THRESHOLD_CHANGE": "الحد الأدنى للكمية: من {from} إلى {to}",
   "NOTE_STATUS_CHANGED": "من {from} إلى {to}",
   "NOTE_ORDER_RESERVED": "الطلب رقم {orderId} — تم حجز الكمية للمتجر رقم {shopId}",
   "NOTE_ORDER_RECEIVED": "الطلب رقم {orderId} — تم الاستلام من المستودع",
