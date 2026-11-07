@@ -12,6 +12,7 @@ Inventory management for warehouse and shop locations. Each shop and the warehou
 
 - Every inventory record is uniquely scoped to one `(shop_id, product_id)` pair.
 - `low_stock_threshold` defaults to `10`. An item is considered low-stock when `current_quantity <= low_stock_threshold`.
+- The threshold is **per shop** (it lives on the inventory row, not the product), so each shop sets its own minimum for a shared catalog product via `PATCH /inventory/:id/threshold`. Changes are audit-logged as `INVENTORY` / `THRESHOLD_CHANGE`.
 - **Stock In** uses an upsert — if no inventory record exists for the product/shop pair, one is created automatically. If it already exists, the quantity is added to the current value.
 - **Adjustment** can be positive (add stock) or negative (remove stock). It cannot bring `current_quantity` below `0` — a `400` is returned before the transaction opens.
 - Every stock-in and adjustment runs inside a database transaction. If the audit log write fails, the quantity update rolls back.
@@ -28,6 +29,7 @@ Inventory management for warehouse and shop locations. Each shop and the warehou
 | `GET /inventory/:id` | Any record | Own shop only (403 otherwise) | Own shop only (403 otherwise) |
 | `POST /inventory/stock-in` | Own shop (warehouse) | Own shop | 403 |
 | `PATCH /inventory/:id` | Any record | Own shop only | 403 |
+| `PATCH /inventory/:id/threshold` | Any record | Own shop only | 403 |
 
 ---
 

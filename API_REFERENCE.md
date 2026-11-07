@@ -963,6 +963,31 @@ Manually adjusts the quantity of an inventory record (positive = add, negative =
 
 ---
 
+### `PATCH /inventory/:id/threshold`
+**Roles:** `WAREHOUSE_ADMIN`, `SHOP_OWNER` (own shop only)
+
+Sets the minimum quantity (low-stock threshold) for one inventory record. The
+threshold is per shop: changing it on a catalog product affects only this
+shop's row, never other shops stocking the same product.
+
+**Request Body**
+```json
+{
+  "lowStockThreshold": 5
+}
+```
+
+| Field | Type | Rules |
+|-------|------|-------|
+| `lowStockThreshold` | integer | required, 0 – 1,000,000 (0 = alert only when out of stock) |
+
+**Response `200`** — updated `Inventory` (with recomputed `is_low_stock`)
+
+**Error `403`** — `inventory.MODIFY_OWN_ONLY` (another shop's record)
+**Error `404`** — `inventory.NOT_FOUND`
+
+---
+
 ## 9. Audit Logs
 
 Base path: `/audit-logs` — **Auth required on all routes**

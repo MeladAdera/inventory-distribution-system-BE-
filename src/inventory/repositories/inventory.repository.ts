@@ -300,6 +300,18 @@ export class InventoryRepository {
     return result.rows[0] ?? null;
   }
 
+  async updateLowStockThreshold(id: number, threshold: number, client: pg.PoolClient): Promise<Inventory | null> {
+    const result = await client.query<Inventory>(
+      `UPDATE inventory
+       SET low_stock_threshold = $1,
+           updated_at = NOW()
+       WHERE id = $2
+       RETURNING *`,
+      [threshold, id],
+    );
+    return result.rows[0] ?? null;
+  }
+
   async adjust(id: number, delta: number, client: pg.PoolClient): Promise<Inventory | null> {
     const result = await client.query<Inventory>(
       `UPDATE inventory

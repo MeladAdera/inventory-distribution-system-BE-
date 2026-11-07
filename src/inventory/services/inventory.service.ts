@@ -14,6 +14,7 @@ import { StockInDto } from '../dto/stock-in.dto';
 import { AddInventoryProductDto } from '../dto/add-inventory-product.dto';
 import { AdjustInventoryDto } from '../dto/adjust-inventory.dto';
 import { UpdateSalePriceDto } from '../dto/update-sale-price.dto';
+import { UpdateLowStockThresholdDto } from '../dto/update-low-stock-threshold.dto';
 import { InventoryWithProduct } from '../entities/inventory.entity';
 import { UserRole } from '../../common/enums/user-role.enum';
 import { paginate, PaginatedResponse } from '../../common/utils/pagination.util';
@@ -222,6 +223,41 @@ export class InventoryService {
           notes: {
             key: 'audit-logs.NOTE_PRICE_CHANGE',
             args: { from: item.sale_price, to: dto.salePrice },
+          },
+        },
+        client,
+      );
+
+      return this.inventoryRepo.findById(id, client).then((r) => r!);
+    });
+  }
+
+  // The threshold lives on the inventory row, not the product, so each shop
+  // sets its own minimum for a shared catalog product without affecting others.
+  // No low-stock notification here: alerts fire on stock movement, and a raised
+  // threshold already surfaces the row via is_low_stock / GET /inventory/low-stock.
+  async setLowStockThreshold(id: number, dto: UpdateLowStockThresholdDto, user: RequestUser): Promise<InventoryWithProduct> {
+    const item = await this.inventoryRepo.findById(id);
+    if (!item) throw new NotFoundException('inventory.NOT_FOUND');
+
+    this.assertWriteAccess(user, item.shop_id);
+
+    return this.db.transaction(async (client) => {
+      const updated = await this.inventoryRepo.updateLowStockThreshold(id, dto.lowStockThreshold, client);
+      if (!updated) throw new NotFoundException('inventory.NOT_FOUND');
+
+      // The threshold goes in notes only — audit `quantity` means units moved.
+      await this.auditLogsService.log(
+        {
+          shop_id: item.shop_id,
+          user_id: user.id,
+          type: 'INVENTORY',
+          action: 'THRESHOLD_CHANGE',
+          entity_type: 'inventory',
+          entity_id: id,
+          notes: {
+            key: 'audit-logs.NOTE_THRESHOLD_CHANGE',
+            args: { from: item.low_stock_threshold, to: dto.lowStockThreshold },
           },
         },
         client,
