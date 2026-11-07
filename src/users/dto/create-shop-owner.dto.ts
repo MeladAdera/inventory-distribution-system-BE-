@@ -3,7 +3,7 @@ import { IsEmail, IsOptional, IsString, MinLength } from 'class-validator';
 import { i18nValidationMessage } from 'nestjs-i18n';
 
 export class CreateShopOwnerDto {
-  @ApiProperty({ example: 'MD Market' })
+  @ApiProperty({ example: 'Maple Street Market' })
   @IsString({ message: i18nValidationMessage('validation.IS_STRING') })
   shopName!: string;
 
@@ -16,7 +16,7 @@ export class CreateShopOwnerDto {
   @IsString({ message: i18nValidationMessage('validation.IS_STRING') })
   ownerName!: string;
 
-  @ApiProperty({ example: 'owner@mdmarket.com' })
+  @ApiProperty({ example: 'owner@example.com' })
   @IsEmail({}, { message: i18nValidationMessage('validation.IS_EMAIL') })
   email!: string;
 

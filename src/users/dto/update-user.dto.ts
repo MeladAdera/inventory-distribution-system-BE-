@@ -9,7 +9,7 @@ export class UpdateUserDto {
   @MinLength(2, { message: i18nValidationMessage('validation.MIN_LENGTH') })
   name?: string;
 
-  @ApiPropertyOptional({ example: 'ahmed@mdmarket.com' })
+  @ApiPropertyOptional({ example: 'ahmed@example.com' })
   @IsOptional()
   @IsEmail({}, { message: i18nValidationMessage('validation.IS_EMAIL') })
   email?: string;

@@ -7,7 +7,7 @@ export class CreateEmployeeDto {
   @IsString({ message: i18nValidationMessage('validation.IS_STRING') })
   name!: string;
 
-  @ApiProperty({ example: 'john@mdmarket.com' })
+  @ApiProperty({ example: 'john@example.com' })
   @IsEmail({}, { message: i18nValidationMessage('validation.IS_EMAIL') })
   email!: string;
 

@@ -1,21 +1,40 @@
 import { NestFactory } from '@nestjs/core';
 import { Logger } from '@nestjs/common';
+import type { NestExpressApplication } from '@nestjs/platform-express';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { I18nValidationPipe } from 'nestjs-i18n';
 import { AppModule } from './app.module';
 import { TransformInterceptor } from './common/interceptors/transform.interceptor';
 import { runPendingMigrations } from './database/migrations/runner';
 import { run as runSeed } from './database/seeders/seed';
+import { assertDemoDatabase, resetDemoData, scheduleDailyDemoReset } from './database/seeders/demo-seed';
 
 async function bootstrap(): Promise<void> {
+  const demoMode = process.env.DEMO_MODE === 'true';
+
+  // Before migrations, so a service pointed at the wrong database stops here.
+  if (demoMode) {
+    await assertDemoDatabase();
+  }
+
   await runPendingMigrations();
 
-  if (process.env.RUN_SEED === 'true') {
+  if (demoMode) {
+    await resetDemoData();
+    scheduleDailyDemoReset();
+  } else if (process.env.RUN_SEED === 'true') {
     await runSeed();
   }
 
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create<NestExpressApplication>(AppModule);
   const httpLogger = new Logger('HTTP');
+
+  // Render sits behind more than one proxy, so `true` (the left-most forwarded
+  // address) is what gives each visitor their own rate limit. Clients can spoof
+  // that header, which is acceptable here: the demo's passwords are public.
+  if (demoMode) {
+    app.set('trust proxy', true);
+  }
 
   app.use((req: import('express').Request, _res: import('express').Response, next: import('express').NextFunction) => {
     httpLogger.log(`METHOD: ${req.method}  PATH: ${req.originalUrl}`);
