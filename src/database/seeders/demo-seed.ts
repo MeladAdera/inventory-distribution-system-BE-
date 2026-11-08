@@ -16,8 +16,9 @@ dotenv.config({ path: `.env.${process.env.NODE_ENV || 'development'}` });
 const MARKER_TABLE = 'demo_environment';
 const PRESERVED_TABLES = ['migrations', MARKER_TABLE];
 const DEMO_PASSWORD = 'Demo@2026';
-const RESET_HOUR_UTC = 3;
-const RESET_CHECK_INTERVAL_MS = 10 * 60_000;
+const DEMO_ADMIN_EMAIL = 'demo-admin@example.com';
+// Any constant works; it only has to be the same in every instance.
+const BOOT_LOCK_KEY = 20_261_107;
 
 const HOUR = 3_600_000;
 const DAY = 24 * HOUR;
@@ -43,7 +44,7 @@ const SHOPS = [
 ];
 
 const USERS = [
-  { id: ADMIN, shop_id: WAREHOUSE, name: 'Dana Warehouse', email: 'demo-admin@example.com', role: 'WAREHOUSE_ADMIN' },
+  { id: ADMIN, shop_id: WAREHOUSE, name: 'Dana Warehouse', email: DEMO_ADMIN_EMAIL, role: 'WAREHOUSE_ADMIN' },
   { id: 2, shop_id: SHOP_A, name: 'Olivia Owner', email: 'demo-owner@example.com', role: 'SHOP_OWNER' },
   { id: 3, shop_id: SHOP_B, name: 'Noah Owner', email: 'demo-owner2@example.com', role: 'SHOP_OWNER' },
   { id: 4, shop_id: SHOP_C, name: 'Emma Owner', email: 'demo-owner3@example.com', role: 'SHOP_OWNER' },
@@ -891,6 +892,9 @@ export async function assertDemoDatabase(): Promise<void> {
   if (/railway|rlwy/i.test(process.env.DATABASE_HOST ?? '')) {
     throw new Error('Demo: DATABASE_HOST points at Railway, which hosts production');
   }
+  if ((process.env.CRON_SECRET ?? '').length < 16) {
+    console.warn('Demo: CRON_SECRET is unset or short, so the daily reset route will refuse every call');
+  }
 
   const client = newClient();
   await client.connect();
@@ -1026,19 +1030,38 @@ export async function resetDemoData(): Promise<void> {
   }
 }
 
-/** Resets once a day after RESET_HOUR_UTC. A failed reset retries on the next check. */
-export function scheduleDailyDemoReset(): void {
-  const today = (): string => new Date().toISOString().slice(0, 10);
-  let lastResetDay = today();
+/**
+ * Boot-time setup: migrations, then demo data only if none is there yet.
+ *
+ * Serverless hosts start an instance on a visitor's first request and stop it
+ * when idle, so resetting on every boot would wipe what visitors were doing.
+ * The daily reset comes from the cron route instead. DEMO_RESET_ON_BOOT=true
+ * restores reset-on-boot, which suits local testing.
+ *
+ * Instances that start together queue on an advisory lock, so only the first
+ * runs the migrations and the seed; the rest find the work already done.
+ */
+export async function prepareDemoDatabase(runMigrations: () => Promise<void>): Promise<void> {
+  const lock = newClient();
+  await lock.connect();
 
-  setInterval(() => {
-    if (new Date().getUTCHours() < RESET_HOUR_UTC || today() === lastResetDay) return;
+  try {
+    await requireMarker(lock);
+    await lock.query('SELECT pg_advisory_lock($1)', [BOOT_LOCK_KEY]);
 
-    const day = today();
-    resetDemoData()
-      .then(() => {
-        lastResetDay = day;
-      })
-      .catch((err: unknown) => console.error('Scheduled demo reset failed:', err));
-  }, RESET_CHECK_INTERVAL_MS);
+    await runMigrations();
+
+    const { rows } = await lock.query<{ seeded: boolean }>(
+      'SELECT EXISTS (SELECT 1 FROM users WHERE email = $1) AS seeded',
+      [DEMO_ADMIN_EMAIL],
+    );
+    if (!rows[0].seeded || process.env.DEMO_RESET_ON_BOOT === 'true') {
+      await resetDemoData();
+    } else {
+      console.log('Demo data already present, keeping it');
+    }
+  } finally {
+    // Ending the session releases the advisory lock as well.
+    await lock.end();
+  }
 }

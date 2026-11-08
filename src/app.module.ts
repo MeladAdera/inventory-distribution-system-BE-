@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { APP_GUARD, APP_FILTER } from '@nestjs/core';
 import { DemoGuard } from './common/guards/demo.guard';
+import { DemoController } from './demo/demo.controller';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { ConfigModule } from '@nestjs/config';
@@ -77,7 +78,7 @@ import { ShiftsModule } from './shifts/shifts.module';
     SuppliersModule,
     ShiftsModule,
   ],
-  controllers: [AppController],
+  controllers: [AppController, DemoController],
   providers: [
     AppService,
     { provide: APP_GUARD, useClass: ThrottlerGuard },
