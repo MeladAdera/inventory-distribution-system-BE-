@@ -1,8 +1,12 @@
-# Demo branch only: Vercel builds this file (it takes precedence over
-# framework detection). Same build as the production Dockerfile, on port 80.
+# Demo branch only: Vercel builds this (vercel.json sets framework: container).
+# Same build as the production Dockerfile, plus build tools, on port 80.
 
 # Build stage
 FROM node:20-alpine AS builder
+
+# bcrypt's prebuilt binary doesn't download on Vercel's builder, so it compiles
+# from source. Only this stage needs the tools; the final image copies the result.
+RUN apk add --no-cache python3 make g++
 
 WORKDIR /app
 
